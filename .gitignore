@@ -16,3 +16,11 @@
 *.exe
 *.out
 *.app
+
+fcs/Debug
+fcs/Release
+*.DS_Store
+*.lock
+*.log
+*.qmsg
+*.bak
