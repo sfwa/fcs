@@ -24,3 +24,7 @@ fcs/Release
 *.log
 *.qmsg
 *.bak
+cpld/db
+cpld/incremental_db
+cpld/output_files
+.metadata

@@ -38,7 +38,7 @@
 
 set_global_assignment -name FAMILY "MAX II"
 set_global_assignment -name DEVICE EPM1270M256C5
-set_global_assignment -name TOP_LEVEL_ENTITY cpuboard_test
+set_global_assignment -name TOP_LEVEL_ENTITY cpld_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "13.0 SP1"
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "17:13:38  NOVEMBER 11, 2013"
 set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1"
@@ -47,5 +47,329 @@ set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR "-1"
 set_global_assignment -name POWER_EXT_SUPPLY_VOLTAGE_TO_REGULATOR 3.3V
-set_global_assignment -name VERILOG_FILE cpld_top.v
 set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
+set_global_assignment -name VERILOG_FILE pmbus_passthrough.v
+set_global_assignment -name VERILOG_FILE exynos4412_sequencer.v
+set_global_assignment -name VERILOG_FILE cdce62002_program.v
+set_global_assignment -name VERILOG_FILE c66x_sequencer.v
+set_global_assignment -name VERILOG_FILE cpld_top.v
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "NO HEAT SINK WITH STILL AIR"
+set_global_assignment -name SYNTH_TIMING_DRIVEN_SYNTHESIS OFF
+set_location_assignment PIN_U20 -to spi_flash_clk
+set_location_assignment PIN_V20 -to spi_flash_cs_INV
+set_location_assignment PIN_W20 -to spi_flash_miso
+set_location_assignment PIN_Y20 -to spi_flash_mosi
+set_location_assignment PIN_F3 -to smbus_data
+set_location_assignment PIN_J2 -to smbus_cntrl
+set_location_assignment PIN_G3 -to smbus_clk
+set_location_assignment PIN_H2 -to smbus_alert
+set_location_assignment PIN_D1 -to pll_spi_mosi
+set_location_assignment PIN_E1 -to pll_spi_miso
+set_location_assignment PIN_B1 -to pll_spi_cs_INV
+set_location_assignment PIN_C1 -to pll_spi_clk
+set_location_assignment PIN_E2 -to pll_locked
+set_location_assignment PIN_F1 -to pll_en
+set_location_assignment PIN_H19 -to pg_vtt
+set_location_assignment PIN_G2 -to pg_ucd9222
+set_location_assignment PIN_L1 -to pg_cvdd
+set_location_assignment PIN_F18 -to pg_5v
+set_location_assignment PIN_K2 -to pg_3v3
+set_location_assignment PIN_K19 -to pg_1v5
+set_location_assignment PIN_L2 -to pg_1v0
+set_location_assignment PIN_U19 -to led[3]
+set_location_assignment PIN_U18 -to led[2]
+set_location_assignment PIN_U17 -to led[1]
+set_location_assignment PIN_T17 -to led[0]
+set_location_assignment PIN_D3 -to ioboard_uart1_tx
+set_location_assignment PIN_D2 -to ioboard_uart1_rx
+set_location_assignment PIN_D4 -to ioboard_uart0_tx
+set_location_assignment PIN_E4 -to ioboard_uart0_rx
+set_location_assignment PIN_C2 -to ioboard_2_reset_out
+set_location_assignment PIN_N4 -to ioboard_2_reset_in
+set_location_assignment PIN_C3 -to ioboard_1_reset_out
+set_location_assignment PIN_P4 -to ioboard_1_reset_in
+set_location_assignment PIN_R1 -to gpio[4]
+set_location_assignment PIN_T1 -to gpio[3]
+set_location_assignment PIN_U1 -to gpio[2]
+set_location_assignment PIN_V1 -to gpio[1]
+set_location_assignment PIN_W1 -to gpio[0]
+set_location_assignment PIN_P1 -to ext_uart1_tx
+set_location_assignment PIN_N2 -to ext_uart1_rx
+set_location_assignment PIN_P2 -to ext_uart0_tx
+set_location_assignment PIN_N1 -to ext_uart0_rx
+set_location_assignment PIN_T4 -to ext_spi_mosi
+set_location_assignment PIN_U3 -to ext_spi_miso
+set_location_assignment PIN_R3 -to ext_spi_cs_INV
+set_location_assignment PIN_R4 -to ext_spi_clk
+set_location_assignment PIN_G19 -to en_vtt
+set_location_assignment PIN_G1 -to en_cvdd
+set_location_assignment PIN_F19 -to en_1v8
+set_location_assignment PIN_J19 -to en_1v5
+set_location_assignment PIN_M2 -to en_1v0
+set_location_assignment PIN_B2 -to dsp_vid_oe_INV
+set_location_assignment PIN_C17 -to dsp_usb_reset_INV
+set_location_assignment PIN_C16 -to dsp_usb_irq_INV
+set_location_assignment PIN_C15 -to dsp_usb_eot
+set_location_assignment PIN_C14 -to dsp_usb_dreq
+set_location_assignment PIN_B12 -to dsp_usb_dack
+set_location_assignment PIN_D6 -to dsp_spi_mosi
+set_location_assignment PIN_C6 -to dsp_spi_miso
+set_location_assignment PIN_B9 -to dsp_spi_cs1_INV
+set_location_assignment PIN_D5 -to dsp_spi_cs0_INV
+set_location_assignment PIN_B10 -to dsp_spi_clk
+set_location_assignment PIN_D14 -to dsp_resetstat
+set_location_assignment PIN_A3 -to dsp_resetfull_INV
+set_location_assignment PIN_A2 -to dsp_reset_INV
+set_location_assignment PIN_A4 -to dsp_por_INV
+set_location_assignment PIN_D16 -to dsp_nmi_INV
+set_location_assignment PIN_A1 -to dsp_lresetnmien_INV
+set_location_assignment PIN_B19 -to dsp_lreset_INV
+set_location_assignment PIN_B7 -to dsp_int_uart1_tx
+set_location_assignment PIN_B6 -to dsp_int_uart1_rx
+set_location_assignment PIN_B8 -to dsp_int_uart0_tx
+set_location_assignment PIN_C7 -to dsp_int_uart0_rx
+set_location_assignment PIN_D7 -to dsp_i2c_1v8_sda
+set_location_assignment PIN_D8 -to dsp_i2c_1v8_scl
+set_location_assignment PIN_B18 -to dsp_hout
+set_location_assignment PIN_B4 -to dsp_gpio[19]
+set_location_assignment PIN_B5 -to dsp_gpio[18]
+set_location_assignment PIN_B3 -to dsp_gpio[17]
+set_location_assignment PIN_C5 -to dsp_gpio[16]
+set_location_assignment PIN_A17 -to dsp_gpio[15]
+set_location_assignment PIN_A16 -to dsp_gpio[14]
+set_location_assignment PIN_A13 -to dsp_gpio[13]
+set_location_assignment PIN_A19 -to dsp_gpio[12]
+set_location_assignment PIN_A20 -to dsp_gpio[11]
+set_location_assignment PIN_A9 -to dsp_gpio[10]
+set_location_assignment PIN_A10 -to dsp_gpio[9]
+set_location_assignment PIN_A14 -to dsp_gpio[8]
+set_location_assignment PIN_A18 -to dsp_gpio[7]
+set_location_assignment PIN_A15 -to dsp_gpio[6]
+set_location_assignment PIN_A6 -to dsp_gpio[5]
+set_location_assignment PIN_A11 -to dsp_gpio[4]
+set_location_assignment PIN_A5 -to dsp_gpio[3]
+set_location_assignment PIN_A12 -to dsp_gpio[2]
+set_location_assignment PIN_A8 -to dsp_gpio[1]
+set_location_assignment PIN_A7 -to dsp_gpio[0]
+set_location_assignment PIN_B11 -to dsp_ext_uart_tx
+set_location_assignment PIN_B16 -to dsp_ext_uart_rx
+set_location_assignment PIN_J1 -to dsp_ext_uart_en
+set_location_assignment PIN_B14 -to dsp_ext_uart1_int_INV
+set_location_assignment PIN_B13 -to dsp_ext_uart0_int_INV
+set_location_assignment PIN_R2 -to dsp_ext_spi_en
+set_location_assignment PIN_D15 -to dsp_coresel1
+set_location_assignment PIN_B17 -to dsp_coresel0
+set_location_assignment PIN_D13 -to dsp_booted
+set_location_assignment PIN_W15 -to cpu_wreset_INV
+set_location_assignment PIN_W19 -to cpu_usbhub_reset_INV
+set_location_assignment PIN_W4 -to cpu_spi1_1v8_mosi
+set_location_assignment PIN_Y5 -to cpu_spi1_1v8_miso
+set_location_assignment PIN_V5 -to cpu_spi1_1v8_cs_INV
+set_location_assignment PIN_Y2 -to cpu_spi1_1v8_clk
+set_location_assignment PIN_W5 -to cpu_spi0_1v8_mosi
+set_location_assignment PIN_Y4 -to cpu_spi0_1v8_miso
+set_location_assignment PIN_Y1 -to cpu_spi0_1v8_cs_INV
+set_location_assignment PIN_V4 -to cpu_spi0_1v8_clk
+set_location_assignment PIN_U7 -to cpu_resetout
+set_location_assignment PIN_W9 -to cpu_reset_INV
+set_location_assignment PIN_Y17 -to cpu_pmic_reset_INV
+set_location_assignment PIN_Y16 -to cpu_pmic_pwron
+set_location_assignment PIN_W12 -to cpu_gpio[23]
+set_location_assignment PIN_U15 -to cpu_gpio[22]
+set_location_assignment PIN_Y12 -to cpu_gpio[21]
+set_location_assignment PIN_W14 -to cpu_gpio[20]
+set_location_assignment PIN_V14 -to cpu_gpio[19]
+set_location_assignment PIN_W11 -to cpu_gpio[18]
+set_location_assignment PIN_W8 -to cpu_gpio[17]
+set_location_assignment PIN_Y10 -to cpu_gpio[16]
+set_location_assignment PIN_W10 -to cpu_gpio[15]
+set_location_assignment PIN_U6 -to cpu_gpio[14]
+set_location_assignment PIN_U13 -to cpu_gpio[13]
+set_location_assignment PIN_Y13 -to cpu_gpio[12]
+set_location_assignment PIN_U8 -to cpu_gpio[11]
+set_location_assignment PIN_Y9 -to cpu_gpio[10]
+set_location_assignment PIN_Y11 -to cpu_gpio[9]
+set_location_assignment PIN_U14 -to cpu_gpio[8]
+set_location_assignment PIN_V6 -to cpu_gpio[7]
+set_location_assignment PIN_W7 -to cpu_gpio[6]
+set_location_assignment PIN_Y8 -to cpu_gpio[5]
+set_location_assignment PIN_W6 -to cpu_gpio[4]
+set_location_assignment PIN_V7 -to cpu_gpio[3]
+set_location_assignment PIN_Y6 -to cpu_gpio[2]
+set_location_assignment PIN_Y7 -to cpu_gpio[1]
+set_location_assignment PIN_W13 -to cpu_gpio[0]
+set_location_assignment PIN_H1 -to cpu_ext_uart_en
+set_location_assignment PIN_U4 -to cpu_ext_uart1_tx
+set_location_assignment PIN_Y3 -to cpu_ext_uart1_rx
+set_location_assignment PIN_W3 -to cpu_ext_uart0_tx
+set_location_assignment PIN_U5 -to cpu_ext_uart0_rx
+set_location_assignment PIN_Y18 -to cpu_bootmode[5]
+set_location_assignment PIN_V17 -to cpu_bootmode[4]
+set_location_assignment PIN_W18 -to cpu_bootmode[3]
+set_location_assignment PIN_Y19 -to cpu_bootmode[2]
+set_location_assignment PIN_W17 -to cpu_bootmode[1]
+set_location_assignment PIN_V18 -to cpu_bootmode[0]
+set_location_assignment PIN_C4 -to cell_wake_INV
+set_location_assignment PIN_D17 -to cell_gps_en_INV
+set_location_assignment PIN_B20 -to cell_disable_INV
+set_location_assignment PIN_M1 -to camera_trigger
+set_location_assignment PIN_E3 -to ucd9222_rst_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to camera_trigger
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_bootmode[0]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_bootmode[1]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_bootmode[2]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_bootmode[3]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_bootmode[4]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_bootmode[5]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_ext_uart0_rx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_ext_uart0_tx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_ext_uart1_rx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_ext_uart1_tx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[0]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[1]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[2]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[3]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[4]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[5]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[6]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[7]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[8]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[9]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[10]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[11]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[12]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[13]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[14]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[15]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[16]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[17]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[18]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[19]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[20]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[21]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[22]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_gpio[23]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_pmic_pwron
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_pmic_reset_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_reset_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_resetout
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi0_1v8_clk
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi0_1v8_cs_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi0_1v8_miso
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi0_1v8_mosi
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi1_1v8_clk
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi1_1v8_cs_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi1_1v8_miso
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_spi1_1v8_mosi
+set_instance_assignment -name IO_STANDARD "1.8 V" -to cpu_wreset_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_vid_oe_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_booted
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_coresel0
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_coresel1
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart0_int_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart1_int_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart_rx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart_tx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[0]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[1]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[2]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[3]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[4]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[5]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[6]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[7]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[8]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[9]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[10]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[11]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[12]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[13]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[14]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[15]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[16]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[17]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[18]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[19]
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_hout
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_i2c_1v8_scl
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_i2c_1v8_sda
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_int_uart0_rx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_int_uart0_tx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_int_uart1_rx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_int_uart1_tx
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_lreset_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_lresetnmien_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_nmi_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_por_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_reset_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_resetfull_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_resetstat
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_clk
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_cs0_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_cs1_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_miso
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_mosi
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_dack
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_dreq
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_eot
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_irq_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_reset_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to en_1v0
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cpu_ext_uart_en
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_uart0_rx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_1_reset_out
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_1_reset_in
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pg_1v0
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_uart0_tx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pll_locked
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ucd9222_rst_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_uart1_tx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pll_spi_clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_uart0_tx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_2_reset_out
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to gpio[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dsp_ext_spi_en
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to gpio[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_uart1_rx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pll_en
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_uart0_rx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pll_spi_cs_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to smbus_clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_spi_mosi
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to smbus_alert
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to smbus_data
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to gpio[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pll_spi_mosi
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pll_spi_miso
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_2_reset_in
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to gpio[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to en_cvdd
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dsp_ext_uart_en
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to gpio[4]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_spi_cs_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to smbus_cntrl
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_uart1_tx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ioboard_uart1_rx
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_spi_miso
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_spi_clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pg_3v3
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cell_wake_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pg_cvdd
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pg_ucd9222
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to led[0]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to led[1]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cpu_usbhub_reset_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pg_vtt
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to spi_flash_mosi
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to en_1v8
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to led[3]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cell_disable_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to en_vtt
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to spi_flash_cs_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pg_5v
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to pg_1v5
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to en_1v5
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to led[2]
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to spi_flash_miso
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to spi_flash_clk
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cell_gps_en_INV
