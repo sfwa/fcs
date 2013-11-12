@@ -47,51 +47,53 @@ module cdce62002
 
    wire [255:0]   data_out;
    wire [255:0]   le_out;
-   wire [27:0]    word0, word1, word2, word3;
-   wire [27:0]    ones = 28'hfff_ffff;
+   wire [27:0]    word0, word1;
+   wire [27:0]    ones = 28'hfffffff, zeros = 28'h0000000;
 
-   assign     busy = (out_pointer != 0);
+   assign busy = (out_pointer != 8'b00000000);
+	wire done = (out_pointer[7] == 1'b1);
 
    // "active" is necessary because we don't rely on getting a proper
    // reset signal, and out_pointer is subject to munching by the
    // synthesizer, which may result in nasty things during wakeup
 
-   always @(posedge clk or posedge reset)
-     if (reset)
-       begin
-      out_pointer <= 0;
-      active <= 0;
-       end
-     else if (send_data)
-       begin
-      out_pointer <= 1;
-      active <= 1;
-       end
-     else if ((spi_clk) && busy)
-       out_pointer <= out_pointer + 1;
+   always @(posedge clk) begin
+		if (reset | done) begin
+			out_pointer <= 1'b0;
+			active <= 1'b0;
+		end else if (send_data & !busy) begin
+			out_pointer <= 1'b1;
+			active <= 1'b1;
+      end else if (spi_clk && busy) begin
+			out_pointer <= out_pointer + 1'b1;
+			active <= active;
+		end else begin
+			out_pointer <= out_pointer;
+			active <= active;
+		end
+	end
 
-   always @(posedge clk)
-     begin
-    if (spi_clk)
-      begin
+   always @(posedge clk) begin
+		if (spi_clk) begin
          spi_mosi <= data_out[out_pointer];
          spi_le <= !(le_out[out_pointer] && active);
       end
-    spi_clk <= !spi_clk;
-     end
+		spi_clk <= !spi_clk;
+	end
 
-   assign data_out = { word3, 4'd2, 2'd0, // To register #2 again.
-               64'd0, // Dwell a bit in power down
-               word1, 4'd1, 2'd0,
-               word0, 4'd0, 2'd0,
-               word2, 4'd2, 4'd0
+   assign data_out = {
+               word0, 4'b0000, 2'd0,
+               word1, 4'b0001, 2'd0,
+               zeros[27:0], 4'b1111, 4'd0,
+               64'd0 // Dwell a bit in power down
                };
 
-   assign le_out = { ones[27:0], ones[3:0], 2'd0,
-             64'd0, // Dwell a bit in power down
+   assign le_out = {
              ones[27:0], ones[3:0], 2'd0,
              ones[27:0], ones[3:0], 2'd0,
-             ones[27:0], ones[3:0], 4'd0 };
+             ones[27:0], ones[3:0], 4'd0,
+             64'd0 // Dwell a bit in power down
+            };
 
    assign word0[0] = INBUFSELX;
    assign word0[1] = INBUFSELY;
@@ -118,10 +120,4 @@ module cdce62002
    assign word1[21:19] = SELBPDIV;
    assign word1[25:22] = LFRCSEL;
    assign word1[27:26] = 2'b10; // Read only bits
-
-   // word2 and word3 are both sent to register #2 in order to
-   // restart the PLL calibration after registers are set.
-
-   assign word2 = 28'h000_0100; // Power down
-   assign word3 = 28'h000_0180; // Exit powerdown
 endmodule

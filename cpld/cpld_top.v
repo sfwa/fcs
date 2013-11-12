@@ -26,10 +26,10 @@ module cpld_top(
 	output reg spi_flash_mosi,
 	input spi_flash_miso,
 	output reg spi_flash_cs_INV,
-	output reg pll_spi_clk,
-	output reg pll_spi_mosi,
+	output pll_spi_clk,
+	output pll_spi_mosi,
 	input pll_spi_miso,
-	output reg pll_spi_cs_INV,
+	output pll_spi_cs_INV,
 	inout smbus_clk, /* open drain */
 	inout smbus_data, /* open drain */
 	input smbus_alert,
@@ -235,6 +235,48 @@ pmbus_passthrough ucd9222_interface(
     .slave_scl(smbus_clk),
     .slave_sda(smbus_data),
     .sda_direction_tap()
+);
+
+/*
+Program the CDCE62002 with preset configuration words:
+REGISTERS
+0	55200080
+1	8389A061
+2	00000002
+*/
+cdce62002 clkgen_interface(
+   .clk(osc_clk),
+   .reset(!sys_enable),
+   .busy(),
+   .send_data(sys_enable),
+   .spi_clk(pll_spi_clk),
+   .spi_le(pll_spi_cs_INV),
+   .spi_mosi(pll_spi_mosi),
+   .spi_miso(pll_spi_miso),
+
+   /* The names below match those used in pages 22-24 of the datasheet*/
+   .INBUFSELX(1'b0),
+   .INBUFSELY(1'b0),
+   .REFSEL(1'b0),
+   .AUXSEL(1'b1),
+   .ACDCSEL(1'b0),
+   .TERMSEL(1'b0),
+   .REFDIVIDE(4'b0000),
+   .LOCKW(2'b00),
+   .OUT0DIVRSEL(4'b0100),
+   .OUT1DIVRSEL(4'b1010),
+   .HIPERFORMANCE(1'b0),
+   .OUTBUFSEL0X(1'b1),
+   .OUTBUFSEL0Y(1'b0),
+   .OUTBUFSEL1X(1'b1),
+   .OUTBUFSEL1Y(1'b0),
+
+   .SELVCO(1'b0),
+   .SELINDIV(8'b00000011),
+   .SELPRESC(2'b01),
+   .SELFBDIV(8'b00010011),
+   .SELBPDIV(3'b111),
+   .LFRCSEL(4'b0000)
 );
 
 endmodule
