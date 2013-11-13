@@ -138,7 +138,8 @@ assign dsp_i2c_1v8_sda = 1'bz;
 assign cpu_gpio[23:0] = 24'bz;
 
 wire osc_clk, osc_clk_100us, dsp_enable, cpu_enable, io1_enable, io2_enable,
-     dsp_bootmode_en, pg_ddr3, pg_1v8, sys_enable;
+     dsp_bootmode_enable, pg_ddr3, pg_1v8, sys_enable, cpu_bank_enable,
+     dsp_bank_enable;
 wire[15:0] dsp_bootmode;
 reg[8:0] osc_clk_scaler;
 
@@ -173,6 +174,9 @@ assign en_vtt = en_1v5; /* FIXME? */
 assign pg_ddr3 = pg_1v5 & pg_vtt; /* FIXME? */
 assign pg_1v8 = en_1v8; /* FIXME */
 assign ucd9222_rst_INV = !sys_enable;
+assign dsp_lreset_INV = dsp_bank_enable;
+assign dsp_lresetnmien_INV = dsp_bank_enable;
+assign dsp_nmi_INV = dsp_bank_enable;
 c66x_sequencer dsp_seq(
     .sysclk(osc_clk_100us),
     .enable(dsp_enable & sys_enable),
@@ -190,19 +194,21 @@ c66x_sequencer dsp_seq(
     .por_INV(dsp_por_INV),
     .reset_INV(dsp_reset_INV),
     .resetfull_INV(dsp_resetfull_INV),
-    .bootmode_en(dsp_bootmode_en),
+    .vid_oe_INV(dsp_vid_oe_INV),
+    .dsp_bank_en(dsp_bank_enable),
+    .bootmode_en(dsp_bootmode_enable),
     .bootmode(dsp_bootmode)
 );
 
 /*
-Handle DSP bootmode mux -- if dsp_bootmode_en asserted, then pass the bootmode
-signals from the C66x sequencer through to the GPIOs.
+Handle DSP bootmode mux -- if dsp_bootmode_enable asserted, then pass the
+bootmode signals from the C66x sequencer through to the GPIOs.
 
 If it's not asserted, we can use them however we like.
 */
 always @(*) begin
 	dsp_gpio[15:0] = 16'b0;
-	if (dsp_bootmode_en) begin
+	if (dsp_bootmode_enable & dsp_bank_enable) begin
 		dsp_gpio = dsp_bootmode;
 	end else begin
 		dsp_gpio = 16'bz;
@@ -217,6 +223,7 @@ exynos4412_sequencer cpu_seq(
     .enable(cpu_enable & sys_enable),
     .cpu_pmic_pwron(cpu_pmic_pwron),
     .cpu_pmic_reset_INV(cpu_pmic_reset_INV),
+    .cpu_bank_en(cpu_bank_enable),
     .cpu_bootmode(cpu_bootmode)
 );
 

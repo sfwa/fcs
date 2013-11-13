@@ -25,6 +25,7 @@ module exynos4412_sequencer(
     input enable,
     output reg cpu_pmic_pwron,
     output reg cpu_pmic_reset_INV,
+    output reg cpu_bank_en,
     output reg[5:0] cpu_bootmode
 );
 
@@ -73,7 +74,7 @@ always @(*) begin
     cpu_pmic_pwron = 1'b0;
     cpu_pmic_reset_INV = 1'b0;
     cpu_bootmode = 6'b000000;
-    /* And disable the entire CPU bank */
+    cpu_bank_en = 1'b0;
 
     case (state)
         off: begin
@@ -85,13 +86,13 @@ always @(*) begin
         startup_bootmode_wait_state: begin
             cpu_pmic_pwron = 1'b1;
             cpu_bootmode = 6'b000101; /* MicroSD boot */
-            /* FIXME: enable CPU bank */
+            cpu_bank_en = 1'b1;
         end
         on: begin
             cpu_pmic_pwron = 1'b1;
             cpu_pmic_reset_INV = 1'b1;
             cpu_bootmode = 6'b000101; /* MicroSD boot */
-            /* FIXME: enable CPU bank */
+            cpu_bank_en = 1'b1;
         end
         shutdown_reset_wait_state: begin
             cpu_pmic_pwron = 1'b1;

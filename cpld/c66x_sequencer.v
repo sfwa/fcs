@@ -36,6 +36,8 @@ module c66x_sequencer(
     output reg por_INV,
     output reg reset_INV,
     output reg resetfull_INV,
+    output reg vid_oe_INV,
+    output reg dsp_bank_en,
     output reg bootmode_en,
     output reg[15:0] bootmode
 );
@@ -135,9 +137,10 @@ always @(*) begin
     por_INV = 1'b0;
     reset_INV = 1'b0;
     resetfull_INV = 1'b0;
+    vid_oe_INV = 1'b1;
     bootmode_en = 1'b1;
     bootmode = 16'bz;
-    /* And disable the entire DSP bank */
+    dsp_bank_en = 1'b0;
 
     case (state)
         off: begin
@@ -162,14 +165,17 @@ always @(*) begin
             dvdd18_en = 1'b1;
             dvdd15_en = 1'b1;
             pll_en = 1'b1;
+            vid_oe_INV = 1'b0;
         end
         startup_reset_wait_state: begin
             cvdd_en = 1'b1;
             cvdd1_en = 1'b1;
             dvdd18_en = 1'b1;
             dvdd15_en = 1'b1;
+            pll_en = 1'b1;
             reset_INV = 1'b1;
-            /* FIXME: ENABLE the entire DSP bank */
+            vid_oe_INV = 1'b0;
+            dsp_bank_en = 1'b1;
         end
         startup_reset_wait_state_2: begin
             cvdd_en = 1'b1;
@@ -178,7 +184,8 @@ always @(*) begin
             dvdd15_en = 1'b1;
             pll_en = 1'b1;
             reset_INV = 1'b1;
-            /* FIXME: ENABLE the entire DSP bank */
+            vid_oe_INV = 1'b0;
+            dsp_bank_en = 1'b1;
         end
         startup_por_wait_state: begin
             cvdd_en = 1'b1;
@@ -188,7 +195,9 @@ always @(*) begin
             pll_en = 1'b1;
             por_INV = 1'b1;
             reset_INV = 1'b1;
-            /* FIXME: ENABLE the entire DSP bank; set bootmode config */
+            vid_oe_INV = 1'b0;
+            /* FIXME: set bootmode config */
+            dsp_bank_en = 1'b1;
             bootmode = 16'b0;
         end
         startup_awaiting_resetstat_INV: begin
@@ -200,7 +209,9 @@ always @(*) begin
             por_INV = 1'b1;
             reset_INV = 1'b1;
             resetfull_INV = 1'b1;
-            /* FIXME: ENABLE the entire DSP bank; set bootmode config */
+            vid_oe_INV = 1'b0;
+            /* FIXME: set bootmode config */
+            dsp_bank_en = 1'b1;
             bootmode = 16'b0;
         end
         on: begin
@@ -212,7 +223,8 @@ always @(*) begin
             por_INV = 1'b1;
             reset_INV = 1'b1;
             resetfull_INV = 1'b1;
-            /* FIXME: ENABLE the entire DSP bank */
+            vid_oe_INV = 1'b0;
+            dsp_bank_en = 1'b1;
             bootmode_en = 1'b0; /* Boot mode pins can be used for GPIO now */
         end
         shutdown_reset: begin
