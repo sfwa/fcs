@@ -114,15 +114,23 @@ always @(*) begin
     next_state = state;
     case (state)
         off: begin
-            /* Default state */
-        end
-        startup_pwron_wait_state: begin
             /*
             Look for enable & timeout so that there's a minimum 10ms delay
             between shutting down and starting back up.
             */
             if (enable & timeout_10ms) begin
                 next_state = startup_pwron_wait_state;
+            end
+        end
+        startup_pwron_wait_state: begin
+            /*
+            Look for enable & timeout so that there's a minimum 10ms delay
+            between shutting down and starting back up.
+            */
+            if (!enable) begin
+				    next_state = shutdown_reset_wait_state;
+			   end else if	(timeout_10ms) begin
+                next_state = startup_bootmode_wait_state;
             end
         end
         startup_bootmode_wait_state: begin
@@ -159,6 +167,7 @@ always @(posedge sysclk) begin
         state <= next_state;
         state_timer <= 7'b00000000;
     end else begin
+	     state <= state;
         state_timer <= state_timer + 7'b00000001;
     end
 end

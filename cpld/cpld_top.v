@@ -219,7 +219,7 @@ end
 CPU sequencer -- handle power on/off for the CPU board
 */
 exynos4412_sequencer cpu_seq(
-	.sysclk(osc_clk_100us),
+    .sysclk(osc_clk_100us),
     .enable(cpu_enable & sys_enable),
     .cpu_pmic_pwron(cpu_pmic_pwron),
     .cpu_pmic_reset_INV(cpu_pmic_reset_INV),
