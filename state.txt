@@ -1,0 +1,132 @@
+private state (scope 0) --
+    * device name/ID
+    * base comms link config
+    * message layer keys
+    * IP hole-punch state
+
+mission state (scope 1) --
+    * set of participants: vehicles, relays, controllers
+
+vehicle (variable scope) --
+    * extra comms link config
+    * readiness (checklist status, internal/external)
+    * state (physical)
+    * waypoints
+    * script
+
+relay (variable scope) --
+    * extra comms link config
+    * readiness (checklist status, internal/external)
+    * state (physical)
+
+controller (variable scope) --
+    * extra comms link config
+    * readiness (checklist status, internal/external)
+    * control state
+
+
+Comms link config:
+
+* All values indexed, to support multiple links
+* Keys:
+    - LINK_TYPE: serial (0), IP (1)
+    - LINK_DEVICE: socket/port identifier (e.g. path, URL)
+    - LINK_RATE: maximum packets per second
+    - LINK_STATE: down (0), up (1)
+    - LINK_LAYER_PRIORITY: sequence of bytes indicates the layer ID priority
+        chain applying to this interface, e.g. 0x01 0x05 0x02 indicates layer
+        1 takes priority over layer 5, which takes priority over layer 2.
+
+Message layer config:
+
+* Values indexed based on layer ID
+* Only key is LAYER_KEY, defining an encryption key for that layer of message
+(empty = unencrypted)
+* Value index 0 may not be set
+
+Device name config:
+
+* Only key is DEVICE_NAME, which is a UTF-8 string.
+
+IP hole-punch state:
+
+* TBD
+
+Mission participant config:
+
+* Keys:
+    - MISSION_PARTICIPANT_SCOPE: indexed by scope ID, value is the device name
+    - MISSION_PARTICIPANT_ROLE: indexed by scope ID, value is one of
+        relay (0), controller (1), vehicle (2)
+    - MISSION_PARTICIPANT_ADDRESS: indexed by scope ID, value is the address
+        (e.g. IP/port) of the device (if available)
+
+Control state config:
+
+* Keys:
+    - CONTROL_VALUES: packed 16-bit vector
+    - CONTROL_ABORT: string containing "ABORT"
+
+Readiness config:
+
+* Keys:
+    - READINESS_REQUIRE: indexed by checklist order, value is a checklist
+        string in UTF-8
+    - READINESS_CHECK: indexed by checklist order, value is a NUL-separated
+        status (ok/fail), source scope ID tuple
+    - READINESS_CONFIRM: indexed by checklist order, value is a NUL-separated
+        status (ok/fail), source scope ID tuple
+
+State:
+
+* Keys:
+    - STATE_PHYSICAL: no index, value is a state vector
+    - STATE_POWER: no index, value is a power state vector
+    - STATE_COMMS: no index, value is a comms state vector
+    - STATE_HEALTH: no index, value is a health state vector
+    - STATE_ENVIRONMENT: no index, value is an environment (pressure, wind)
+        state vector
+
+Waypoints:
+
+* Keys:
+    - WAYPOINT_BOUNDARY: indexed by polygon point order, values are lat/lon
+        tuples
+    - WAYPOINT_HOME: no index, value is a lat/lon/alt tuple for home location
+    - WAYPOINT_RECOVERY: no index, value is a lat/lon tuple for loss of data
+        link mode
+    - WAYPOINT_FLOOR: no index, value is a height above ellipsoid
+    - WAYPOINT_CEILING: no index, value is a height above ellipsoid
+    - WAYPOINT_NAV: indexed by waypoint order, values are target state vectors
+
+**
+
+Controllers connect to a vehicle or relay, and sync state with that device only. The connection is stateful (WebSockets or HTTP).
+
+Vehicles and relays communicate on an ad-hoc basis, via UDP over 3G or a custom protocol over 915MHz radio. Initially this will just be broadcast.
+
+***
+
+Tuple:
+
+* Clock (4 bytes unsigned)
+* CRC32 (4 bytes unsigned)
+* Scope ID (1 byte unsigned)
+* Key ID (4 bytes unsigned)
+* Value length (1 byte unsigned)
+* Value index (2 bytes unsigned)
+* Value (variable)
+
+
+Tuple overhead = 16 bytes
+
+Message:
+
+* NUL
+* COBS-R length
+* Layer ID (1 byte unsigned)
+* Tuples (variable)
+* NUL
+
+Message overhead = 4 bytes
+

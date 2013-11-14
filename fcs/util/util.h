@@ -25,9 +25,7 @@ SOFTWARE.
 
 void fcs_util_init(void);
 void fcs_util_tick(void);
-enum fcs_config_validation_result_t fcs_util_validate_config(
-fcs_config_t new_config);
-void fcs_util_load_config(fcs_config_t new_config);
+void fcs_util_update_state(const struct fcs_state_t *new_state);
 
 /*
 http://www.ece.cmu.edu/~koopman/roses/dsn04/koopman04_crc_poly_embedded.pdf

@@ -32,14 +32,9 @@ void fcs_util_init(void) {
 }
 
 void fcs_util_tick(void) {
-
+    /* TODO */
 }
 
-enum fcs_config_validation_result_t fcs_util_validate_config(
-fcs_config_t new_config) {
-    return FCS_CONFIG_OK;
-}
-
-void fcs_util_load_config(fcs_config_t new_config) {
-
+void fcs_util_update_state(const struct fcs_state_t *new_state) {
+    /* TODO */
 }

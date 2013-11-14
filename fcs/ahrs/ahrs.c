@@ -164,14 +164,6 @@ void fcs_ahrs_init(void) {
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
 
     /*
-    Ensure this isn't called more than once, and the initial configuration is
-    good
-    */
-    fcs_config_t current_config;
-    current_config = fcs_config_get_current();
-    assert(fcs_ahrs_validate_config(current_config) == FCS_CONFIG_OK);
-
-    /*
     TODO: read state from NMPC shared memory, just in case we're booting up
     after an in-flight reset
     */
@@ -230,69 +222,7 @@ void fcs_ahrs_tick(void) {
     ukf_get_state(&state);
 }
 
-enum fcs_config_validation_result_t fcs_ahrs_validate_config(
-fcs_config_t new_config) {
-    enum fcs_config_param_result_t result;
-
-    /*
-    Check the presence and version of each of the parameter blocks we need;
-    abort if any are missing or incorrect
-    */
-    result = fcs_config_check_param_block(
-        new_config, sizeof(struct fcs_ahrs_sensor_geometry_v1_t),
-        FCS_AHRS_SENSOR_GEOMETRY_KEY, FCS_AHRS_SENSOR_GEOMETRY_VERSION);
-    if (result != FCS_CONFIG_PARAM_OK) {
-        return FCS_CONFIG_ERROR;
-    }
-
-    result = fcs_config_check_param_block(
-        new_config, sizeof(struct fcs_ahrs_sensor_calibration_v1_t),
-        FCS_AHRS_SENSOR_CALIBRATION_KEY, FCS_AHRS_SENSOR_CALIBRATION_VERSION);
-    if (result != FCS_CONFIG_PARAM_OK) {
-        return FCS_CONFIG_ERROR;
-    }
-
-    result = fcs_config_check_param_block(
-        new_config, sizeof(struct fcs_ahrs_sensor_covariance_v1_t),
-        FCS_AHRS_SENSOR_COVARIANCE_KEY, FCS_AHRS_SENSOR_COVARIANCE_VERSION);
-    if (result != FCS_CONFIG_PARAM_OK) {
-        return FCS_CONFIG_ERROR;
-    }
-
-    result = fcs_config_check_param_block(
-        new_config, sizeof(struct fcs_ahrs_wmm_field_v1_t),
-        FCS_AHRS_WMM_FIELD_KEY, FCS_AHRS_WMM_FIELD_VERSION);
-    if (result != FCS_CONFIG_PARAM_OK) {
-        return FCS_CONFIG_ERROR;
-    }
-
-    /*
-    Need to actually fetch the model config to ensure the selection of
-    dynamics model is valid.
-    */
-    struct fcs_ahrs_dynamics_model_v1_t model;
-    result = fcs_config_get_param_block(
-        new_config, sizeof(model), &model,
-        FCS_AHRS_DYNAMICS_MODEL_KEY, FCS_AHRS_DYNAMICS_MODEL_VERSION);
-    if (result != FCS_CONFIG_PARAM_OK || model.model > UKF_MODEL_FIXED_WING) {
-        return FCS_CONFIG_ERROR;
-    }
-
-    /*
-    It's OK if the dynamics model parameters are missing, but if they're wrong
-    then return an error
-    */
-    result = fcs_config_check_param_block(
-        new_config, sizeof(struct fcs_model_dynamics_params_v1_t),
-        FCS_MODEL_DYNAMICS_PARAMS_KEY, FCS_MODEL_DYNAMICS_PARAMS_VERSION);
-    if (result == FCS_CONFIG_ERROR) {
-        return FCS_CONFIG_ERROR;
-    }
-
-    return FCS_CONFIG_OK;
-}
-
-void fcs_ahrs_load_config(fcs_config_t new_config) {
+void fcs_ahrs_update_state(const struct fcs_state_t *new_state) {
     assert(new_config);
 
     enum fcs_config_param_result_t result;

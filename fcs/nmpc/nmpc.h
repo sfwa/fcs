@@ -25,8 +25,6 @@ SOFTWARE.
 
 void fcs_nmpc_init(void);
 void fcs_nmpc_tick(void);
-enum fcs_config_validation_result_t fcs_nmpc_validate_config(
-fcs_config_t new_config);
-void fcs_nmpc_load_config(fcs_config_t new_config);
+void fcs_nmpc_update_state(const struct fcs_state_t *new_state);
 
 #endif

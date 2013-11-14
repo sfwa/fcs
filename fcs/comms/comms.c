@@ -34,10 +34,5 @@ void fcs_comms_tick(void) {
 
 }
 
-enum fcs_config_validation_result_t fcs_comms_validate_config(
-fcs_config_t new_config) {
-    return FCS_CONFIG_OK;
-}
-
-void fcs_comms_load_config(fcs_config_t new_config) {
+void fcs_comms_update_state(const struct fcs_state_t *new_state) {
 }

@@ -45,29 +45,6 @@ void fcs_nmpc_tick(void) {
     /* TODO */
 }
 
-enum fcs_config_validation_result_t fcs_nmpc_validate_config(
-fcs_config_t new_config) {
-    enum fcs_config_param_result_t result;
-    result = fcs_config_check_param_block(
-        new_config, sizeof(struct fcs_model_dynamics_params_v1_t),
-        FCS_MODEL_DYNAMICS_PARAMS_KEY, FCS_MODEL_DYNAMICS_PARAMS_VERSION);
-    if (result != FCS_CONFIG_PARAM_OK) {
-        return FCS_CONFIG_ERROR;
-    }
-
-    return FCS_CONFIG_OK;
-}
-
-void fcs_nmpc_load_config(fcs_config_t new_config) {
-    assert(new_config);
-
-    enum fcs_config_param_result_t result;
-    struct fcs_model_dynamics_params_v1_t params;
-    result = fcs_config_get_param_block(
-        new_config, sizeof(model), &model,
-        FCS_MODEL_DYNAMICS_PARAMS_KEY,
-        FCS_MODEL_DYNAMICS_PARAMS_VERSION);
-    assert(result == FCS_CONFIG_PARAM_OK);
-
+void fcs_nmpc_update_state(const struct fcs_state_t *new_state) {
     /* TODO */
 }

@@ -23,10 +23,21 @@ SOFTWARE.
 #ifndef _FCS_COMMS_H
 #define _FCS_COMMS_H
 
+/*
+fcs_message_t is a NUL-delimited, COBS-R encoded sequence of fcs_state_t
+tuples.
+
+If the layer_id is not 0, the message data is encrypted with a key identified
+by the layer_id value. The key must have already been exchanged through some
+other means.
+*/
+struct fcs_message_t {
+    uint8_t layer_id;
+    uint8_t data[250];
+};
+
 void fcs_comms_init(void);
 void fcs_comms_tick(void);
-enum fcs_config_validation_result_t fcs_comms_validate_config(
-fcs_config_t new_config);
-void fcs_comms_load_config(fcs_config_t new_config);
+void fcs_comms_update_state(const struct fcs_state_t *new_state);
 
 #endif

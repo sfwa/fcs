@@ -27,9 +27,6 @@ SOFTWARE.
 Configuration data types for the AHRS
 */
 
-#define FCS_AHRS_SENSOR_GEOMETRY_KEY "ahrs.sensgeom__"
-#define FCS_AHRS_SENSOR_GEOMETRY_VERSION 1u
-
 struct fcs_ahrs_sensor_geometry_v1_t {
     float accel_1_orientation[4];
     float accel_2_orientation[4];
@@ -38,10 +35,6 @@ struct fcs_ahrs_sensor_geometry_v1_t {
     float accel_1_position[3];
     float accel_2_position[3];
 };
-
-#define FCS_AHRS_SENSOR_CALIBRATION_KEY "ahrs.senscalib_"
-#define FCS_AHRS_SENSOR_CALIBRATION_VERSION 1u
-
 struct fcs_ahrs_sensor_calibration_v1_t {
     float accel_1_calibration[16];
     float accel_2_calibration[16];
@@ -53,9 +46,6 @@ struct fcs_ahrs_sensor_calibration_v1_t {
     float barometer_bias;
     float barometer_scale;
 };
-
-#define FCS_AHRS_SENSOR_COVARIANCE_KEY "ahrs.senscovar_"
-#define FCS_AHRS_SENSOR_COVARIANCE_VERSION 1u
 
 struct fcs_ahrs_sensor_covariance_v1_t {
     float accel_covariance;
@@ -69,15 +59,9 @@ struct fcs_ahrs_sensor_covariance_v1_t {
     float barometer_amsl_covariance;
 };
 
-#define FCS_AHRS_WMM_FIELD_KEY "ahrs.wmmfield__"
-#define FCS_AHRS_WMM_FIELD_VERSION 1u
-
 struct fcs_ahrs_wmm_field_v1_t {
     float mag_field[3];
 };
-
-#define FCS_AHRS_DYNAMICS_MODEL_KEY "ahrs.dynmodel__"
-#define FCS_AHRS_DYNAMICS_MODEL_VERSION 1u
 
 struct fcs_ahrs_dynamics_model_v1_t {
     float process_noise[24];
@@ -87,8 +71,6 @@ struct fcs_ahrs_dynamics_model_v1_t {
 
 void fcs_ahrs_init(void);
 void fcs_ahrs_tick(void);
-enum fcs_config_validation_result_t fcs_ahrs_validate_config(
-fcs_config_t new_config);
-void fcs_ahrs_load_config(fcs_config_t new_config);
+void fcs_ahrs_update_state(const struct fcs_state_t *new_state);
 
 #endif

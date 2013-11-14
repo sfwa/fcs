@@ -29,15 +29,6 @@ SOFTWARE.
 #include "piksi.h"
 
 void fcs_piksi_init(void) {
-    /*
-    Ensure this isn't called more than once, and the initial configuration is
-    good
-    */
-    fcs_config_t current_config;
-    current_config = fcs_config_get_current();
-    assert(fcs_nmpc_validate_config(current_config) == FCS_CONFIG_OK);
-    fcs_piksi_load_config(current_config);
-
     /* TODO */
 }
 
@@ -45,15 +36,6 @@ void fcs_piksi_tick(void) {
     /* TODO */
 }
 
-enum fcs_config_validation_result_t fcs_piksi_validate_config(
-fcs_config_t new_config) {
-    /* TODO */
-
-    return FCS_CONFIG_OK;
-}
-
-void fcs_piksi_load_config(fcs_config_t new_config) {
-    assert(new_config);
-
+void fcs_piksi_update_state(const struct fcs_state_t *new_state) {
     /* TODO */
 }
