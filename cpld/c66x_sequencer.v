@@ -39,7 +39,11 @@ module c66x_sequencer(
     output reg vid_oe_INV,
     output reg dsp_bank_en,
     output reg bootmode_en,
-    output reg[15:0] bootmode
+    output reg[15:0] bootmode,
+    output reg[3:0] state,
+    output pll_spi_clk,
+    output pll_spi_cs_INV,
+    output pll_spi_mosi
 );
 
 reg[1:0] cvdd_good_debounce;
@@ -55,6 +59,9 @@ wire dvdd18_ok = (dvdd18_good_debounce == 2'b11);
 wire dvdd15_ok = (dvdd15_good_debounce == 2'b11);
 wire pll_ok = (pll_locked_debounce == 2'b11);
 wire resetstat_ok = (resetstat_INV_debounce == 2'b11);
+
+wire clkgen_busy;
+reg clkgen_reset, clkgen_program;
 
 /*
 If not used elsewhere, /LRESET, /NMI and /LRESETNMIEN should be pulled high.
@@ -101,16 +108,17 @@ Power-down:
 If any power input is not good, run power-down sequence immediately.
 */
 
-reg[3:0] state;
+//reg[3:0] state;
 reg[3:0] next_state;
-reg[7:0] state_timer;
-wire timeout = (state_timer == 8'b11111111); /* 25msec timeout */
+reg[12:0] state_timer;
+wire delay = (state_timer == 13'b1111111111111); /* 3msec delay */
+wire timeout = (state_timer == 17'b11111111111111111); /* 48msec timeout */
 
 parameter off = 4'b0000,
           /* Start-up sequence */
           startup_awaiting_cvdd_good = 4'b0001,
-          startup_awaiting_pll_locked_cvdd1_good = 4'b0010,
-          startup_awaiting_dvdd18_good = 4'b0011,
+          startup_awaiting_cvdd1_good = 4'b0010,
+          startup_awaiting_pll_locked_dvdd18_good = 4'b0011,
           startup_awaiting_dvdd15_good = 4'b0100,
           startup_reset_wait_state = 4'b0101,
           startup_reset_wait_state_2 = 4'b0110,
@@ -126,6 +134,53 @@ parameter off = 4'b0000,
           /* Should never hit this */
           invalid1 = 4'b1111;
 
+/*
+Program the CDCE62002 with preset configuration words:
+REGISTERS
+0   55200080
+1   8389A061
+2   00000002
+*/
+cdce62002 clkgen_interface(
+   .clk(sysclk),
+   .reset(clkgen_reset),
+   .active(clkgen_busy),
+   .send_data(clkgen_program),
+   .spi_clk(pll_spi_clk),
+   .spi_le(pll_spi_cs_INV),
+   .spi_mosi(pll_spi_mosi),
+   .spi_miso()
+);
+
+/*
+"bootmode" is actually {pciessmode[1:0], bootmode[12:0], lendian} on the DSP
+datasheet. Always boot in little-endian (bit 0 high), with PCIESSMODE = 00
+(endpoint mode).
+
+For bootmode_none, there is no additional configuration necessary -- just wait
+for attachment via the debug port.
+
+For bootmode_spiflash, the SPI configuration bitfieldsa re
+*/
+parameter boot_endian_little = 1'b1,
+          boot_device_none = 3'b0,
+          boot_device_spiflash = 3'b110,
+          boot_config_none = 10'b0,
+          boot_config_spi_mode = 2'b00,
+          boot_config_spi_pins_4 = 1'b0,
+          boot_config_spi_pins_5 = 1'b1,
+          boot_config_spi_addrwidth_16 = 1'b0,
+          boot_config_spi_addrwidth_24 = 1'b1,
+          boot_config_spi_chipselect = 2'b0,
+          boot_config_spi_param_table_idx = 4'b0;
+
+wire[15:0] default_bootmode = {boot_config_none, boot_device_none,
+                         boot_endian_little};
+wire[15:0] spi_bootmode = {boot_config_spi_mode, boot_config_spi_pins_4,
+                     boot_config_spi_addrwidth_16,
+                     boot_config_spi_addrwidth_24,
+                     boot_config_spi_param_table_idx};
+
 /* Mapping between current state and outputs */
 always @(*) begin
     /* Defaults for unhandled case statements -- everything off */
@@ -133,7 +188,6 @@ always @(*) begin
     cvdd1_en = 1'b0;
     dvdd18_en = 1'b0;
     dvdd15_en = 1'b0;
-    pll_en = 1'b0;
     por_INV = 1'b0;
     reset_INV = 1'b0;
     resetfull_INV = 1'b0;
@@ -141,23 +195,28 @@ always @(*) begin
     bootmode_en = 1'b1;
     bootmode = 16'bz;
     dsp_bank_en = 1'b0;
+    clkgen_reset = 1'b0;
+    clkgen_program = 1'b0;
 
     case (state)
         off: begin
             /* Default state */
+            clkgen_reset = 1'b1;
         end
         startup_awaiting_cvdd_good: begin
             cvdd_en = 1'b1;
         end
-        startup_awaiting_pll_locked_cvdd1_good: begin
+        startup_awaiting_cvdd1_good: begin
             cvdd_en = 1'b1;
             cvdd1_en = 1'b1;
+            pll_en = 1'b1;
         end
-        startup_awaiting_dvdd18_good: begin
+        startup_awaiting_pll_locked_dvdd18_good: begin
             cvdd_en = 1'b1;
             cvdd1_en = 1'b1;
             dvdd18_en = 1'b1;
             pll_en = 1'b1;
+            clkgen_program = 1'b1;
         end
         startup_awaiting_dvdd15_good: begin
             cvdd_en = 1'b1;
@@ -196,9 +255,8 @@ always @(*) begin
             por_INV = 1'b1;
             reset_INV = 1'b1;
             vid_oe_INV = 1'b0;
-            /* FIXME: set bootmode config */
             dsp_bank_en = 1'b1;
-            bootmode = 16'b0;
+            bootmode = default_bootmode;
         end
         startup_awaiting_resetstat_INV: begin
             cvdd_en = 1'b1;
@@ -210,9 +268,8 @@ always @(*) begin
             reset_INV = 1'b1;
             resetfull_INV = 1'b1;
             vid_oe_INV = 1'b0;
-            /* FIXME: set bootmode config */
             dsp_bank_en = 1'b1;
-            bootmode = 16'b0;
+            bootmode = default_bootmode;
         end
         on: begin
             cvdd_en = 1'b1;
@@ -275,20 +332,20 @@ always @(*) begin
             if (!enable | timeout) begin
                 next_state = shutdown_awaiting_cvdd_pll_off;
             end else if (cvdd_ok) begin
-                next_state = startup_awaiting_pll_locked_cvdd1_good;
+                next_state = startup_awaiting_cvdd1_good;
             end
         end
-        startup_awaiting_pll_locked_cvdd1_good: begin
+        startup_awaiting_cvdd1_good: begin
             if (!enable | timeout | !cvdd_ok) begin
                 next_state = shutdown_awaiting_cvdd_pll_off;
-            end else if (cvdd1_ok & pll_ok) begin
-                next_state = startup_awaiting_dvdd18_good;
+            end else if (cvdd1_ok) begin
+                next_state = startup_awaiting_pll_locked_dvdd18_good;
             end
         end
-        startup_awaiting_dvdd18_good: begin
+        startup_awaiting_pll_locked_dvdd18_good: begin
             if (!enable | timeout | !cvdd_ok | !cvdd1_ok | !pll_ok) begin
                 next_state = shutdown_awaiting_cvdd1_off;
-            end else if (dvdd18_good_debounce == 2'b11) begin
+            end else if (dvdd18_ok & pll_ok) begin
                 next_state = startup_awaiting_dvdd15_good;
             end
         end
@@ -296,7 +353,7 @@ always @(*) begin
             if (!enable | timeout | !cvdd_ok | !cvdd1_ok | !pll_ok |
                     !dvdd18_ok) begin
                 next_state = shutdown_awaiting_dvdd18_off;
-            end else if (dvdd15_good_debounce == 2'b11) begin
+            end else if (dvdd15_ok) begin
                 next_state = startup_reset_wait_state;
             end
         end
@@ -367,7 +424,7 @@ always @(*) begin
     endcase
 end
 
-always @(posedge sysclk) begin
+always @(posedge delay) begin
     if (state != next_state) begin
         state <= next_state;
         state_timer <= 8'b00000000;
@@ -411,6 +468,7 @@ always @(posedge sysclk) begin
         dvdd15_good_debounce <= 2'b00;
     end
 
+/*
     if (pll_locked) begin
         if (!pll_ok) begin
             pll_locked_debounce <= pll_locked_debounce + 2'b01;
@@ -418,6 +476,8 @@ always @(posedge sysclk) begin
     end else begin
         pll_locked_debounce <= 2'b00;
     end
+*/
+    pll_locked_debounce <= 2'b11;
 
     if (resetstat_INV) begin
         if (!resetstat_ok) begin

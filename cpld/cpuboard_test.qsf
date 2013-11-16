@@ -41,14 +41,13 @@ set_global_assignment -name DEVICE EPM1270M256C5
 set_global_assignment -name TOP_LEVEL_ENTITY cpld_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "13.0 SP1"
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "17:13:38  NOVEMBER 11, 2013"
-set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1"
+set_global_assignment -name LAST_QUARTUS_VERSION 13.1
 set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
 set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR "-1"
 set_global_assignment -name POWER_EXT_SUPPLY_VOLTAGE_TO_REGULATOR 3.3V
 set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
-set_global_assignment -name VERILOG_FILE pmbus_passthrough.v
 set_global_assignment -name VERILOG_FILE exynos4412_sequencer.v
 set_global_assignment -name VERILOG_FILE cdce62002_program.v
 set_global_assignment -name VERILOG_FILE c66x_sequencer.v
@@ -373,9 +372,16 @@ set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to led[2]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to spi_flash_miso
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to spi_flash_clk
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cell_gps_en_INV
-set_global_assignment -name VECTOR_WAVEFORM_FILE cpu_sequence.vwf
 set_global_assignment -name SIMULATION_MODE FUNCTIONAL
 set_global_assignment -name EDA_SIMULATION_TOOL "ModelSim-Altera (Verilog)"
 set_global_assignment -name EDA_OUTPUT_DATA_FORMAT "VERILOG HDL" -section_id eda_simulation
 set_global_assignment -name EDA_GENERATE_FUNCTIONAL_NETLIST ON -section_id eda_simulation
 set_global_assignment -name INCREMENTAL_VECTOR_INPUT_SOURCE "Z:/fcs/cpld/cpu_sequence.vwf"
+set_global_assignment -name USE_CONFIGURATION_DEVICE ON
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS "AS INPUT TRI-STATED"
+set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
+set_global_assignment -name AUTO_RESTART_CONFIGURATION OFF
+set_global_assignment -name ENABLE_CONFIGURATION_PINS OFF
+set_global_assignment -name ENABLE_NCE_PIN OFF
+set_global_assignment -name ENABLE_BOOT_SEL_PIN OFF
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS_NO_OUTPUT_GND "AS INPUT TRI-STATED"

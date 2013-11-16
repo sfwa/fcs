@@ -51,7 +51,7 @@ module cpld_top(
 	input pg_1v0,
 	output reg camera_trigger,
 	output reg dsp_ext_spi_en,
-	output reg dsp_ext_uart_en,
+	output dsp_ext_uart_en,
 	output reg cpu_ext_uart_en,
 	output reg ioboard_2_reset_out,
 	input ioboard_2_reset_in,
@@ -61,7 +61,7 @@ module cpld_top(
 	input cell_wake_INV,
 	output reg cell_gps_en_INV,
 	output reg cell_disable_INV,
-	output reg[3:0] led,
+	output[3:0] led,
 	inout[4:0] gpio,
 	/* BANK 2 -- DSP 1V8 */
 	input dsp_spi_clk,
@@ -87,7 +87,7 @@ module cpld_top(
 	input dsp_ext_uart_tx,
 	input dsp_ext_uart0_int_INV,
 	input dsp_ext_uart1_int_INV,
-	output reg dsp_usb_reset_INV,
+	output dsp_usb_reset_INV,
 	input dsp_usb_irq_INV,
 	output reg dsp_usb_dack,
 	output reg dsp_usb_eot,
@@ -136,12 +136,13 @@ module cpld_top(
 assign dsp_i2c_1v8_scl = 1'bz;
 assign dsp_i2c_1v8_sda = 1'bz;
 assign cpu_gpio[23:0] = 24'bz;
+assign dsp_usb_reset_INV = 1'b0;
+assign dsp_ext_uart_en = 1'b1;
 
-wire osc_clk, osc_clk_100us, dsp_enable, cpu_enable, io1_enable, io2_enable,
+wire osc_clk, osc_clk_1600us, dsp_enable, cpu_enable, io1_enable, io2_enable,
      dsp_bootmode_enable, pg_ddr3, pg_1v8, sys_enable, cpu_bank_enable,
      dsp_bank_enable;
 wire[15:0] dsp_bootmode;
-reg[8:0] osc_clk_scaler;
 
 /*
 User flash module oscillator output -- anywhere from 3.3-5.5MHz, used for
@@ -152,11 +153,11 @@ altufm_osc0_altufm_osc_1p3 int_osc(
 	.oscena(1'b1)
 );
 
-/* Generate osc_clk_100us from osc_clk / 512 */
-assign osc_clk_100us = osc_clk_scaler[8];
-always @(posedge osc_clk) begin
-	osc_clk_scaler <= osc_clk_scaler + 8'b000000001;
-end
+wire[3:0] c66x_state;
+assign led[0] = c66x_state[0]; //dsp_por_INV;
+assign led[1] = dsp_resetstat; //dsp_resetfull_INV;
+assign led[2] = pll_locked; //dsp_reset_INV;
+assign led[3] = ~pll_spi_cs_INV;
 
 /*
 Global system enable -- wait until the board power supplies are good
@@ -165,7 +166,8 @@ assign sys_enable = pg_5v & pg_3v3;
 
 assign gpio[4] = 1'bz;
 assign cpu_enable = gpio[4];
-assign dsp_enable = gpio[4];
+assign dsp_enable = 1'b1;
+assign en_1v8 = 1'b1;
 
 /*
 DSP sequencer -- handles power on/off for the DSP and associated peripherals
@@ -173,12 +175,16 @@ DSP sequencer -- handles power on/off for the DSP and associated peripherals
 assign en_vtt = en_1v5; /* FIXME? */
 assign pg_ddr3 = pg_1v5 & pg_vtt; /* FIXME? */
 assign pg_1v8 = en_1v8; /* FIXME */
-assign ucd9222_rst_INV = !sys_enable;
+assign ucd9222_rst_INV = 1'b1;
+// assign pll_spi_cs_INV = 1'b1;
+// assign pll_spi_clk = 1'b0;
+// assign pll_spi_mosi = 1'b0;
+// assign pll_en = 1'b1;
 assign dsp_lreset_INV = dsp_bank_enable;
 assign dsp_lresetnmien_INV = dsp_bank_enable;
 assign dsp_nmi_INV = dsp_bank_enable;
 c66x_sequencer dsp_seq(
-    .sysclk(osc_clk_100us),
+    .sysclk(osc_clk),
     .enable(dsp_enable & sys_enable),
     .cvdd_good(pg_cvdd),
     .cvdd1_good(pg_1v0),
@@ -188,7 +194,7 @@ c66x_sequencer dsp_seq(
     .resetstat_INV(dsp_resetstat),
     .cvdd_en(en_cvdd),
     .cvdd1_en(en_1v0),
-    .dvdd18_en(en_1v8),
+    .dvdd18_en(/* en_1v8 */),
     .dvdd15_en(en_1v5),
     .pll_en(pll_en),
     .por_INV(dsp_por_INV),
@@ -197,7 +203,11 @@ c66x_sequencer dsp_seq(
     .vid_oe_INV(dsp_vid_oe_INV),
     .dsp_bank_en(dsp_bank_enable),
     .bootmode_en(dsp_bootmode_enable),
-    .bootmode(dsp_bootmode)
+    .bootmode(dsp_bootmode),
+    .state(c66x_state),
+    .pll_spi_clk(pll_spi_clk),
+    .pll_spi_cs_INV(pll_spi_cs_INV),
+    .pll_spi_mosi(pll_spi_mosi)
 );
 
 /*
@@ -218,73 +228,19 @@ end
 /*
 CPU sequencer -- handle power on/off for the CPU board
 */
-exynos4412_sequencer cpu_seq(
-    .sysclk(osc_clk_100us),
-    .enable(cpu_enable & sys_enable),
-    .cpu_pmic_pwron(cpu_pmic_pwron),
-    .cpu_pmic_reset_INV(cpu_pmic_reset_INV),
-    .cpu_bank_en(cpu_bank_enable),
-    .cpu_bootmode(cpu_bootmode)
-);
+// exynos4412_sequencer cpu_seq(
+//     .sysclk(osc_clk_1600us),
+//     .enable(cpu_enable & sys_enable),
+//     .cpu_pmic_pwron(cpu_pmic_pwron),
+//     .cpu_pmic_reset_INV(cpu_pmic_reset_INV),
+//     .cpu_bank_en(cpu_bank_enable),
+//     .cpu_bootmode(cpu_bootmode)
+// );
 
-/*
-Board setup -- configure a PMBus pass-through from the CPLD GPIO header to the
-UCD9222 DSP core power controller
-*/
-assign gpio[2] = smbus_alert ? 1'b1 : 1'b0;
-assign gpio[3] = 1'bz;
-assign smbus_cntrl = gpio[3] ? 1'b1 : 1'b0;
-pmbus_passthrough ucd9222_interface(
-    .reset(!sys_enable),
-    .sysclk(osc_clk),
-    .master_scl(gpio[0]),
-    .master_sda(gpio[1]),
-    .slave_scl(smbus_clk),
-    .slave_sda(smbus_data),
-    .sda_direction_tap()
-);
-
-/*
-Program the CDCE62002 with preset configuration words:
-REGISTERS
-0	55200080
-1	8389A061
-2	00000002
-*/
-cdce62002 clkgen_interface(
-   .clk(osc_clk),
-   .reset(!sys_enable),
-   .busy(),
-   .send_data(sys_enable),
-   .spi_clk(pll_spi_clk),
-   .spi_le(pll_spi_cs_INV),
-   .spi_mosi(pll_spi_mosi),
-   .spi_miso(pll_spi_miso),
-
-   /* The names below match those used in pages 22-24 of the datasheet*/
-   .INBUFSELX(1'b0),
-   .INBUFSELY(1'b0),
-   .REFSEL(1'b0),
-   .AUXSEL(1'b1),
-   .ACDCSEL(1'b0),
-   .TERMSEL(1'b0),
-   .REFDIVIDE(4'b0000),
-   .LOCKW(2'b00),
-   .OUT0DIVRSEL(4'b0100),
-   .OUT1DIVRSEL(4'b1010),
-   .HIPERFORMANCE(1'b0),
-   .OUTBUFSEL0X(1'b1),
-   .OUTBUFSEL0Y(1'b0),
-   .OUTBUFSEL1X(1'b1),
-   .OUTBUFSEL1Y(1'b0),
-
-   .SELVCO(1'b0),
-   .SELINDIV(8'b00000011),
-   .SELPRESC(2'b01),
-   .SELFBDIV(8'b00010011),
-   .SELBPDIV(3'b111),
-   .LFRCSEL(4'b0000)
-);
+assign gpio[3:0] = 4'bz;
+assign smbus_cntrl = 1'bz;
+assign smbus_clk = 1'bz;
+assign smbus_data = 1'bz;
 
 endmodule
 
