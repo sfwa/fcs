@@ -50,14 +50,14 @@ reg[1:0] cvdd_good_debounce;
 reg[1:0] cvdd1_good_debounce;
 reg[1:0] dvdd18_good_debounce;
 reg[1:0] dvdd15_good_debounce;
-reg[1:0] pll_locked_debounce;
+reg[3:0] pll_locked_debounce;
 reg[1:0] resetstat_INV_debounce;
 
 wire cvdd_ok = (cvdd_good_debounce == 2'b11);
 wire cvdd1_ok = (cvdd1_good_debounce == 2'b11);
 wire dvdd18_ok = (dvdd18_good_debounce == 2'b11);
 wire dvdd15_ok = (dvdd15_good_debounce == 2'b11);
-wire pll_ok = (pll_locked_debounce == 2'b11);
+wire pll_ok = (pll_locked_debounce == 4'b1111);
 wire resetstat_ok = (resetstat_INV_debounce == 2'b11);
 
 wire clkgen_busy;
@@ -109,17 +109,17 @@ If any power input is not good, run power-down sequence immediately.
 */
 
 reg[3:0] next_state;
-reg[3:0] state_timer;
+reg[7:0] state_timer;
 reg[12:0] delay_timer;
 wire delay = (delay_timer == 13'b1111111111111); /* 3msec delay */
-wire timeout = (state_timer == 4'b1111); /* 48msec timeout */
+wire timeout = (state_timer == 8'b11111111); /* 768msec timeout */
 
 parameter off = 4'b0000,
           /* Start-up sequence */
           startup_awaiting_cvdd_good = 4'b0001,
           startup_awaiting_cvdd1_good = 4'b0010,
-          startup_awaiting_pll_locked_dvdd18_good = 4'b0011,
-          startup_awaiting_dvdd15_good = 4'b0100,
+          startup_awaiting_dvdd18_good = 4'b0011,
+          startup_awaiting_pll_locked_dvdd15_good = 4'b0100,
           startup_reset_wait_state = 4'b0101,
           startup_reset_wait_state_2 = 4'b0110,
           startup_por_wait_state = 4'b0111,
@@ -209,14 +209,14 @@ always @(*) begin
             cvdd1_en = 1'b1;
             pll_en = 1'b1;
         end
-        startup_awaiting_pll_locked_dvdd18_good: begin
+        startup_awaiting_dvdd18_good: begin
             cvdd_en = 1'b1;
             cvdd1_en = 1'b1;
             dvdd18_en = 1'b1;
             pll_en = 1'b1;
             clkgen_program = 1'b1;
         end
-        startup_awaiting_dvdd15_good: begin
+        startup_awaiting_pll_locked_dvdd15_good: begin
             cvdd_en = 1'b1;
             cvdd1_en = 1'b1;
             dvdd18_en = 1'b1;
@@ -337,21 +337,20 @@ always @(*) begin
             if (!enable | timeout | !cvdd_ok) begin
                 next_state = shutdown_awaiting_cvdd_pll_off;
             end else if (cvdd1_ok) begin
-                next_state = startup_awaiting_pll_locked_dvdd18_good;
+                next_state = startup_awaiting_dvdd18_good;
             end
         end
-        startup_awaiting_pll_locked_dvdd18_good: begin
-            if (!enable | timeout | !cvdd_ok | !cvdd1_ok | !pll_ok) begin
+        startup_awaiting_dvdd18_good: begin
+            if (!enable | timeout | !cvdd_ok | !cvdd1_ok) begin
                 next_state = shutdown_awaiting_cvdd1_off;
-            end else if (dvdd18_ok & pll_ok) begin
-                next_state = startup_awaiting_dvdd15_good;
+            end else if (dvdd18_ok) begin
+                next_state = startup_awaiting_pll_locked_dvdd15_good;
             end
         end
-        startup_awaiting_dvdd15_good: begin
-            if (!enable | timeout | !cvdd_ok | !cvdd1_ok | !pll_ok |
-                    !dvdd18_ok) begin
+        startup_awaiting_pll_locked_dvdd15_good: begin
+            if (!enable | timeout | !cvdd_ok | !cvdd1_ok | !dvdd18_ok) begin
                 next_state = shutdown_awaiting_dvdd18_off;
-            end else if (dvdd15_ok) begin
+            end else if (dvdd15_ok & pll_ok) begin
                 next_state = startup_reset_wait_state;
             end
         end
@@ -471,15 +470,19 @@ always @(posedge delay) begin
     end
 
 /*
+Disable PLL lock check because with the current parameters, it doesn't.
+
+However, stability is still good enough for the DSP to function as expected.
+
     if (pll_locked) begin
         if (!pll_ok) begin
-            pll_locked_debounce <= pll_locked_debounce + 2'b01;
+            pll_locked_debounce <= pll_locked_debounce + 4'b001;
         end
     end else begin
-        pll_locked_debounce <= 2'b00;
+        pll_locked_debounce <= 4'b000;
     end
 */
-    pll_locked_debounce <= 2'b11;
+    pll_locked_debounce <= 4'b1111;
 
     if (resetstat_INV) begin
         if (!resetstat_ok) begin

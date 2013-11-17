@@ -14,15 +14,27 @@ module cdce62002 (
     input spi_miso
 );
 
-reg[8:0] out_pointer;
+reg[8:0] out_pointer = 9'b0;
+
+/*
+These parameters appear to yield a fairly stable clock signal, but the PLL
+doesn't seem to lock properly:
+bb870061
+54220080
+
+These parameters are stable enough for the DSP to boot and complete testing,
+but the PLL doesn't lock if 1v8 is high:
+b7870061
+54200080
+*/
 
 wire[511:0] data_out = {
     32'h61003bf2, 4'd0,
     32'h60003bf2, 4'd0,
     32'h61003bf2, 4'd0,
     32'h00000000, 4'd0,
-    32'h8383E001, 4'd0,
-    32'h55D00080, 8'd0
+    32'hb7870061, 4'd0,
+    32'h54200080, 8'd0
 };
 
 wire[511:0] le_out  = {
@@ -38,7 +50,9 @@ wire busy = (out_pointer != 9'b00000000);
 wire done = (out_pointer[8] == 1'b1);
 
 always @(posedge clk) begin
-    if (reset | done) begin
+    if (done) begin
+        active <= 1'b0;
+    end else if (reset) begin
         out_pointer <= 1'b0;
         active <= 1'b0;
     end else if (send_data & !busy) begin
@@ -57,9 +71,8 @@ always @(posedge clk) begin
     if (spi_clk) begin
         spi_mosi <= data_out[out_pointer];
         spi_le <= !(le_out[out_pointer] && active);
-    end else begin
-        spi_clk <= !spi_clk;
     end
+    spi_clk <= !spi_clk;
 end
 
 endmodule

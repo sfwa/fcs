@@ -98,10 +98,10 @@ module cpld_top(
 	output reg dsp_int_uart1_rx,
 	output reg dsp_ext_uart_rx,
 	/* BANK 3 -- 3V3 */
-	output reg ext_spi_clk,
-	output reg ext_spi_mosi,
+	output ext_spi_clk,
+	output ext_spi_mosi,
 	input ext_spi_miso,
-	output reg ext_spi_cs_INV,
+	output ext_spi_cs_INV,
 	output reg ioboard_uart0_tx,
 	input ioboard_uart0_rx,
 	output reg ioboard_uart1_tx,
@@ -154,10 +154,18 @@ altufm_osc0_altufm_osc_1p3 int_osc(
 );
 
 wire[3:0] c66x_state;
-assign led[0] = c66x_state[0]; //dsp_por_INV;
-assign led[1] = dsp_resetstat; //dsp_resetfull_INV;
-assign led[2] = pll_locked; //dsp_reset_INV;
-assign led[3] = ~pll_spi_cs_INV;
+assign led[0] = (c66x_state == 4'b1001);
+assign led[1] = dsp_resetfull_INV;
+assign led[2] = pll_locked;
+assign led[3] = 1'b1;
+
+/*
+Break out the CDCE62002 SPI signals to the external SPI connector to enable
+monitoring
+*/
+assign ext_spi_clk = pll_spi_clk;
+assign ext_spi_mosi = pll_spi_mosi;
+assign ext_spi_cs_INV = pll_spi_cs_INV;
 
 /*
 Global system enable -- wait until the board power supplies are good
@@ -172,8 +180,10 @@ assign smbus_data = 1'bz;
 assign cpu_enable = 1'b0;
 assign dsp_enable = 1'b1;
 
-/* GPIO 0 must be input with weak pull-up */
-assign en_1v8 = en_1v8_dsp | ~gpio[0];
+/*
+Keep 1v8 enabled all the time -- the regulator does funny things otherwise
+*/
+assign en_1v8 = 1'b1;
 
 /*
 DSP sequencer -- handles power on/off for the DSP and associated peripherals
@@ -182,10 +192,6 @@ assign en_vtt = en_1v5; /* FIXME? */
 assign pg_ddr3 = pg_1v5 & pg_vtt; /* FIXME? */
 assign pg_1v8 = en_1v8; /* FIXME */
 assign ucd9222_rst_INV = 1'b1;
-// assign pll_spi_cs_INV = 1'b1;
-// assign pll_spi_clk = 1'b0;
-// assign pll_spi_mosi = 1'b0;
-// assign pll_en = 1'b1;
 assign dsp_lreset_INV = dsp_bank_enable;
 assign dsp_lresetnmien_INV = dsp_bank_enable;
 assign dsp_nmi_INV = dsp_bank_enable;
@@ -209,7 +215,7 @@ c66x_sequencer dsp_seq(
     .vid_oe_INV(dsp_vid_oe_INV),
     .dsp_bank_en(dsp_bank_enable),
     .bootmode_en(dsp_bootmode_enable),
-    .bootmode(dsp_bootmode),
+    .bootmode(/* dsp_bootmode */),
     .state(c66x_state),
     .pll_spi_clk(pll_spi_clk),
     .pll_spi_cs_INV(pll_spi_cs_INV),
