@@ -141,7 +141,7 @@ assign dsp_ext_uart_en = 1'b1;
 
 wire osc_clk, osc_clk_1600us, dsp_enable, cpu_enable, io1_enable, io2_enable,
      dsp_bootmode_enable, pg_ddr3, pg_1v8, sys_enable, cpu_bank_enable,
-     dsp_bank_enable;
+     dsp_bank_enable, en_1v8_dsp;
 wire[15:0] dsp_bootmode;
 
 /*
@@ -164,10 +164,16 @@ Global system enable -- wait until the board power supplies are good
 */
 assign sys_enable = pg_5v & pg_3v3;
 
-assign gpio[4] = 1'bz;
-assign cpu_enable = gpio[4];
+assign gpio[4:0] = 5'bz;
+assign smbus_cntrl = 1'bz;
+assign smbus_clk = 1'bz;
+assign smbus_data = 1'bz;
+
+assign cpu_enable = 1'b0;
 assign dsp_enable = 1'b1;
-assign en_1v8 = 1'b1;
+
+/* GPIO 0 must be input with weak pull-up */
+assign en_1v8 = en_1v8_dsp | ~gpio[0];
 
 /*
 DSP sequencer -- handles power on/off for the DSP and associated peripherals
@@ -194,7 +200,7 @@ c66x_sequencer dsp_seq(
     .resetstat_INV(dsp_resetstat),
     .cvdd_en(en_cvdd),
     .cvdd1_en(en_1v0),
-    .dvdd18_en(/* en_1v8 */),
+    .dvdd18_en(en_1v8_dsp),
     .dvdd15_en(en_1v5),
     .pll_en(pll_en),
     .por_INV(dsp_por_INV),
@@ -236,11 +242,6 @@ CPU sequencer -- handle power on/off for the CPU board
 //     .cpu_bank_en(cpu_bank_enable),
 //     .cpu_bootmode(cpu_bootmode)
 // );
-
-assign gpio[3:0] = 4'bz;
-assign smbus_cntrl = 1'bz;
-assign smbus_clk = 1'bz;
-assign smbus_data = 1'bz;
 
 endmodule
 

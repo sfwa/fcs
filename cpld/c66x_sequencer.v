@@ -108,11 +108,11 @@ Power-down:
 If any power input is not good, run power-down sequence immediately.
 */
 
-//reg[3:0] state;
 reg[3:0] next_state;
-reg[12:0] state_timer;
-wire delay = (state_timer == 13'b1111111111111); /* 3msec delay */
-wire timeout = (state_timer == 17'b11111111111111111); /* 48msec timeout */
+reg[3:0] state_timer;
+reg[12:0] delay_timer;
+wire delay = (delay_timer == 13'b1111111111111); /* 3msec delay */
+wire timeout = (state_timer == 4'b1111); /* 48msec timeout */
 
 parameter off = 4'b0000,
           /* Start-up sequence */
@@ -135,11 +135,8 @@ parameter off = 4'b0000,
           invalid1 = 4'b1111;
 
 /*
-Program the CDCE62002 with preset configuration words:
-REGISTERS
-0   55200080
-1   8389A061
-2   00000002
+Program the CDCE62002 shortly after it starts up, overriding whatever's in
+flash.
 */
 cdce62002 clkgen_interface(
    .clk(sysclk),
@@ -188,6 +185,7 @@ always @(*) begin
     cvdd1_en = 1'b0;
     dvdd18_en = 1'b0;
     dvdd15_en = 1'b0;
+    pll_en = 1'b0;
     por_INV = 1'b0;
     reset_INV = 1'b0;
     resetfull_INV = 1'b0;
@@ -424,12 +422,16 @@ always @(*) begin
     endcase
 end
 
+always @(posedge sysclk) begin
+    delay_timer <= delay_timer + 13'b0000000000001;
+end
+
 always @(posedge delay) begin
     if (state != next_state) begin
         state <= next_state;
-        state_timer <= 8'b00000000;
+        state_timer <= 4'b0000;
     end else begin
-        state_timer <= state_timer + 8'b00000001;
+        state_timer <= state_timer + 4'b0001;
     end
 
     /*
