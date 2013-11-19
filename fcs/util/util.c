@@ -22,6 +22,8 @@ SOFTWARE.
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <assert.h>
+#include <math.h>
 
 #include "../config/config.h"
 #include "util.h"
@@ -31,10 +33,224 @@ void fcs_util_init(void) {
 	fcs_crc8_init(FCS_CRC8_POLY);
 }
 
-void fcs_util_tick(void) {
-    /* TODO */
+/* Positive and negative powers of 10 for clamping/rounding */
+static double exp10[14] = {
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
+    1e10, 1e11, 1e12, 1e13
+};
+
+/*
+Same deal, but integers. These are all negative because we do the base
+conversion on negative numbers to avoid the -INT_MIN undefinedness.
+*/
+static int32_t exp10i[11] = {
+    -1, -10, -100, -1000, -10000, -100000, -1000000, -10000000, -100000000,
+    -1000000000
+};
+
+/*
+Convert an integer to ASCII. Restricts the number of digits output to
+max_digits; numbers greater in magnitude will output "OF" or "-OF". Returns
+the number of bytes written.
+
+The buffer length must be at least (1 + max_digits).
+*/
+size_t fcs_ascii_from_int32(uint8_t *restrict result, int32_t value,
+uint8_t max_digits) {
+    assert(max_digits && max_digits <= 10u);
+    assert(result);
+
+    size_t out_len = 0;
+
+    /*
+    Since -INT_MIN is undefined but -INT_MAX is OK, do the math on negative
+    numbers.
+    */
+    if (value > 0) {
+        value = -value;
+    } else {
+        result[0] = '-';
+        out_len++;
+    }
+
+    /* Check for overflow -- output "OF" or "-OF" */
+    if (max_digits < 10u && value <= exp10i[max_digits]) {
+        result[0] = 'O';
+        result[1] = 'F';
+        out_len += 2u;
+    } else if (value == 0) {
+        result[0] = '0';
+        out_len++;
+    } else {
+        uint8_t place = max_digits - 1u;
+        /* Skip ahead to the first non-zero place */
+        while (exp10i[place] < value) {
+            place++;
+        }
+
+        /*
+        For each place, subtract the (negated) value of a unit in that place
+        while incrementing the output digit until the value is smaller than
+        one unit.
+
+        This is faster than dividing by 10 each time through the loop, since
+        the C66 has no divide instruction.
+        */
+        int32_t place_value;
+        uint8_t digit;
+        for (; place >= 0; place--) {
+            digit = '0';
+            place_value = exp10i[place];
+            while (value <= place_value) {
+                digit++;
+                value -= place_value;
+            }
+            result[out_len++] = digit;
+        }
+
+        /* Sanity check */
+        assert(value == 0);
+    }
+
+    return out_len;
 }
 
-void fcs_util_update_state(const struct fcs_state_t *new_state) {
-    /* TODO */
+/*
+Convert a double to ASCII, with output written to the result buffer. Returns
+the number of bytes written.
+
+max_integer_digits controls the number of digits before the decimal place;
+max_fractional_digits controls the number of digits after.
+
+max_fractional_digits must be <= 7; max_integer_digits must be <= 6. Either
+max_fractional_digits or max_integer_digits must be greater than zero. Numbers
+too large to be represented will output "OF" or "-OF".
+
+The buffer length must be at least (1 + max_integer_digits + 1 +
+max_fractional_digits).
+*/
+size_t fcs_ascii_fixed_from_double(uint8_t *restrict result, double value,
+uint8_t max_integer_digits, uint8_t max_fractional_digits) {
+    assert(max_integer_digits <= 6u);
+    assert(max_fractional_digits <= 7u);
+    assert(max_integer_digits || max_fractional_digits);
+    assert(result);
+    assert(!isnan(value));
+
+    size_t out_len = 0;
+
+    /* Handle the sign */
+    if (value < 0.0) {
+        value = -value;
+        result[0] = '-';
+        out_len++;
+    }
+
+    /*
+    Multiply by the maximum number of fractional digits, then round to the
+    nearest integer (ties away from zero).
+
+    This obviously leads to a loss of precision for values >= 2^53, but since
+    the maximum number we can represent in 7 + 6 digits is < 2^44, we don't
+    need to worry.
+    */
+    value = round(value * exp10[max_fractional_digits]);
+
+    /* Check for overflow -- output "OF" or "-OF" */
+    if (value >= exp10[max_integer_digits + max_fractional_digits]) {
+        result[out_len++] = 'O';
+        result[out_len++] = 'F';
+    } else if (value < 1.0) {
+        result[out_len++] = '0';
+    } else {
+        /* Find the highest place used by the number */
+        int8_t place = max_integer_digits + max_fractional_digits - 1u;
+        while (place > 0 && exp10[place] > value) {
+            place--;
+        }
+
+        /*
+        For each place, subtract the value of a unit in that place while
+        incrementing the output digit until the value is smaller than
+        one unit.
+
+        This is faster than dividing by 10 each time through the loop, since
+        the C66 has no divide instruction.
+        */
+        double place_value;
+        uint8_t digit;
+        for (; place >= 0; place--) {
+            if (max_fractional_digits > 0 && place == max_fractional_digits - 1) {
+                result[out_len++] = '.';
+            }
+
+            digit = '0';
+            place_value = exp10[place];
+            while (value >= place_value) {
+                digit++;
+                value -= place_value;
+            }
+            result[out_len++] = digit;
+        }
+
+        /* Sanity check */
+        assert(value == 0.0);
+    }
+
+    return out_len;
+}
+
+/*
+Convert an ASCII string (nnnn.nnn, nnn, or .nnn) to double. Returns
+FCS_CONVERSION_OK if the result is valid, or FCS_CONVERSION_ERROR if not.
+*/
+
+enum fcs_conversion_result_t fcs_double_from_ascii(double *restrict result,
+const uint8_t *restrict value, size_t len) {
+    return FCS_CONVERSION_ERROR;
+}
+
+/*
+Convert an ASCII string (nnnn) to int32_t. Returns FCS_CONVERSION_OK if the
+result is valid, or FCS_CONVERSION_ERROR if not.
+*/
+
+enum fcs_conversion_result_t fcs_int32_from_ascii(int32_t *restrict result,
+const uint8_t *restrict value, size_t len) {
+    assert(len && len <= 10);
+    assert(value);
+    assert(result);
+
+    int32_t output = INT32_MIN, place_value;
+    uint8_t digit, i;
+    for (i = len - 1; i >= 1; i--) {
+        place_value = exp10i[10 - i];
+
+        digit = value[i];
+        if (digit < '0' || digit > '9') {
+            break;
+        }
+
+        while (digit <= '9') {
+            digit++;
+            output -= place_value;
+        }
+    }
+
+    if (i == 0 && digit == '-') {
+        /* All OK, negative result */
+        *result = output;
+        return FCS_CONVERSION_OK;
+    } else if (i == 0 && digit > '0' && digit < '9' && output > INT32_MIN) {
+        /* All OK, positive result though, so negate it here */
+        *result = -output;
+        return FCS_CONVERSION_OK;
+    } else {
+        /*
+        Early exit from loop, invalid most significant digit, or value is
+        INT32_MIN leading to overflow when negated -- conversion error.
+        */
+        *result = INT32_MIN;
+        return FCS_CONVERSION_ERROR;
+    }
 }

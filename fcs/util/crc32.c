@@ -1,4 +1,4 @@
-/* Crc - 32 BIT ANSI X3.66 CRC checksum files */
+/* Crc - 32 BIT ANSI X3.66 / ITU V.42 CRC checksum files */
 
 /**********************************************************************\
 |* Demonstration program to compute the 32-bit CRC used as the frame  *|
@@ -59,6 +59,7 @@
 /*     using byte-swap instructions.                                   */
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <assert.h>
 
 #include "util.h"
@@ -112,7 +113,7 @@ static uint32_t crc_lookup[] = { /* CRC polynomial 0xedb88320 */
 uint32_t fcs_crc32(const uint8_t *restrict pdata, uint32_t nbytes,
 uint32_t crc) {
     /*
-    For standard CRC32 results, set crc = 0xffffffffu
+    For standard CRC32B results, set crc = 0xffffffffu
     */
 
     uint32_t i;

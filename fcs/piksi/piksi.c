@@ -35,7 +35,3 @@ void fcs_piksi_init(void) {
 void fcs_piksi_tick(void) {
     /* TODO */
 }
-
-void fcs_piksi_update_state(const struct fcs_state_t *new_state) {
-    /* TODO */
-}

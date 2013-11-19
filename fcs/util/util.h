@@ -23,9 +23,10 @@ SOFTWARE.
 #ifndef _FCS_UTIL_H
 #define _FCS_UTIL_H
 
+/*
+fcs_util_init -- performs setup required for utility functions to work
+*/
 void fcs_util_init(void);
-void fcs_util_tick(void);
-void fcs_util_update_state(const struct fcs_state_t *new_state);
 
 /*
 http://www.ece.cmu.edu/~koopman/roses/dsn04/koopman04_crc_poly_embedded.pdf
@@ -54,7 +55,7 @@ uint8_t fcs_crc8(const uint8_t *restrict pdata, uint32_t nbytes,
 uint8_t crc);
 
 /*
-fcs_crc32 - calculate a CRC32 over the given input data using the EDB88320
+fcs_crc32 - calculate a CRC32(B) over the given input data using the EDB88320
 polynomial (ANSI X3.66, ITU-T V.42, Ethernet, Gzip, PNG etc).
 
 pdata: pointer to data buffer.
@@ -92,5 +93,43 @@ struct fcs_cobsr_encode_result fcs_cobsr_encode(uint8_t *dst_buf_ptr,
 uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len);
 struct fcs_cobsr_decode_result fcs_cobsr_decode(uint8_t *dst_buf_ptr,
 uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len);
+
+/*
+fcs_ascii_fixed_from_double -- convert a double to ASCII, with output written
+to the result buffer. Returns the number of bytes written.
+
+max_integer_digits controls the number of digits before the decimal place;
+max_fractional_digits controls the number of digits after.
+
+max_fractional_digits must be <= 7; max_integer_digits must be <= 6. Either
+max_fractional_digits or max_integer_digits must be greater than zero. Numbers
+too large to be represented will output "OF" or "-OF".
+
+The buffer length must be at least (1 + max_integer_digits + 1 +
+max_fractional_digits).
+*/
+size_t fcs_ascii_fixed_from_double(uint8_t *restrict result, double value,
+uint8_t max_integer_digits, uint8_t max_fractional_digits);
+
+/*
+fcs_ascii_from_int32 -- convert an integer to ASCII. Restricts the number of
+digits output to max_digits; numbers greater in magnitude will output "OF" or
+"-OF". Returns the number of bytes written.
+
+The buffer length must be at least (1 + max_digits).
+*/
+size_t fcs_ascii_from_int32(uint8_t *result, int32_t value,
+uint8_t max_digits);
+
+enum fcs_conversion_result_t {
+    FCS_CONVERSION_OK,
+    FCS_CONVERSION_ERROR
+};
+
+enum fcs_conversion_result_t fcs_double_from_ascii(double *restrict result,
+const uint8_t *restrict value, size_t len);
+
+enum fcs_conversion_result_t fcs_int32_from_ascii(int32_t *restrict result,
+const uint8_t *restrict value, size_t len);
 
 #endif

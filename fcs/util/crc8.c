@@ -15,6 +15,7 @@
  */
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
 
@@ -28,7 +29,7 @@ static bool crc_inited;
  *
  * polynomial:  polynomial for which table is to be filled.
  */
-void crc8_init(uint8_t polynomial) {
+void fcs_crc8_init(uint8_t polynomial) {
     uint32_t i, j;
     uint8_t t = 0;
 
@@ -52,7 +53,7 @@ void crc8_init(uint8_t polynomial) {
  * nbytes: number of bytes in data buffer.
  * crc: previous returned crc8 value.
  */
-uint8_t crc8(const uint8_t *restrict pdata, uint32_t nbytes,
+uint8_t fcs_crc8(const uint8_t *restrict pdata, uint32_t nbytes,
 uint8_t crc) {
     uint32_t i;
 
