@@ -33,6 +33,24 @@ void fcs_util_init(void) {
 	fcs_crc8_init(FCS_CRC8_POLY);
 }
 
+/*
+fcs_text_checksum - calculate an NMEA0183-compatible checksum over the given
+input data.
+*/
+uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes) {
+    assert(pdata);
+    assert(nbytes);
+    assert(nbytes <= 256);
+
+    uint8_t result = 0x00, i;
+    #pragma must_iterate(1, 1, 256)
+    for (i = 0; i < nbytes; i++) {
+        result ^= pdata[i];
+    }
+
+    return result;
+}
+
 /* Positive and negative powers of 10 for clamping/rounding */
 static double exp10[14] = {
     1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
@@ -75,17 +93,15 @@ uint8_t max_digits) {
 
     /* Check for overflow -- output "OF" or "-OF" */
     if (max_digits < 10u && value <= exp10i[max_digits]) {
-        result[0] = 'O';
-        result[1] = 'F';
-        out_len += 2u;
+        result[out_len++] = 'O';
+        result[out_len++] = 'F';
     } else if (value == 0) {
-        result[0] = '0';
-        out_len++;
+        result[out_len++] = '0';
     } else {
-        uint8_t place = max_digits - 1u;
+        int8_t place = max_digits - 1u;
         /* Skip ahead to the first non-zero place */
-        while (exp10i[place] < value) {
-            place++;
+        while (place > 0 && exp10i[place] < value) {
+            place--;
         }
 
         /*
@@ -160,12 +176,10 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
     if (value >= exp10[max_integer_digits + max_fractional_digits]) {
         result[out_len++] = 'O';
         result[out_len++] = 'F';
-    } else if (value < 1.0) {
-        result[out_len++] = '0';
     } else {
         /* Find the highest place used by the number */
         int8_t place = max_integer_digits + max_fractional_digits - 1u;
-        while (place > 0 && exp10[place] > value) {
+        while (place >= max_fractional_digits && exp10[place] > value) {
             place--;
         }
 
@@ -191,6 +205,11 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
                 value -= place_value;
             }
             result[out_len++] = digit;
+        }
+
+        /* Handle zero values where max_fractional_digits == 0 */
+        if (out_len == 0 || (out_len == 1 && result[0] == '-')) {
+            result[out_len++] = '0';
         }
 
         /* Sanity check */

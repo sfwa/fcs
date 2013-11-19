@@ -119,6 +119,7 @@ uint32_t crc) {
     uint32_t i;
 
     assert(pdata);
+    assert(nbytes);
 
     /* loop over the buffer data */
     #pragma MUST_ITERATE(1,1,24)

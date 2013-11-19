@@ -65,6 +65,12 @@ crc: starting value; must be 0xffffffffu for standards compliance.
 uint32_t fcs_crc32(const uint8_t *restrict pdata, uint32_t nbytes,
 uint32_t crc);
 
+/*
+fcs_text_checksum - calculate an NMEA0183-compatible checksum over the given
+input data.
+*/
+uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes);
+
 /* COBS-R prototypes */
 enum fcs_cobsr_encode_status{
     FCS_COBSR_ENCODE_OK = 0x00u,

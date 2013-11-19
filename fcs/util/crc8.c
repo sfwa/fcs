@@ -57,7 +57,7 @@ uint8_t fcs_crc8(const uint8_t *restrict pdata, uint32_t nbytes,
 uint8_t crc) {
     uint32_t i;
 
-    assert(nbytes <= 256u);
+    assert(nbytes && nbytes <= 256u);
     assert(pdata);
     assert(crc_inited);
 
