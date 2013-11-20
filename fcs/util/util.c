@@ -22,6 +22,7 @@ SOFTWARE.
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <assert.h>
 #include <math.h>
 
@@ -233,43 +234,54 @@ const uint8_t *restrict value, size_t len) {
 Convert an ASCII string (nnnn) to int32_t. Returns FCS_CONVERSION_OK if the
 result is valid, or FCS_CONVERSION_ERROR if not.
 */
-
 enum fcs_conversion_result_t fcs_int32_from_ascii(int32_t *restrict result,
 const uint8_t *restrict value, size_t len) {
-    assert(len && len <= 10);
+    assert(len);
     assert(value);
     assert(result);
 
-    int32_t output = INT32_MIN, place_value;
-    uint8_t digit, i;
-    for (i = len - 1; i >= 1; i--) {
-        place_value = exp10i[10 - i];
+    bool negative = false;
 
-        digit = value[i];
-        if (digit < '0' || digit > '9') {
-            break;
-        }
-
-        while (digit <= '9') {
-            digit++;
-            output -= place_value;
-        }
+    /*
+    If the number is negative, keep track of that and deal with the sign at
+    the end.
+    */
+    if (value[0] == '-') {
+        len--;
+        value++;
+        negative = true;
     }
 
-    if (i == 0 && digit == '-') {
-        /* All OK, negative result */
-        *result = output;
-        return FCS_CONVERSION_OK;
-    } else if (i == 0 && digit > '0' && digit < '9' && output > INT32_MIN) {
-        /* All OK, positive result though, so negate it here */
-        *result = -output;
-        return FCS_CONVERSION_OK;
-    } else {
-        /*
-        Early exit from loop, invalid most significant digit, or value is
-        INT32_MIN leading to overflow when negated -- conversion error.
-        */
-        *result = INT32_MIN;
-        return FCS_CONVERSION_ERROR;
+    /*
+    uint32 can hold up to 4294967295, so we don't need to worry about overflow
+    during calculation as long as the most significant digit is smaller than
+    or equal to 2
+    */
+    if (len > 10 || (len == 10 && value[0] > '2')) {
+        goto invalid;
     }
+
+    uint32_t output = 0;
+    uint8_t i;
+    for (i = len; i >= 1; i--) {
+        if (value[i - 1] < '0' || value[i - 1] > '9') {
+            /* Invalid digit */
+            goto invalid;
+        }
+        output += (uint32_t)(value[i - 1] - '0') * (uint32_t)(-exp10i[len - i]);
+    }
+
+    if (!negative && output <= INT32_MAX) {
+        /* All OK, positive result */
+        *result = (int32_t)output;
+        return FCS_CONVERSION_OK;
+    } else if (negative && output <= 2147483648u) {
+        /* All OK, negative result though, so negate it here */
+        *result = (int32_t)-output;
+        return FCS_CONVERSION_OK;
+    }
+
+invalid:
+    *result = INT32_MIN;
+    return FCS_CONVERSION_ERROR;
 }

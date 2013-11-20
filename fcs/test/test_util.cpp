@@ -413,3 +413,98 @@ TEST(ASCIIFromInt32, Overflow) {
     result[result_length] = 0;
     EXPECT_STREQ("-OF", (char*)result);
 }
+
+TEST(Int32FromASCII, Valid) {
+    int32_t result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"0", 1);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(0, result);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-0", 2);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(0, result);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"0123", 4);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(123, result);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-0123", 5);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(-123, result);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"1230", 4);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(1230, result);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-1230", 5);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(-1230, result);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"2147483647", 10);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(2147483647, result);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-2147483648", 11);
+    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(-2147483648, result);
+}
+
+TEST(Int32FromASCII, InvalidChars) {
+    int32_t result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"x0", 2);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-x0", 3);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"0x123", 5);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-0x123", 6);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"1230x", 5);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-1230x", 6);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"21474-83647", 11);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-21474-83648", 12);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+}
+
+TEST(Int32FromASCII, Overflow) {
+    int32_t result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"3147483647", 10);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-3147483648", 11);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"2147483648", 10);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-2147483649", 11);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"2247483647", 10);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-2247483648", 11);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"2147484647", 10);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+
+    status = fcs_int32_from_ascii(&result, (uint8_t*)"-2147484648", 11);
+    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+}
