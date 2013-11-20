@@ -132,8 +132,8 @@ enum fcs_conversion_result_t {
     FCS_CONVERSION_ERROR
 };
 
-enum fcs_conversion_result_t fcs_double_from_ascii(double *restrict result,
-const uint8_t *restrict value, size_t len);
+enum fcs_conversion_result_t fcs_double_from_ascii_fixed(
+double *restrict result, const uint8_t *restrict value, size_t len);
 
 enum fcs_conversion_result_t fcs_int32_from_ascii(int32_t *restrict result,
 const uint8_t *restrict value, size_t len);

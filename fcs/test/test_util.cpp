@@ -354,6 +354,37 @@ TEST(ASCIIFixedFromDouble, Rounding) {
     EXPECT_STREQ("-.0001", (char*)result);
 }
 
+TEST(ASCIIFixedFromDouble, NoBuffer) {
+    EXPECT_DEATH(
+        { fcs_ascii_fixed_from_double(NULL, 1.0, 1u, 1u); }, "^Assertion" );
+}
+
+TEST(ASCIIFixedFromDouble, TooShort) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 0u); },
+        "^Assertion"
+    );
+}
+
+TEST(ASCIIFixedFromDouble, TooLong) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 8u, 0u); },
+        "^Assertion"
+    );
+
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 8u); },
+        "^Assertion"
+    );
+}
+
+TEST(ASCIIFixedFromDouble, NaN) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 0.0/0.0, 1u, 1u); },
+        "^Assertion"
+    );
+}
+
 TEST(ASCIIFromInt32, Valid) {
     size_t result_length;
     uint8_t result[32];
@@ -414,40 +445,54 @@ TEST(ASCIIFromInt32, Overflow) {
     EXPECT_STREQ("-OF", (char*)result);
 }
 
+TEST(ASCIIFromInt32, NoBuffer) {
+    EXPECT_DEATH({ fcs_ascii_from_int32(NULL, 1, 1u); }, "^Assertion" );
+}
+
+TEST(ASCIIFromInt32, TooShort) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_from_int32(x, 1, 0); }, "^Assertion");
+}
+
+TEST(ASCIIFromInt32, TooLong) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_from_int32(x, 1, 11u); }, "^Assertion" );
+}
+
 TEST(Int32FromASCII, Valid) {
     int32_t result;
     enum fcs_conversion_result_t status;
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"0", 1);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(0, result);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-0", 2);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(0, result);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"0123", 4);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(123, result);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-0123", 5);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(-123, result);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"1230", 4);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(1230, result);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-1230", 5);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(-1230, result);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"2147483647", 10);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(2147483647, result);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-2147483648", 11);
-    EXPECT_EQ(status, FCS_CONVERSION_OK);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
     EXPECT_EQ(-2147483648, result);
 }
 
@@ -456,28 +501,28 @@ TEST(Int32FromASCII, InvalidChars) {
     enum fcs_conversion_result_t status;
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"x0", 2);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-x0", 3);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"0x123", 5);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-0x123", 6);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"1230x", 5);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-1230x", 6);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"21474-83647", 11);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-21474-83648", 12);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 }
 
 TEST(Int32FromASCII, Overflow) {
@@ -485,26 +530,240 @@ TEST(Int32FromASCII, Overflow) {
     enum fcs_conversion_result_t status;
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"3147483647", 10);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-3147483648", 11);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"2147483648", 10);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-2147483649", 11);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"2247483647", 10);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-2247483648", 11);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"2147484647", 10);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 
     status = fcs_int32_from_ascii(&result, (uint8_t*)"-2147484648", 11);
-    EXPECT_EQ(status, FCS_CONVERSION_ERROR);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
 }
+
+TEST(Int32FromASCII, NoBuffers) {
+    EXPECT_DEATH({ fcs_int32_from_ascii(NULL, NULL, 1); }, "^Assertion" );
+
+    EXPECT_DEATH(
+        { int32_t x; uint8_t y[4]; fcs_int32_from_ascii(&x, NULL, 1); },
+        "^Assertion"
+    );
+
+    EXPECT_DEATH(
+        { int32_t x; uint8_t y[4]; fcs_int32_from_ascii(NULL, y, 1); },
+        "^Assertion"
+    );
+}
+
+TEST(Int32FromASCII, TooShort) {
+    EXPECT_DEATH(
+        { int32_t x; uint8_t y[4]; fcs_int32_from_ascii(&x, y, 0); },
+        "^Assertion"
+    );
+}
+
+TEST(DoubleFromASCIIFixed, Zero) {
+    double result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)".0000000", 8u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-.0000000", 9u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)".0", 2u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-.0", 3u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"0", 1u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-0", 2u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"0.0", 3u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-0.0", 4u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"00.0", 4u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-00.0", 5u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0, result);
+}
+
+TEST(DoubleFromASCIIFixed, FractionalOnly) {
+    double result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)".1234567", 8u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.1234567, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-.1234567", 9u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-0.1234567, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"0.1", 3u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.1, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-0.1", 4u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-0.1, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"00.001", 6u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.001, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-00.001", 7u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-0.001, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)".0000001", 8u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(0.0000001, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-.0000001", 9u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-0.0000001, result);
+}
+
+TEST(DoubleFromASCIIFixed, IntegralOnly) {
+    double result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"1", 1u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(1.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-1", 2u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-1.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"100000", 6u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(100000, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-100000", 7u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-100000, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"123456", 6u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(123456, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-123456", 7u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-123456, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"000001", 6u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(1, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-000001", 7u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-1, result);
+}
+
+TEST(DoubleFromASCIIFixed, Mixed) {
+    double result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"1.0", 3u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(1.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-1.0", 4u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-1.0, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"100000.1234567",
+                                         14u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(100000.1234567, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-100000.1234567",
+                                         15u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-100000.1234567, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"1.23456", 7u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(1.23456, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-1.23456", 8u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-1.23456, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"000009.0000001",
+                                         14u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(9.0000001, result);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-000009.0000001",
+                                         15u);
+    EXPECT_EQ(FCS_CONVERSION_OK, status);
+    EXPECT_DOUBLE_EQ(-9.0000001, result);
+}
+
+/*
+TEST(DoubleFromASCIIFixed, NoBuffer) {
+    EXPECT_DEATH(
+        { fcs_ascii_fixed_from_double(NULL, 1.0, 1u, 1u); }, "^Assertion" );
+}
+
+TEST(DoubleFromASCIIFixed, TooShort) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 0u); },
+        "^Assertion"
+    );
+}
+
+TEST(DoubleFromASCIIFixed, TooLong) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 8u, 0u); },
+        "^Assertion"
+    );
+
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 8u); },
+        "^Assertion"
+    );
+}
+
+TEST(DoubleFromASCIIFixed, NaN) {
+    EXPECT_DEATH(
+        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 0.0/0.0, 1u, 1u); },
+        "^Assertion"
+    );
+}
+*/

@@ -58,6 +58,10 @@ static double exp10[14] = {
     1e10, 1e11, 1e12, 1e13
 };
 
+static double exp10neg[7] = {
+    1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7
+};
+
 /*
 Same deal, but integers. These are all negative because we do the base
 conversion on negative numbers to avoid the -INT_MIN undefinedness.
@@ -224,9 +228,62 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
 Convert an ASCII string (nnnn.nnn, nnn, or .nnn) to double. Returns
 FCS_CONVERSION_OK if the result is valid, or FCS_CONVERSION_ERROR if not.
 */
+enum fcs_conversion_result_t fcs_double_from_ascii_fixed(
+double *restrict result, const uint8_t *restrict value, size_t len) {
+    assert(len);
+    assert(value);
+    assert(result);
 
-enum fcs_conversion_result_t fcs_double_from_ascii(double *restrict result,
-const uint8_t *restrict value, size_t len) {
+    uint8_t integral_length, fractional_length;
+    int32_t integral, fractional;
+
+    for (integral_length = 0; integral_length < len; integral_length++) {
+        if (value[integral_length] == '.') {
+            break;
+        }
+    }
+
+    /* Don't allow a decimal place in last position */
+    if (integral_length == len - 1) {
+        goto invalid;
+    } else if (value[0] == '-' && integral_length > 7u) {
+        goto invalid;
+    } else if (value[0] != '-' && integral_length > 6u) {
+        goto invalid;
+    }
+
+    double output = 0.0;
+
+    if (integral_length != 0) {
+        if (fcs_int32_from_ascii(&integral, value, integral_length) !=
+            FCS_CONVERSION_OK) {
+            goto invalid;
+        }
+
+        output = integral;
+    }
+
+    fractional_length = len - integral_length;
+    if (fractional_length > 1) {
+        if (fcs_int32_from_ascii(&fractional, &value[integral_length + 1],
+                                 fractional_length - 1) != FCS_CONVERSION_OK) {
+            goto invalid;
+        }
+
+        if (value[0] == '-') {
+            fractional = -fractional;
+        }
+
+        output += (double)fractional * exp10neg[fractional_length - 2];
+    } else if (fractional_length > 7u) {
+        goto invalid;
+    }
+
+    *result = output;
+    return FCS_CONVERSION_OK;
+
+invalid:
+    *result = 0.0;
     return FCS_CONVERSION_ERROR;
 }
 
@@ -268,7 +325,8 @@ const uint8_t *restrict value, size_t len) {
             /* Invalid digit */
             goto invalid;
         }
-        output += (uint32_t)(value[i - 1] - '0') * (uint32_t)(-exp10i[len - i]);
+        output += (uint32_t)(value[i - 1] - '0') *
+                  (uint32_t)(-exp10i[len - i]);
     }
 
     if (!negative && output <= INT32_MAX) {
