@@ -227,6 +227,9 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
 /*
 Convert an ASCII string (nnnn.nnn, nnn, or .nnn) to double. Returns
 FCS_CONVERSION_OK if the result is valid, or FCS_CONVERSION_ERROR if not.
+
+The integral part of the fixed-point value must have 6 digits or fewer, and
+the fractional part must have 7 digits or fewer.
 */
 enum fcs_conversion_result_t fcs_double_from_ascii_fixed(
 double *restrict result, const uint8_t *restrict value, size_t len) {
@@ -264,7 +267,9 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
     }
 
     fractional_length = len - integral_length;
-    if (fractional_length > 1) {
+    if (fractional_length > 8u) { /* allow an extra 1 for the DP */
+        goto invalid;
+    } else if (fractional_length > 1u) {
         if (fcs_int32_from_ascii(&fractional, &value[integral_length + 1],
                                  fractional_length - 1) != FCS_CONVERSION_OK) {
             goto invalid;
@@ -275,8 +280,6 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
         }
 
         output += (double)fractional * exp10neg[fractional_length - 2];
-    } else if (fractional_length > 7u) {
-        goto invalid;
     }
 
     *result = output;

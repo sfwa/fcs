@@ -735,35 +735,98 @@ TEST(DoubleFromASCIIFixed, Mixed) {
     EXPECT_DOUBLE_EQ(-9.0000001, result);
 }
 
-/*
-TEST(DoubleFromASCIIFixed, NoBuffer) {
+TEST(DoubleFromASCIIFixed, InvalidChars) {
+    double result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"x0", 2);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-x0", 3);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"x.0", 3);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-x.0", 4);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"0.", 3);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-0.", 4);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"0x123", 5);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-0x123", 6);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"1230.x", 5);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-1230.x", 6);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"21474-83647",
+                                         11);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-21474-83648",
+                                         12);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+}
+
+TEST(DoubleFromASCIIFixed, Overflow) {
+    double result;
+    enum fcs_conversion_result_t status;
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"1234567", 7);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-1234567", 8);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"1234567.1", 9);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-1234567.1", 10);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)".12345678", 9);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result, (uint8_t*)"-.12345678", 10);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result,
+                                         (uint8_t*)"1234567.12345678", 16);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+
+    status = fcs_double_from_ascii_fixed(&result,
+                                         (uint8_t*)"-1234567.12345678", 17);
+    EXPECT_EQ(FCS_CONVERSION_ERROR, status);
+}
+
+TEST(DoubleFromASCIIFixed, NoBuffers) {
     EXPECT_DEATH(
-        { fcs_ascii_fixed_from_double(NULL, 1.0, 1u, 1u); }, "^Assertion" );
+        { fcs_double_from_ascii_fixed(NULL, NULL, 1); }, "^Assertion" );
+
+    EXPECT_DEATH(
+        { double x; uint8_t y[4]; fcs_double_from_ascii_fixed(&x, NULL, 1); },
+        "^Assertion"
+    );
+
+    EXPECT_DEATH(
+        { double x; uint8_t y[4]; fcs_double_from_ascii_fixed(NULL, y, 1); },
+        "^Assertion"
+    );
 }
 
 TEST(DoubleFromASCIIFixed, TooShort) {
     EXPECT_DEATH(
-        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 0u); },
+        { double x; uint8_t y[4]; fcs_double_from_ascii_fixed(&x, y, 0); },
         "^Assertion"
     );
 }
-
-TEST(DoubleFromASCIIFixed, TooLong) {
-    EXPECT_DEATH(
-        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 8u, 0u); },
-        "^Assertion"
-    );
-
-    EXPECT_DEATH(
-        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 8u); },
-        "^Assertion"
-    );
-}
-
-TEST(DoubleFromASCIIFixed, NaN) {
-    EXPECT_DEATH(
-        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 0.0/0.0, 1u, 1u); },
-        "^Assertion"
-    );
-}
-*/
