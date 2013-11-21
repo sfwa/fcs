@@ -5,6 +5,8 @@ extern "C" {
 #include "util/util.h"
 }
 
+#include <cstdlib>
+
 TEST(CRC8, NotInitialised) {
     EXPECT_DEATH({ fcs_crc8((uint8_t*)"message", 7, 0); }, "^Assertion");
 }
@@ -827,6 +829,70 @@ TEST(DoubleFromASCIIFixed, NoBuffers) {
 TEST(DoubleFromASCIIFixed, TooShort) {
     EXPECT_DEATH(
         { double x; uint8_t y[4]; fcs_double_from_ascii_fixed(&x, y, 0); },
+        "^Assertion"
+    );
+}
+
+TEST(ASCIIHexFromUInt8, Exhaustive) {
+    uint16_t i;
+    uint8_t result[3];
+    size_t result_len;
+
+    char *endptr;
+    uint64_t check_result;
+
+    for (i = 0; i <= 0xFFu; i++) {
+        result_len = fcs_ascii_hex_from_uint8(result, i);
+
+        result[2] = 0;
+        check_result = strtol((char*)result, &endptr, 16);
+
+        EXPECT_EQ(2u, result_len);
+        EXPECT_EQ(i, check_result);
+    }
+}
+
+TEST(ASCIIHexFromUInt8, NoBuffer) {
+    EXPECT_DEATH({ fcs_ascii_hex_from_uint8(NULL, 1); }, "^Assertion" );
+}
+
+TEST(UInt8FromASCIIHex, Exhaustive) {
+    uint16_t i;
+    uint8_t value[2], result;
+    enum fcs_conversion_result_t status;
+
+    for (i = 0; i <= 0xFFu; i++) {
+        fcs_ascii_hex_from_uint8(value, i);
+        status = fcs_uint8_from_ascii_hex(&result, value, 2u);
+
+        EXPECT_EQ(FCS_CONVERSION_OK, status);
+        EXPECT_EQ(i, result);
+    }
+}
+
+TEST(UInt8FromASCIIHex, NoBuffer) {
+    EXPECT_DEATH(
+        { fcs_uint8_from_ascii_hex(NULL, NULL, 2); }, "^Assertion" );
+
+    EXPECT_DEATH(
+        { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(&x, NULL, 2); },
+        "^Assertion"
+    );
+
+    EXPECT_DEATH(
+        { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(NULL, y, 2); },
+        "^Assertion"
+    );
+}
+
+TEST(UInt8FromASCIIHex, WrongLength) {
+    EXPECT_DEATH(
+        { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(&x, y, 1); },
+        "^Assertion"
+    );
+
+    EXPECT_DEATH(
+        { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(&x, y, 3); },
         "^Assertion"
     );
 }

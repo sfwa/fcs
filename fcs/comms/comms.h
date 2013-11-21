@@ -24,20 +24,152 @@ SOFTWARE.
 #define _FCS_COMMS_H
 
 /*
-fcs_message_t is a NUL-delimited, COBS-R encoded sequence of fcs_state_t
-tuples.
+State (FCS->CPU): $PSFWAS
+- time of solution (ms) -- 9 chars
+- next waypoint ID -- 4 chars
+- lat (deg to 7dp) -- 11 chars
+- lon (deg to 7dp) -- 12 chars
+- alt (above ellipsoid, m to 2dp) -- 7 chars
+- velocity N (m/s to 2dp) -- 7 chars
+- velocity E (m/s to 2dp) -- 7 chars
+- velocity D (m/s to 2dp) -- 7 chars
+- wind N (m/s to 2dp) -- 6 chars
+- wind E (m/s to 2dp) -- 6 chars
+- wind D (m/s to 2dp) -- 6 chars
+- attitude (yaw/pitch/roll, degrees to 2dp) -- 19 chars
+- angular velocity (yaw/pitch/roll rate, degrees/s to 2dp) -- 21 chars
+- horizontal position uncertainty (95%, integral m) -- 3 chars
+- alt uncertainty (95%, m to 1dp) -- 4 chars
+- velocity N uncertainty (95%, integral m/s) -- 2 chars
+- velocity E uncertainty (95%, integral m/s) -- 2 chars
+- velocity D uncertainty (95%, integral m/s) -- 2 chars
+- wind N uncertainty (95%, m/s) -- 2 chars
+- wind E uncertainty (95%, m/s) -- 2 chars
+- wind D uncertainty (95%, m/s) -- 2 chars
+- yaw uncertainty (95%, degrees up to 90deg) -- 2 chars
+- pitch uncertainty (95%, degrees up to 90deg) -- 2 chars
+- roll uncertainty (95%, degrees up to 90deg) -- 2 chars
+- yaw rate uncertainty (95%, degreees/s up to 90deg/s) -- 2 chars
+- pitch rate uncertainty (95%, degrees/s up to 90deg/s) -- 2 chars
+- roll rate uncertainty (95%, degrees/s up to 90deg/s) -- 2 chars
+- FAA mode indicator ('A' = autonomous, 'D' = differential,
+  'E' = dead-reckoning, 'M' = manual input, 'S' = simulated,
+  'N' = not valid) -- 1 char
+- flags (GPS SVs, GPS fix status, taken photo) -- 4 chars (say)
 
-If the layer_id is not 0, the message data is encrypted with a key identified
-by the layer_id value. The key must have already been exchanged through some
-other means.
+=> 159 bytes + 32 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   203 bytes total
 */
-struct fcs_message_t {
-    uint8_t layer_id;
-    uint8_t data[250];
+struct fcs_packet_state_t {
+    int32_t solution_time;
+    uint8_t next_waypoint_id[4];
+    double lat, lon, alt;
+    double velocity[3];
+    double wind_velocity[3];
+    double attitude[3];
+    double angular_velocity[3];
+    double lat_lon_uncertainty, alt_uncertainty;
+    double velocity_uncertainty[3];
+    double wind_velocity_uncertainty[3];
+    double attitude_uncertainty[3];
+    double angular_velocity_uncertainty[3];
+    uint8_t mode_indicator;
+    uint8_t flags[4];
+};
+
+#define FCS_STATE_MAX_LAT_LON_UNCERTAINTY 1000.0
+#define FCS_STATE_MAX_ALT_UNCERTAINTY 20.0
+#define FCS_STATE_MAX_VELOCITY_UNCERTAINTY 10.0
+#define FCS_STATE_MAX_ATTITUDE_UNCERTAINTY 30.0
+#define FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY 90.0
+
+/*
+Waypoint information (CPU->FCS, FCS->CPU):
+- waypoint ID -- 4 chars
+- waypoint role ("H" for home, "R" for recovery, "M" for mission boundary,
+  "C" for course, "I" for image) -- 1 char
+- target lat (up to 7dp) -- 12 chars
+- target lon (up to 7dp) -- 12 chars
+- target alt (above ellipsoid, up to 2dp) -- 7 chars
+- target attitude (yaw/pitch/roll, up to 3dp) -- 19 chars
+- target airspeed (m/s, up to 2dp) -- 7 chars
+- flags -- 5 chars (say)
+
+=> 67 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   87 bytes total
+*/
+struct fcs_packet_waypoint_t {
+    uint32_t waypoint_id;
+    uint8_t waypoint_role;
+    double target_lat, target_lon, target_alt;
+    double target_attitude[3];
+    double target_airspeed;
+    uint8_t flags[5];
+};
+
+/*
+GCS information (CPU->FCS):
+- time of solution (ms) -- 9 chars
+- lat (up to 7dp) -- 12 chars
+- lon (up to 7dp) -- 12 chars
+- alt (m, up to 2dp) -- 7 chars
+- barometric pressure (mbar, up to 2dp) -- 7 chars
+- Piksi RTK data? -- ?? chars
+
+=> 47 bytes + Piksi data + 6 separators + 7 bytes prefix + * +
+   2 bytes checksum + CRLF = 65 bytes total
+*/
+struct fcs_packet_gcs_t {
+    uint32_t solution_time;
+    double lat, lon, alt;
+    double pressure;
+};
+
+/*
+Config information (CPU->FCS, FCS->CPU)
+- param name -- 24 chars
+- param value (Base64) -- up to 216 chars (162 bytes)
+
+=> up to 240 bytes + 2 separators + 7 bytes prefix + * + 2 bytes checksum +
+   CRLF = 254 bytes total
+*/
+struct fcs_packet_config_t {
+    uint8_t param_name[24];
+    uint8_t param_value[162];
 };
 
 void fcs_comms_init(void);
 void fcs_comms_tick(void);
-void fcs_comms_update_state(const struct fcs_state_t *new_state);
+
+enum fcs_deserialization_result_t {
+    FCS_DESERIALIZATION_OK,
+    FCS_DESERIALIZATION_ERROR
+};
+
+/* In all these cases, buf must be at least 256 chars long */
+
+void fcs_comms_serialize_state(uint8_t *restrict buf,
+const struct fcs_packet_state_t *restrict state);
+
+enum fcs_deserialization_result_t fcs_comms_deserialize_state(
+struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
+size_t len);
+
+void fcs_comms_serialize_waypoint(uint8_t *restrict buf,
+const struct fcs_packet_state_t *restrict state);
+
+enum fcs_deserialization_result_t fcs_comms_deserialize_waypoint(
+struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
+size_t len);
+
+void fcs_comms_serialize_config(uint8_t *restrict buf,
+const struct fcs_packet_config_t *restrict config);
+
+enum fcs_deserialization_result_t fcs_comms_deserialize_config(
+struct fcs_packet_config_t *restrict config, uint8_t *restrict buf,
+size_t len);
+
+enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
+struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len);
 
 #endif

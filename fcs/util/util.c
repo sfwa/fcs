@@ -29,6 +29,28 @@ SOFTWARE.
 #include "../config/config.h"
 #include "util.h"
 
+/* Positive and negative powers of 10 for clamping/rounding */
+static double exp10[14] = {
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
+    1e10, 1e11, 1e12, 1e13
+};
+
+static double exp10neg[7] = {
+    1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7
+};
+
+/*
+Same deal, but integers. These are all negative because we do the base
+conversion on negative numbers to avoid the -INT_MIN undefinedness.
+*/
+static int32_t exp10i[11] = {
+    -1, -10, -100, -1000, -10000, -100000, -1000000, -10000000, -100000000,
+    -1000000000
+};
+
+/* Digits for hex conversion routines */
+static uint8_t hex_digits[] = "0123456789ABCDEF";
+
 
 void fcs_util_init(void) {
 	fcs_crc8_init(FCS_CRC8_POLY);
@@ -51,25 +73,6 @@ uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes) {
 
     return result;
 }
-
-/* Positive and negative powers of 10 for clamping/rounding */
-static double exp10[14] = {
-    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
-    1e10, 1e11, 1e12, 1e13
-};
-
-static double exp10neg[7] = {
-    1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7
-};
-
-/*
-Same deal, but integers. These are all negative because we do the base
-conversion on negative numbers to avoid the -INT_MIN undefinedness.
-*/
-static int32_t exp10i[11] = {
-    -1, -10, -100, -1000, -10000, -100000, -1000000, -10000000, -100000000,
-    -1000000000
-};
 
 /*
 Convert an integer to ASCII. Restricts the number of digits output to
@@ -344,5 +347,50 @@ const uint8_t *restrict value, size_t len) {
 
 invalid:
     *result = INT32_MIN;
+    return FCS_CONVERSION_ERROR;
+}
+
+/* fcs_ascii_hex_from_uint8 -- convert a uint8_t value to two uppercase hex
+digits */
+size_t fcs_ascii_hex_from_uint8(uint8_t *restrict result, uint8_t value) {
+    assert(result);
+
+    result[0] = hex_digits[(value & 0xF0u) >> 4];
+    result[1] = hex_digits[value & 0x0Fu];
+
+    return 2u;
+}
+
+/* fcs_uint8_from_ascii_hex-- convert two uppercase hex digits to a uint8 */
+enum fcs_conversion_result_t fcs_uint8_from_ascii_hex(uint8_t *result,
+uint8_t *restrict value, size_t len) {
+    assert(result);
+    assert(value);
+    assert(len == 2u);
+
+    uint8_t output;
+    if ('0' <= value[0] && value[0] <= '9') {
+        output = value[0] - '0';
+    } else if ('A' <= value[0] && value[0] <= 'F') {
+        output = value[0] - 'A' + 10u;
+    } else {
+        goto invalid;
+    }
+
+    output <<= 4;
+
+    if ('0' <= value[1] && value[1] <= '9') {
+        output += value[1] - '0';
+    } else if ('A' <= value[1] && value[1] <= 'F') {
+        output += value[1] - 'A' + 10u;
+    } else {
+        goto invalid;
+    }
+
+    *result = output;
+    return FCS_CONVERSION_OK;
+
+invalid:
+    *result = 0xFFu;
     return FCS_CONVERSION_ERROR;
 }

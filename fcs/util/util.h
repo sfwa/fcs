@@ -138,4 +138,13 @@ double *restrict result, const uint8_t *restrict value, size_t len);
 enum fcs_conversion_result_t fcs_int32_from_ascii(int32_t *restrict result,
 const uint8_t *restrict value, size_t len);
 
+/* fcs_ascii_hex_from_uint8 -- convert a uint8_t value to two uppercase hex
+digits */
+size_t fcs_ascii_hex_from_uint8(uint8_t *restrict result, uint8_t value);
+
+/* fcs_uint8_from_ascii_hex-- convert two uppercase hex digits to a uint8.
+The len parameter must be 2. */
+enum fcs_conversion_result_t fcs_uint8_from_ascii_hex(uint8_t *result,
+uint8_t *restrict value, size_t len);
+
 #endif
