@@ -7,14 +7,17 @@ extern "C" {
 }
 
 TEST(SerializeState, NoBuffers) {
-    EXPECT_DEATH({ fcs_comms_serialize_state(NULL, NULL); }, "^Assertion");
+    EXPECT_DEATH(
+        { fcs_comms_serialize_state(NULL, NULL); }, "Assertion.*failed");
 
     EXPECT_DEATH(
-        { uint8_t x; fcs_comms_serialize_state(&x, NULL); }, "^Assertion");
+        { uint8_t x; fcs_comms_serialize_state(&x, NULL); },
+        "Assertion.*failed"
+    );
 
     EXPECT_DEATH(
         { struct fcs_packet_state_t x; fcs_comms_serialize_state(NULL, &x); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
@@ -25,7 +28,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.solution_time = -1;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -33,7 +36,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.lat = -95.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -41,7 +44,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.lon = -190.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -49,7 +52,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.alt = -1000.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -57,7 +60,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.velocity[0] = 1000.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -65,7 +68,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.velocity[1] = 1000.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -73,7 +76,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.velocity[2] = 1000.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -81,7 +84,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.wind_velocity[0] = 1000.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -89,7 +92,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.wind_velocity[1] = 1000.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -97,7 +100,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.wind_velocity[2] = 1000.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -105,7 +108,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.attitude[0] = 400.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -113,7 +116,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.attitude[1] = 100.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -121,7 +124,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.attitude[2] = 200.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -129,7 +132,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.angular_velocity[0] = 500.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -137,7 +140,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.angular_velocity[1] = 500.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 
     EXPECT_DEATH({
         uint8_t x[256];
@@ -145,7 +148,7 @@ TEST(SerializeState, InvalidStates) {
         memset(&y, 0, sizeof(y));
         y.angular_velocity[2] = 500.0;
         fcs_comms_serialize_state(x, &y);
-    }, "^Assertion");
+    }, "Assertion.*failed");
 }
 
 TEST(SerializeState, AllOK) {

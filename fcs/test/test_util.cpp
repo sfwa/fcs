@@ -8,7 +8,8 @@ extern "C" {
 #include <cstdlib>
 
 TEST(CRC8, NotInitialised) {
-    EXPECT_DEATH({ fcs_crc8((uint8_t*)"message", 7, 0); }, "^Assertion");
+    EXPECT_DEATH(
+        { fcs_crc8((uint8_t*)"message", 7, 0); }, "Assertion.*failed");
 }
 
 TEST(CRC8, Initialisation) {
@@ -48,15 +49,16 @@ TEST(CRC8, InitialValue) {
 }
 
 TEST(CRC8, NoBuffer) {
-    EXPECT_DEATH( { fcs_crc8(NULL, 5, 0); }, "^Assertion" );
+    EXPECT_DEATH({ fcs_crc8(NULL, 5, 0); }, "Assertion.*failed");
 }
 
 TEST(CRC8, TooLong) {
-    EXPECT_DEATH({ uint8_t x[512]; fcs_crc8(x, 512, 0); }, "^Assertion");
+    EXPECT_DEATH(
+        { uint8_t x[512]; fcs_crc8(x, 512, 0); }, "Assertion.*failed");
 }
 
 TEST(CRC8, TooShort) {
-    EXPECT_DEATH({ uint8_t x[512]; fcs_crc8(x, 0, 0); }, "^Assertion");
+    EXPECT_DEATH({ uint8_t x[512]; fcs_crc8(x, 0, 0); }, "Assertion.*failed");
 }
 
 TEST(CRC32, OneByte) {
@@ -84,11 +86,12 @@ TEST(CRC32, Message) {
 }
 
 TEST(CRC32, NoBuffer) {
-    EXPECT_DEATH( { fcs_crc32(NULL, 5, 0); }, "^Assertion" );
+    EXPECT_DEATH({ fcs_crc32(NULL, 5, 0); }, "Assertion.*failed");
 }
 
 TEST(CRC32, TooShort) {
-    EXPECT_DEATH( { uint8_t x[512]; fcs_crc32(x, 0, 0); }, "^Assertion" );
+    EXPECT_DEATH(
+        { uint8_t x[512]; fcs_crc32(x, 0, 0); }, "Assertion.*failed");
 }
 
 TEST(TextChecksum, Message) {
@@ -100,17 +103,17 @@ TEST(TextChecksum, Message) {
 }
 
 TEST(TextChecksum, NoBuffer) {
-    EXPECT_DEATH( { fcs_text_checksum(NULL, 5); }, "^Assertion" );
+    EXPECT_DEATH({ fcs_text_checksum(NULL, 5); }, "Assertion.*failed");
 }
 
 TEST(TextChecksum, TooLong) {
     EXPECT_DEATH(
-        { uint8_t x[512]; fcs_text_checksum(x, 512); }, "^Assertion" );
+        { uint8_t x[512]; fcs_text_checksum(x, 512); }, "Assertion.*failed");
 }
 
 TEST(TextChecksum, TooShort) {
     EXPECT_DEATH(
-        { uint8_t x[512]; fcs_text_checksum(x, 0); }, "^Assertion" );
+        { uint8_t x[512]; fcs_text_checksum(x, 0); }, "Assertion.*failed");
 }
 
 TEST(ASCIIFixedFromDouble, Zero) {
@@ -358,32 +361,34 @@ TEST(ASCIIFixedFromDouble, Rounding) {
 
 TEST(ASCIIFixedFromDouble, NoBuffer) {
     EXPECT_DEATH(
-        { fcs_ascii_fixed_from_double(NULL, 1.0, 1u, 1u); }, "^Assertion" );
+        { fcs_ascii_fixed_from_double(NULL, 1.0, 1u, 1u); },
+        "Assertion.*failed"
+    );
 }
 
 TEST(ASCIIFixedFromDouble, TooShort) {
     EXPECT_DEATH(
         { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 0u); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
 TEST(ASCIIFixedFromDouble, TooLong) {
     EXPECT_DEATH(
         { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 8u, 0u); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 
     EXPECT_DEATH(
         { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 1.0, 0u, 8u); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
 TEST(ASCIIFixedFromDouble, NaN) {
     EXPECT_DEATH(
         { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 0.0/0.0, 1u, 1u); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
@@ -448,17 +453,21 @@ TEST(ASCIIFromInt32, Overflow) {
 }
 
 TEST(ASCIIFromInt32, NoBuffer) {
-    EXPECT_DEATH({ fcs_ascii_from_int32(NULL, 1, 1u); }, "^Assertion" );
+    EXPECT_DEATH({ fcs_ascii_from_int32(NULL, 1, 1u); }, "Assertion.*failed");
 }
 
 TEST(ASCIIFromInt32, TooShort) {
     EXPECT_DEATH(
-        { uint8_t x[32]; fcs_ascii_from_int32(x, 1, 0); }, "^Assertion");
+        { uint8_t x[32]; fcs_ascii_from_int32(x, 1, 0); },
+        "Assertion.*failed"
+    );
 }
 
 TEST(ASCIIFromInt32, TooLong) {
     EXPECT_DEATH(
-        { uint8_t x[32]; fcs_ascii_from_int32(x, 1, 11u); }, "^Assertion" );
+        { uint8_t x[32]; fcs_ascii_from_int32(x, 1, 11u); },
+        "Assertion.*failed"
+    );
 }
 
 TEST(Int32FromASCII, Valid) {
@@ -557,23 +566,24 @@ TEST(Int32FromASCII, Overflow) {
 }
 
 TEST(Int32FromASCII, NoBuffers) {
-    EXPECT_DEATH({ fcs_int32_from_ascii(NULL, NULL, 1); }, "^Assertion" );
+    EXPECT_DEATH(
+        { fcs_int32_from_ascii(NULL, NULL, 1); }, "Assertion.*failed");
 
     EXPECT_DEATH(
         { int32_t x; uint8_t y[4]; fcs_int32_from_ascii(&x, NULL, 1); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 
     EXPECT_DEATH(
         { int32_t x; uint8_t y[4]; fcs_int32_from_ascii(NULL, y, 1); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
 TEST(Int32FromASCII, TooShort) {
     EXPECT_DEATH(
         { int32_t x; uint8_t y[4]; fcs_int32_from_ascii(&x, y, 0); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
@@ -813,23 +823,23 @@ TEST(DoubleFromASCIIFixed, Overflow) {
 
 TEST(DoubleFromASCIIFixed, NoBuffers) {
     EXPECT_DEATH(
-        { fcs_double_from_ascii_fixed(NULL, NULL, 1); }, "^Assertion" );
+        { fcs_double_from_ascii_fixed(NULL, NULL, 1); }, "Assertion.*failed");
 
     EXPECT_DEATH(
         { double x; uint8_t y[4]; fcs_double_from_ascii_fixed(&x, NULL, 1); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 
     EXPECT_DEATH(
         { double x; uint8_t y[4]; fcs_double_from_ascii_fixed(NULL, y, 1); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
 TEST(DoubleFromASCIIFixed, TooShort) {
     EXPECT_DEATH(
         { double x; uint8_t y[4]; fcs_double_from_ascii_fixed(&x, y, 0); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
@@ -853,7 +863,7 @@ TEST(ASCIIHexFromUInt8, Exhaustive) {
 }
 
 TEST(ASCIIHexFromUInt8, NoBuffer) {
-    EXPECT_DEATH({ fcs_ascii_hex_from_uint8(NULL, 1); }, "^Assertion" );
+    EXPECT_DEATH({ fcs_ascii_hex_from_uint8(NULL, 1); }, "Assertion.*failed");
 }
 
 TEST(UInt8FromASCIIHex, Exhaustive) {
@@ -872,27 +882,27 @@ TEST(UInt8FromASCIIHex, Exhaustive) {
 
 TEST(UInt8FromASCIIHex, NoBuffer) {
     EXPECT_DEATH(
-        { fcs_uint8_from_ascii_hex(NULL, NULL, 2); }, "^Assertion" );
+        { fcs_uint8_from_ascii_hex(NULL, NULL, 2); }, "Assertion.*failed");
 
     EXPECT_DEATH(
         { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(&x, NULL, 2); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 
     EXPECT_DEATH(
         { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(NULL, y, 2); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
 
 TEST(UInt8FromASCIIHex, WrongLength) {
     EXPECT_DEATH(
         { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(&x, y, 1); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 
     EXPECT_DEATH(
         { uint8_t x; uint8_t y[2]; fcs_uint8_from_ascii_hex(&x, y, 3); },
-        "^Assertion"
+        "Assertion.*failed"
     );
 }
