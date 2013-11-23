@@ -21,6 +21,7 @@ SOFTWARE.
 */
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -34,7 +35,7 @@ void fcs_comms_init(void) {
 }
 
 void fcs_comms_tick(void) {
-
+    /* every 50 ticks, send current state to CPU */
 }
 
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
@@ -227,13 +228,29 @@ const struct fcs_packet_state_t *restrict state) {
         &buf[index], state->attitude_uncertainty[2], 2u, 0);
     buf[index++] = ',';
 
+    assert(0.0 <= state->angular_velocity_uncertainty[0]);
+    index += fcs_ascii_fixed_from_double(
+        &buf[index], state->angular_velocity_uncertainty[0], 2u, 0);
+    buf[index++] = ',';
+
+    assert(0.0 <= state->angular_velocity_uncertainty[1]);
+    index += fcs_ascii_fixed_from_double(
+        &buf[index], state->angular_velocity_uncertainty[1], 2u, 0);
+    buf[index++] = ',';
+
+    assert(0.0 <= state->angular_velocity_uncertainty[2]);
+    index += fcs_ascii_fixed_from_double(
+        &buf[index], state->angular_velocity_uncertainty[2], 2u, 0);
+    buf[index++] = ',';
+
     buf[index++] = state->mode_indicator;
     buf[index++] = ',';
 
     memcpy(&buf[index], state->flags, 4);
     index += 4;
 
-    uint8_t checksum = fcs_text_checksum(buf, index);
+    /* Exclude initial $ from the checksum calculation */
+    uint8_t checksum = fcs_text_checksum(&buf[1], index - 1);
     buf[index++] = '*';
     index += fcs_ascii_hex_from_uint8(&buf[index], checksum);
 
@@ -254,10 +271,226 @@ size_t len) {
         goto invalid;
     }
 
-    /* TODO: split input buffer on ',' */
-    uint8_t field = 0, idx = 8;
-    for (field = 0; field < 32 && idx < len; field++) {
+    uint8_t field = 0,
+            checksum = 'P' ^ 'S' ^ 'F' ^ 'W' ^ 'A' ^ 'S' ^ ',';
+    size_t idx = 8u;
+    enum fcs_conversion_result_t result;
 
+    /* Loop over the buffer and update the checksum. Every time a comma is
+    encountered, process the field corresponding to the preceding values */
+    for (field = 0; field < 33u && idx < len && buf[idx] != '*'; field++) {
+        size_t field_start = idx;
+        for (; idx < len; idx++) {
+            if (buf[idx] == '*') {
+                idx++;
+                break;
+            }
+
+            checksum ^= buf[idx];
+            if (buf[idx] == ',') {
+                idx++;
+                break;
+            }
+        }
+
+        size_t field_len = idx - field_start - 1u;
+        if (field_len == 0) {
+            continue;
+        }
+        assert(field_len < 256);
+
+        switch (field) {
+            case 0:
+                result = fcs_int32_from_ascii(
+                    &state->solution_time, &buf[field_start], field_len);
+                break;
+            case 1:
+                if (field_len != 4) {
+                    goto invalid;
+                }
+
+                memcpy(state->next_waypoint_id, &buf[field_start], field_len);
+                result = FCS_CONVERSION_OK;
+                break;
+            case 2:
+                result = fcs_double_from_ascii_fixed(
+                    &state->lat, &buf[field_start], field_len);
+                break;
+            case 3:
+                result = fcs_double_from_ascii_fixed(
+                    &state->lon, &buf[field_start], field_len);
+                break;
+            case 4:
+                result = fcs_double_from_ascii_fixed(
+                    &state->alt, &buf[field_start], field_len);
+                break;
+            case 5:
+                result = fcs_double_from_ascii_fixed(
+                    &state->velocity[0], &buf[field_start], field_len);
+                break;
+            case 6:
+                result = fcs_double_from_ascii_fixed(
+                    &state->velocity[1], &buf[field_start], field_len);
+                break;
+            case 7:
+                result = fcs_double_from_ascii_fixed(
+                    &state->velocity[2], &buf[field_start], field_len);
+                break;
+            case 8:
+                result = fcs_double_from_ascii_fixed(
+                    &state->wind_velocity[0], &buf[field_start], field_len);
+                break;
+            case 9:
+                result = fcs_double_from_ascii_fixed(
+                    &state->wind_velocity[1], &buf[field_start], field_len);
+                break;
+            case 10:
+                result = fcs_double_from_ascii_fixed(
+                    &state->wind_velocity[2], &buf[field_start], field_len);
+                break;
+            case 11:
+                result = fcs_double_from_ascii_fixed(
+                    &state->attitude[0], &buf[field_start], field_len);
+                break;
+            case 12:
+                result = fcs_double_from_ascii_fixed(
+                    &state->attitude[1], &buf[field_start], field_len);
+                break;
+            case 13:
+                result = fcs_double_from_ascii_fixed(
+                    &state->attitude[2], &buf[field_start], field_len);
+                break;
+            case 14:
+                result = fcs_double_from_ascii_fixed(
+                    &state->angular_velocity[0], &buf[field_start], field_len
+                );
+                break;
+            case 15:
+                result = fcs_double_from_ascii_fixed(
+                    &state->angular_velocity[1], &buf[field_start], field_len
+                );
+                break;
+            case 16:
+                result = fcs_double_from_ascii_fixed(
+                    &state->angular_velocity[2], &buf[field_start], field_len
+                );
+                break;
+            case 17:
+                result = fcs_double_from_ascii_fixed(
+                    &state->lat_lon_uncertainty, &buf[field_start], field_len
+                );
+                break;
+            case 18:
+                result = fcs_double_from_ascii_fixed(
+                    &state->alt_uncertainty, &buf[field_start], field_len);
+                break;
+            case 19:
+                result = fcs_double_from_ascii_fixed(
+                    &state->velocity_uncertainty[0], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 20:
+                result = fcs_double_from_ascii_fixed(
+                    &state->velocity_uncertainty[1], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 21:
+                result = fcs_double_from_ascii_fixed(
+                    &state->velocity_uncertainty[2], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 22:
+                result = fcs_double_from_ascii_fixed(
+                    &state->wind_velocity_uncertainty[0], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 23:
+                result = fcs_double_from_ascii_fixed(
+                    &state->wind_velocity_uncertainty[1], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 24:
+                result = fcs_double_from_ascii_fixed(
+                    &state->wind_velocity_uncertainty[2], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 25:
+                result = fcs_double_from_ascii_fixed(
+                    &state->attitude_uncertainty[0], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 26:
+                result = fcs_double_from_ascii_fixed(
+                    &state->attitude_uncertainty[1], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 27:
+                result = fcs_double_from_ascii_fixed(
+                    &state->attitude_uncertainty[2], &buf[field_start],
+                    field_len
+                );
+                break;
+            case 28:
+                result = fcs_double_from_ascii_fixed(
+                    &state->angular_velocity_uncertainty[0],
+                    &buf[field_start], field_len
+                );
+                break;
+            case 29:
+                result = fcs_double_from_ascii_fixed(
+                    &state->angular_velocity_uncertainty[1],
+                    &buf[field_start], field_len
+                );
+                break;
+            case 30:
+                result = fcs_double_from_ascii_fixed(
+                    &state->angular_velocity_uncertainty[2],
+                    &buf[field_start], field_len
+                );
+                break;
+            case 31:
+                if (field_len != 1) {
+                    goto invalid;
+                }
+                state->mode_indicator = buf[field_start];
+                break;
+            case 32:
+                if (field_len != 4) {
+                    goto invalid;
+                }
+
+                memcpy(state->flags, &buf[field_start], field_len);
+                result = FCS_CONVERSION_OK;
+                break;
+            default:
+                assert(false);
+                break;
+        }
+
+        if (result != FCS_CONVERSION_OK) {
+            goto invalid;
+        }
+    }
+
+    /* Make sure the full message was parsed */
+    if (field != 33 || idx != len - 4 || buf[idx - 1] != '*' ||
+            buf[idx + 2] != '\r' || buf[idx + 3] != '\n') {
+        goto invalid;
+    }
+
+    /* Check validity */
+    uint8_t message_checksum;
+    result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2);
+    if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
+        goto invalid;
     }
 
     return FCS_DESERIALIZATION_OK;

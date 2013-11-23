@@ -57,8 +57,8 @@ State (FCS->CPU): $PSFWAS
   'N' = not valid) -- 1 char
 - flags (GPS SVs, GPS fix status, taken photo) -- 4 chars (say)
 
-=> 159 bytes + 32 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   203 bytes total
+=> 159 bytes + 33 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   204 bytes total
 */
 struct fcs_packet_state_t {
     int32_t solution_time;

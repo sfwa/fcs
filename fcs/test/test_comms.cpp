@@ -181,8 +181,24 @@ TEST(SerializeState, AllOK) {
         "$PSFWAS,200501234,test,-30.0987654,145.0123457,100.50,"
         "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
         "45.68,80.12,-175.10,.00,.00,.00,"
-        "100,.1,0,2,5,0,2,10,12,2,3,"
-        "A,test*4B\r\n",
+        "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
+        "A,test*73\r\n",
         (char*)result
     );
+}
+
+TEST(DeserializeState, AllOK) {
+    struct fcs_packet_state_t state;
+    uint8_t input[] =
+        "$PSFWAS,200501234,test,-30.0987654,145.0123457,100.50,"
+        "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
+        "45.68,80.12,-175.10,.00,.00,.00,"
+        "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
+        "A,test*73\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_OK, status);
+
+    EXPECT_EQ(200501234, state.solution_time);
 }
