@@ -148,21 +148,21 @@ enum fcs_deserialization_result_t {
 
 /* In all these cases, buf must be at least 256 chars long */
 
-void fcs_comms_serialize_state(uint8_t *restrict buf,
+size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_packet_state_t *restrict state);
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_state(
-struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
+struct fcs_packet_state_t *restrict state, uint8_t *restrict buf,
 size_t len);
 
-void fcs_comms_serialize_waypoint(uint8_t *restrict buf,
-const struct fcs_packet_state_t *restrict state);
+size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
+const struct fcs_packet_waypoint_t *restrict waypoint);
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_waypoint(
 struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
 size_t len);
 
-void fcs_comms_serialize_config(uint8_t *restrict buf,
+size_t fcs_comms_serialize_config(uint8_t *restrict buf,
 const struct fcs_packet_config_t *restrict config);
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_config(

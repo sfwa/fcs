@@ -37,7 +37,7 @@ void fcs_comms_tick(void) {
 
 }
 
-void fcs_comms_serialize_state(uint8_t *restrict buf,
+size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_packet_state_t *restrict state) {
     assert(buf);
     assert(state);
@@ -228,6 +228,7 @@ const struct fcs_packet_state_t *restrict state) {
     buf[index++] = ',';
 
     buf[index++] = state->mode_indicator;
+    buf[index++] = ',';
 
     memcpy(&buf[index], state->flags, 4);
     index += 4;
@@ -235,17 +236,40 @@ const struct fcs_packet_state_t *restrict state) {
     uint8_t checksum = fcs_text_checksum(buf, index);
     buf[index++] = '*';
     index += fcs_ascii_hex_from_uint8(&buf[index], checksum);
+
+    buf[index++] = '\r';
+    buf[index++] = '\n';
+
+    return index;
 }
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_state(
-struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
+struct fcs_packet_state_t *restrict state, uint8_t *restrict buf,
 size_t len) {
+    assert(state);
+    assert(buf);
+    assert(len > 10 && len < 256);
+
+    if (memcmp(buf, "$PSFWAS,", 8) != 0) {
+        goto invalid;
+    }
+
+    /* TODO: split input buffer on ',' */
+    uint8_t field = 0, idx = 8;
+    for (field = 0; field < 32 && idx < len; field++) {
+
+    }
+
+    return FCS_DESERIALIZATION_OK;
+
+invalid:
+    memset(state, 0, sizeof(struct fcs_packet_state_t));
     return FCS_DESERIALIZATION_ERROR;
 }
 
-void fcs_comms_serialize_waypoint(uint8_t *restrict buf,
-const struct fcs_packet_state_t *restrict state) {
-
+size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
+const struct fcs_packet_waypoint_t *restrict waypoint) {
+    return 0;
 }
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_waypoint(
@@ -254,9 +278,9 @@ size_t len) {
     return FCS_DESERIALIZATION_ERROR;
 }
 
-void fcs_comms_serialize_config(uint8_t *restrict buf,
+size_t fcs_comms_serialize_config(uint8_t *restrict buf,
 const struct fcs_packet_config_t *restrict config) {
-
+    return 0;
 }
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_config(
