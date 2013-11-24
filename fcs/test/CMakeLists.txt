@@ -11,8 +11,7 @@ set(CMAKE_C_FLAGS "-O3 -mssse3 -oaddmul")
 SET_DIRECTORY_PROPERTIES(PROPERTIES EP_PREFIX .)
 
 # Add gtest
-ExternalProject_Add(
-googletest
+ExternalProject_Add(googletest
 SVN_REPOSITORY http://googletest.googlecode.com/svn/trunk/
 TIMEOUT 30
 # Disable install step
@@ -48,8 +47,17 @@ ExternalProject_Get_Property(googletest binary_dir)
 TARGET_LINK_LIBRARIES(unittest
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}gtest.a
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}gtest_main.a
-    pthread
-    ${CMAKE_SOURCE_DIR}/../ukf/ukf.a)
+    pthread)
+
+# Add UKF library
+ExternalProject_Add(ukf
+  GIT_REPOSITORY https://github.com/sfwa/ukf.git
+  BUILD_COMMAND $(MAKE) fcsukf
+  INSTALL_COMMAND ""
+)
+ExternalProject_Get_Property(ukf binary_dir)
+TARGET_LINK_LIBRARIES(unittest
+    ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsukf.a)
 
 ADD_TEST(unittest unittest)
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
