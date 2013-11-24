@@ -202,6 +202,19 @@ void fcs_ahrs_init(void) {
         ioboard_calibration[1].gyro_scale[1] =
         ioboard_calibration[1].gyro_scale[2] = 1.0 / GYRO_SENSITIVITY;
 
+    /* Load identity matrices for magnetometer calibration */
+    memset(ioboard_calibration[0].mag_calibration, 0, sizeof(float) * 16);
+    memset(ioboard_calibration[1].mag_calibration, 0, sizeof(float) * 16);
+
+    ioboard_calibration[0].mag_calibration[0] =
+        ioboard_calibration[0].mag_calibration[5] =
+        ioboard_calibration[0].mag_calibration[10] =
+        ioboard_calibration[0].mag_calibration[15] = 1.0;
+    ioboard_calibration[1].mag_calibration[0] =
+        ioboard_calibration[1].mag_calibration[5] =
+        ioboard_calibration[1].mag_calibration[10] =
+        ioboard_calibration[1].mag_calibration[15] = 1.0;
+
     ioboard_calibration[0].mag_scale =
         ioboard_calibration[1].mag_scale = 1.0 / MAG_SENSITIVITY;
 

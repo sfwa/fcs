@@ -48,7 +48,8 @@ ExternalProject_Get_Property(googletest binary_dir)
 TARGET_LINK_LIBRARIES(unittest
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}gtest.a
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}gtest_main.a
-    pthread)
+    pthread
+    ${CMAKE_SOURCE_DIR}/../ukf/ukf.a)
 
 ADD_TEST(unittest unittest)
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
