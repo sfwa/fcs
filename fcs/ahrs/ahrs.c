@@ -22,11 +22,17 @@ SOFTWARE.
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <math.h>
 #include <assert.h>
 
 #include "../config/config.h"
-#include "ahrs.h"
+#include "../util/util.h"
+#include "../util/3dmath.h"
+#include "../comms/comms.h"
 #include "../ukf/cukf.h"
+#include "ahrs.h"
 
 #define AHRS_DELTA 0.001
 
@@ -100,6 +106,11 @@ struct sensor_packet_t {
 #define UPDATED_GPS_INFO 0x20u
 #define UPDATED_ADC_GPIO 0x40u
 
+#define ACCEL_SENSITIVITY 4096.0 /* LSB/g @ ±8g FS */
+#define GYRO_SENSITIVITY 65.5 /* LSB/(deg/s) @ 500deg/s FS */
+#define MAG_SENSITIVITY 1090.0 /* LSB/G @ ±2G FS */
+#define G 9.80665
+
 #define CMD_KEY_LEN 8u
 #define TICK_MAX 65535u
 /* From http://www.ece.cmu.edu/~koopman/roses/dsn04/koopman04_crc_poly_embedded.pdf
@@ -142,8 +153,8 @@ enum msg_type_t {
 We need to hold on to these parts of the configuration -- the others are
 provided directly to the UKF
 */
-static struct fcs_ahrs_sensor_geometry_v1_t sensor_geometry;
-static struct fcs_ahrs_sensor_calibration_v1_t sensor_calibration;
+static struct fcs_ahrs_sensor_geometry_t ioboard_geometry[2];
+static struct fcs_ahrs_sensor_calibration_t ioboard_calibration[2];
 
 /*
 Track the "actual" control position -- NMPC outputs desired position but
@@ -152,6 +163,13 @@ value
 */
 static double control_rate[4];
 static double control_pos[4];
+
+/* Latest I/O board state packets */
+static struct sensor_packet_t ioboard[2];
+static uint16_t ioboard_last_tick[2];
+
+/* Global FCS state structure */
+struct fcs_packet_state_t global_state;
 
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
@@ -162,6 +180,67 @@ void fcs_ahrs_init(void) {
     assert(ukf_config_get_control_dim() == 4);
     assert(ukf_config_get_measurement_dim() == 20);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
+
+    /* Set up global state */
+    memset(&global_state, 0, sizeof(global_state));
+
+    /* Set default geometry and calibration */
+    memset(ioboard_calibration[0].accel_bias, 0, sizeof(int16_t) * 3);
+    memset(ioboard_calibration[1].accel_bias, 0, sizeof(int16_t) * 3);
+
+    ioboard_calibration[0].accel_scale[0] =
+        ioboard_calibration[0].accel_scale[1] =
+        ioboard_calibration[0].accel_scale[2] = 1.0 / ACCEL_SENSITIVITY;
+    ioboard_calibration[1].accel_scale[0] =
+        ioboard_calibration[1].accel_scale[1] =
+        ioboard_calibration[1].accel_scale[2] = 1.0 / ACCEL_SENSITIVITY;
+
+    ioboard_calibration[0].gyro_scale[0] =
+        ioboard_calibration[0].gyro_scale[1] =
+        ioboard_calibration[0].gyro_scale[2] = 1.0 / GYRO_SENSITIVITY;
+    ioboard_calibration[1].gyro_scale[0] =
+        ioboard_calibration[1].gyro_scale[1] =
+        ioboard_calibration[1].gyro_scale[2] = 1.0 / GYRO_SENSITIVITY;
+
+    ioboard_calibration[0].mag_scale =
+        ioboard_calibration[1].mag_scale = 1.0 / MAG_SENSITIVITY;
+
+    ioboard_calibration[0].pitot_bias =
+        ioboard_calibration[1].pitot_bias = 0;
+
+    ioboard_calibration[0].pitot_scale =
+        ioboard_calibration[1].pitot_scale = 1.0 / 65535.0;
+
+    ioboard_calibration[0].barometer_bias =
+        ioboard_calibration[1].barometer_bias = 0;
+
+    ioboard_calibration[0].barometer_scale =
+        ioboard_calibration[1].barometer_scale = 0.02;
+
+    ioboard_geometry[0].accel_orientation[0] = 0.0;
+    ioboard_geometry[0].accel_orientation[1] = 0.0;
+    ioboard_geometry[0].accel_orientation[2] = 0.0;
+    ioboard_geometry[0].accel_orientation[3] = 1.0;
+    ioboard_geometry[1].accel_orientation[0] = 0.0;
+    ioboard_geometry[1].accel_orientation[1] = 0.0;
+    ioboard_geometry[1].accel_orientation[2] = 0.0;
+    ioboard_geometry[1].accel_orientation[3] = 1.0;
+
+    ioboard_geometry[0].gyro_orientation[0] = 0.0;
+    ioboard_geometry[0].gyro_orientation[1] = 0.0;
+    ioboard_geometry[0].gyro_orientation[2] = 0.0;
+    ioboard_geometry[0].gyro_orientation[3] = 1.0;
+    ioboard_geometry[1].gyro_orientation[0] = 0.0;
+    ioboard_geometry[1].gyro_orientation[1] = 0.0;
+    ioboard_geometry[1].gyro_orientation[2] = 0.0;
+    ioboard_geometry[1].gyro_orientation[3] = 1.0;
+
+    ioboard_geometry[0].accel_position[0] = 0.0;
+    ioboard_geometry[0].accel_position[1] = 0.0;
+    ioboard_geometry[0].accel_position[2] = 0.0;
+    ioboard_geometry[1].accel_position[0] = 0.0;
+    ioboard_geometry[1].accel_position[1] = 0.0;
+    ioboard_geometry[1].accel_position[2] = 0.0;
 
     /*
     TODO: read state from NMPC shared memory, just in case we're booting up
@@ -178,30 +257,218 @@ void fcs_ahrs_init(void) {
         {0, 0, 0}
     };
 
+    /* Set up UKF */
     ukf_init();
     ukf_set_state(&initial_state);
-    fcs_ahrs_load_config(current_config);
+
+    /* Configure UKF covariance and sensor offsets */
+    struct fcs_ahrs_sensor_covariance_t covariance;
+    struct fcs_ahrs_wmm_field_t field;
+
+    struct ukf_ioboard_params_t params = {
+        /*
+        Orientations should represent the enclosure-to-fuselage rotation of
+        the CPU board. The accel_offset value should be the position of the
+        enclosure reference point relative to the CoM plus the offset from the
+        enclosure reference point to the mean of the two I/O board
+        accelerometer positions.
+        */
+        {0, 0, 0, 1}, /* accel_orientation */
+        {0, 0, 0}, /* accel_offset */
+        {0, 0, 0, 1}, /* gyro_orientation */
+        {0, 0, 0, 1} /* mag_orientation */
+    };
+    params.mag_field[0] = field.mag_field[0];
+    params.mag_field[1] = field.mag_field[1];
+    params.mag_field[2] = field.mag_field[2];
+
+    params.accel_covariance[0] = covariance.accel_covariance;
+    params.accel_covariance[1] = covariance.accel_covariance;
+    params.accel_covariance[2] = covariance.accel_covariance;
+
+    params.gyro_covariance[0] = covariance.gyro_covariance;
+    params.gyro_covariance[1] = covariance.gyro_covariance;
+    params.gyro_covariance[2] = covariance.gyro_covariance;
+
+    params.mag_covariance[0] = covariance.mag_covariance;
+    params.mag_covariance[1] = covariance.mag_covariance;
+    params.mag_covariance[2] = covariance.mag_covariance;
+
+    params.gps_position_covariance[0] = covariance.gps_position_covariance_h;
+    params.gps_position_covariance[1] = covariance.gps_position_covariance_h;
+    params.gps_position_covariance[2] = covariance.gps_position_covariance_v;
+
+    params.gps_velocity_covariance[0] = covariance.gps_velocity_covariance_h;
+    params.gps_velocity_covariance[1] = covariance.gps_velocity_covariance_h;
+    params.gps_velocity_covariance[2] = covariance.gps_velocity_covariance_v;
+
+    params.pitot_covariance = covariance.pitot_covariance;
+    params.barometer_amsl_covariance = covariance.barometer_amsl_covariance;
+
+    ukf_set_params(&params);
 }
 
 void fcs_ahrs_tick(void) {
     ukf_sensor_clear();
 
-    /* TODO: read sensor data from latest I/O board packets, and convert */
+    /* TODO: Read sensor data from latest I/O board packets, and convert */
+    float accel_data[3] = {0.0, 0.0, 0.0},
+          gyro_data[3] = {0.0, 0.0, 0.0},
+          mag_data[3] = {0.0, 0.0, 0.0},
+          gps_position_data[3] = {0.0, 0.0, 0.0},
+          gps_velocity_data[3] = {0.0, 0.0, 0.0},
+          pitot_data = 0.0,
+          barometer_data = 0.0;
+    uint8_t n_accel = 0, n_gyro = 0, n_mag = 0,
+            n_gps = 0, n_pitot = 0,
+            n_barometer = 0;
 
-    /* TODO: load converted sensor data */
-    /*
-    ukf_sensor_set_accelerometer(x, y, z);
-    ukf_sensor_set_gyroscope(x, y, z);
-    ukf_sensor_set_magnetometer(x, y, z);
-    ukf_sensor_set_gps_position(lat, lon, alt);
-    ukf_sensor_set_gps_velocity(n, e, d);
-    ukf_sensor_set_pitot_tas(tas);
-    ukf_sensor_set_barometer_amsl(alt_amsl);
-    */
+    uint8_t i;
+    float v[4], rv[4];
 
-    /* TODO: read control set values from NMPC */
+    for (i = 0; i < 2u; i++) {
+        if (ioboard[i].tick == ioboard_last_tick[i]) {
+            continue;
+        }
+
+        if (ioboard[i].sensor_update_flags & UPDATED_ACCEL) {
+            v[0] = ((float)ioboard[i].accel.x -
+                    (float)ioboard_calibration[i].accel_bias[0]) *
+                   ioboard_calibration[i].accel_scale[0];
+
+            v[1] = ((float)ioboard[i].accel.y -
+                    (float)ioboard_calibration[i].accel_bias[1]) *
+                   ioboard_calibration[i].accel_scale[1];
+
+            v[2] = ((float)ioboard[i].accel.z -
+                    (float)ioboard_calibration[i].accel_bias[2]) *
+                   ioboard_calibration[i].accel_scale[2];
+
+            /* Transform v by accelerometer orientation */
+            quaternion_vector3_multiply_f(
+                rv, ioboard_geometry[i].accel_orientation, v);
+
+            accel_data[0] += rv[0];
+            accel_data[1] += rv[1];
+            accel_data[2] += rv[2];
+
+            n_accel++;
+        }
+
+        if (ioboard[i].sensor_update_flags & UPDATED_GYRO) {
+            v[0] = (float)ioboard[i].gyro.x *
+                   ioboard_calibration[i].gyro_scale[0];
+
+            v[1] = (float)ioboard[i].gyro.y *
+                   ioboard_calibration[i].gyro_scale[1];
+
+            v[2] = (float)ioboard[i].gyro.z *
+                   ioboard_calibration[i].gyro_scale[2];
+
+            /* Transform v by gyro orientation */
+            quaternion_vector3_multiply_f(
+                rv, ioboard_geometry[i].gyro_orientation, v);
+
+            gyro_data[0] += rv[0];
+            gyro_data[1] += rv[1];
+            gyro_data[2] += rv[2];
+
+            n_gyro++;
+        }
+
+        if (ioboard[i].sensor_update_flags & UPDATED_MAG) {
+            v[0] = (float)ioboard[i].mag.x * ioboard_calibration[i].mag_scale;
+            v[1] = (float)ioboard[i].mag.y * ioboard_calibration[i].mag_scale;
+            v[2] = (float)ioboard[i].mag.z * ioboard_calibration[i].mag_scale;
+            v[3] = 1.0;
+
+            /* Multiply v by magnetometer calibration matrix */
+            /* FIXME: confirm order of parameters etc */
+            matrix_multiply_f(rv, ioboard_calibration[i].mag_calibration,
+                              v, 1, 4, 4, 4, 1.0);
+
+            mag_data[0] += rv[0];
+            mag_data[1] += rv[1];
+            mag_data[2] += rv[2];
+
+            n_mag++;
+        }
+
+        if (ioboard[i].sensor_update_flags & UPDATED_GPS_POS) {
+            gps_position_data[0] += (float)ioboard[i].gps.position.lat * 1e-7;
+            gps_position_data[1] += (float)ioboard[i].gps.position.lng * 1e-7;
+            gps_position_data[2] += (float)ioboard[i].gps.position.alt * 1e-2;
+
+            gps_velocity_data[0] += (float)ioboard[i].gps.velocity.n * 1e-2;
+            gps_velocity_data[1] += (float)ioboard[i].gps.velocity.e * 1e-2;
+            gps_velocity_data[2] += (float)ioboard[i].gps.velocity.d * 1e-2;
+
+            n_gps++;
+        }
+
+        if (ioboard[i].sensor_update_flags & UPDATED_BAROMETER) {
+            barometer_data += ((float)ioboard[i].pressure +
+                               (float)ioboard_calibration[i].barometer_bias) *
+                              ioboard_calibration[i].barometer_scale;
+
+            n_barometer++;
+        }
+
+        if (ioboard[i].sensor_update_flags & UPDATED_ADC_GPIO) {
+            pitot_data += ((float)ioboard[i].pitot +
+                           (float)ioboard_calibration[i].pitot_bias) *
+                          ioboard_calibration[i].pitot_scale;
+
+            n_pitot++;
+        }
+
+        ioboard_last_tick[i] = ioboard[i].tick;
+    }
+
+    /* Load converted/averaged sensor data */
+    float scale[3] = {0.0, 0.5, 1.0};
+    if (n_accel) {
+        ukf_sensor_set_accelerometer(
+            accel_data[0] * scale[n_accel],
+            accel_data[1] * scale[n_accel],
+            accel_data[2] * scale[n_accel]
+        );
+    }
+    if (n_gyro) {
+        ukf_sensor_set_gyroscope(
+            gyro_data[0] * scale[n_gyro],
+            gyro_data[1] * scale[n_gyro],
+            gyro_data[2] * scale[n_gyro]
+        );
+    }
+    if (n_mag) {
+        ukf_sensor_set_magnetometer(
+            mag_data[0] * scale[n_mag],
+            mag_data[1] * scale[n_mag],
+            mag_data[2] * scale[n_mag]
+        );
+    }
+    if (n_gps) {
+        ukf_sensor_set_gps_position(
+            gps_position_data[0] * scale[n_gps],
+            gps_position_data[1] * scale[n_gps],
+            gps_position_data[2] * scale[n_gps]
+        );
+        ukf_sensor_set_gps_velocity(
+            gps_velocity_data[0] * scale[n_gps],
+            gps_velocity_data[1] * scale[n_gps],
+            gps_velocity_data[2] * scale[n_gps]
+        );
+    }
+    if (n_pitot) {
+        ukf_sensor_set_pitot_tas(pitot_data * scale[n_pitot]);
+    }
+    if (n_barometer) {
+        ukf_sensor_set_barometer_amsl(barometer_data * scale[n_barometer]);
+    }
+
+    /* TODO: Read control set values from NMPC */
     double control_set[4] = { 0.0, 0.0, 0.0, 0.0 };
-    uint32_t i;
 
     /*
     Work out the nominal current control position, taking into account the
@@ -214,141 +481,93 @@ void fcs_ahrs_tick(void) {
         control_pos[i] += limitabs(delta, limit);
     }
 
+    /* TODO: Write current control values to I/O boards */
+
     /* Run the UKF */
     ukf_iterate(AHRS_DELTA, control_pos);
 
-    /* TODO: write current state to NMPC */
-    struct ukf_state_t state;
-    ukf_get_state(&state);
-}
+    /* Write current state to global state store */
+    struct ukf_state_t s;
+    ukf_get_state(&s);
 
-void fcs_ahrs_update_state(const struct fcs_state_t *new_state) {
-    assert(new_config);
-
-    enum fcs_config_param_result_t result;
-
-    /* Load the AHRS settings */
-    result = fcs_config_get_param_block(
-        new_config, sizeof(sensor_geometry), &sensor_geometry,
-        FCS_AHRS_SENSOR_GEOMETRY_KEY, FCS_AHRS_SENSOR_GEOMETRY_VERSION);
-    assert(result == FCS_CONFIG_PARAM_OK);
-
-    result = fcs_config_get_param_block(
-        new_config, sizeof(sensor_calibration), &sensor_calibration,
-        FCS_AHRS_SENSOR_CALIBRATION_KEY, FCS_AHRS_SENSOR_CALIBRATION_VERSION);
-    assert(result == FCS_CONFIG_PARAM_OK);
-
-    /* Set up the I/O board params */
-    {
-        struct fcs_ahrs_sensor_covariance_v1_t covariance;
-        result = fcs_config_get_param_block(
-            new_config, sizeof(covariance), &covariance,
-            FCS_AHRS_SENSOR_COVARIANCE_KEY,
-            FCS_AHRS_SENSOR_COVARIANCE_VERSION);
-        assert(result == FCS_CONFIG_PARAM_OK);
-
-        struct fcs_ahrs_wmm_field_v1_t field;
-        result = fcs_config_get_param_block(
-            new_config, sizeof(field), &field,
-            FCS_AHRS_WMM_FIELD_KEY,
-            FCS_AHRS_WMM_FIELD_VERSION);
-        assert(result == FCS_CONFIG_PARAM_OK);
-
-        struct ukf_ioboard_params_t ioboard_params = {
-            /*
-            Orientations and offsets are 0 because we're using two I/O boards
-            and fusing their measurements before handing them off to the UKF
-            */
-            {0, 0, 0, 1}, /* accel_orientation */
-            {0, 0, 0}, /* accel_offset */
-            {0, 0, 0, 1}, /* gyro_orientation */
-            {0, 0, 0, 1} /* mag_orientation */
-        };
-        ioboard_params.mag_field[0] = field.mag_field[0];
-        ioboard_params.mag_field[1] = field.mag_field[1];
-        ioboard_params.mag_field[2] = field.mag_field[2];
-
-        ioboard_params.accel_covariance[0] = covariance.accel_covariance[0];
-        ioboard_params.accel_covariance[1] = covariance.accel_covariance[1];
-        ioboard_params.accel_covariance[2] = covariance.accel_covariance[2];
-
-        ioboard_params.gyro_covariance[0] = covariance.gyro_covariance[0];
-        ioboard_params.gyro_covariance[1] = covariance.gyro_covariance[1];
-        ioboard_params.gyro_covariance[2] = covariance.gyro_covariance[2];
-
-        ioboard_params.mag_covariance[0] = covariance.mag_covariance[0];
-        ioboard_params.mag_covariance[1] = covariance.mag_covariance[1];
-        ioboard_params.mag_covariance[2] = covariance.mag_covariance[2];
-
-        ioboard_params.gps_position_covariance[0] = covariance.gps_position_covariance[0];
-        ioboard_params.gps_position_covariance[1] = covariance.gps_position_covariance[1];
-        ioboard_params.gps_position_covariance[2] = covariance.gps_position_covariance[2];
-
-        ioboard_params.gps_velocity_covariance[0] = covariance.gps_velocity_covariance[0];
-        ioboard_params.gps_velocity_covariance[1] = covariance.gps_velocity_covariance[1];
-        ioboard_params.gps_velocity_covariance[2] = covariance.gps_velocity_covariance[2];
-
-        ioboard_params.pitot_covariance = covariance.pitot_covariance;
-        ioboard_params.barometer_amsl_covariance = covariance.barometer_amsl_covariance;
-
-        ukf_set_params(&ioboard_params);
+    if (global_state.solution_time < INT32_MAX) {
+        global_state.solution_time++;
+    } else {
+        global_state.solution_time = 0;
     }
 
-    /* Set up the dynamics model */
-    {
-        struct fcs_ahrs_dynamics_model_v1_t model;
-        result = fcs_config_get_param_block(
-            new_config, sizeof(model), &model,
-            FCS_AHRS_DYNAMICS_MODEL_KEY,
-            FCS_AHRS_DYNAMICS_MODEL_VERSION);
-        assert(result == FCS_CONFIG_PARAM_OK);
+    /* Convert lat/lon to degrees */
+    global_state.lat = s.position[0] * (180.0 / M_PI);
+    global_state.lon = s.position[1] * (180.0 / M_PI);
+    global_state.alt = s.position[2];
 
-        ukf_set_process_noise(model.process_noise);
-        switch (model.model) {
-            case 0u:
-                ukf_choose_dynamics(UKF_MODEL_NONE);
-                break;
-            case 1u:
-                ukf_choose_dynamics(UKF_MODEL_CENTRIPETAL);
-                break;
-            case 2u:
-                ukf_choose_dynamics(UKF_MODEL_FIXED_WING);
-                break;
-            default:
-                assert(0);
-                break;
-        }
+    memcpy(global_state.velocity, s.velocity, 3 * sizeof(double));
+    memcpy(global_state.wind_velocity, s.wind_velocity,
+           3 * sizeof(double));
 
-        /* Set the dynamics model parameters, if present */
-        struct fcs_model_dynamics_params_v1_t opts;
-        result = fcs_config_get_param_block(
-            new_config, sizeof(opts), &opts,
-            FCS_MODEL_DYNAMICS_PARAMS_KEY,
-            FCS_MODEL_DYNAMICS_PARAMS_VERSION);
-        if (result == FCS_CONFIG_PARAM_OK) {
-            ukf_fixedwingdynamics_set_mass(opts.mass);
-            ukf_fixedwingdynamics_set_inertia_tensor(opts.inertia_tensor);
-            ukf_fixedwingdynamics_set_prop_coeffs(opts.prop_area,
-                                                  opts.prop_cve);
-            ukf_fixedwingdynamics_set_lift_coeffs(opts.lift_coeffs);
-            ukf_fixedwingdynamics_set_drag_coeffs(opts.drag_coeffs);
-            ukf_fixedwingdynamics_set_side_coeffs(
-                opts.side_coeffs, opts.side_control_coeffs);
-            ukf_fixedwingdynamics_set_yaw_moment_coeffs(
-                opts.yaw_moment_coeffs,
-                opts.yaw_moment_control_coeffs);
-            ukf_fixedwingdynamics_set_pitch_moment_coeffs(
-                opts.pitch_moment_coeffs,
-                opts.pitch_moment_control_coeffs);
-            ukf_fixedwingdynamics_set_roll_moment_coeffs(
-                opts.roll_moment_coeff,
-                opts.roll_momentcontrol_coeffs);
+    /* Convert angular velocity to degrees/s */
+    global_state.angular_velocity[0] = s.angular_velocity[0] * (180.0 / M_PI);
+    global_state.angular_velocity[1] = s.angular_velocity[1] * (180.0 / M_PI);
+    global_state.angular_velocity[2] = s.angular_velocity[2] * (180.0 / M_PI);
 
-            uint32_t i;
-            #pragma MUST_ITERATE(4)
-            for (i = 0; i < 4; i++) {
-                control_rate[i] = opts.control_rate[i];
-            }
-        }
+    /* Convert state.attitude to yaw/pitch/roll */
+    double yaw, pitch, roll;
+
+    #define q s.attitude
+    yaw = atan2(2.0f * (q[W] * q[Z] + q[X] * q[Y]),
+                1.0f - 2.0f * (q[Y] * q[Y] + q[Z] * q[Z]));
+    pitch = asin(2.0f * (q[W] * q[X] - q[Z] * q[X]));
+    roll = atan2(2.0f * (q[W] * q[X] + q[Y] * q[Z]),
+                 1.0f - 2.0f * (q[X] * q[X] + q[Y] * q[Y]));
+    #undef q
+
+    if (yaw < 0.0) {
+        yaw += 360.0;
     }
+    assert(0.0 <= yaw && yaw <= 360.0);
+    assert(-90.0 <= pitch && pitch <= 90.0);
+    assert(-180.0 <= roll && roll <= 180.0);
+
+    global_state.attitude[0] = yaw;
+    global_state.attitude[1] = pitch;
+    global_state.attitude[2] = roll;
+
+    /*
+    Get the state covariance matrix, and work out the 95th percentile
+    confidence interval assuming Gaussian distribution
+    */
+    double covariance[UKF_STATE_DIM];
+    ukf_get_state_covariance_diagonal(covariance);
+
+    /*
+    Ignore changes in lon with varying lat -- this should be close enough
+    */
+    global_state.lat_lon_uncertainty = 1.96 *
+        sqrt(fmax(covariance[0], covariance[1])) * (40008000.0 / 360.0);
+    global_state.alt_uncertainty = 1.96 * sqrt(covariance[2]);
+
+    global_state.velocity_uncertainty[0] = 1.96 * sqrt(covariance[3]);
+    global_state.velocity_uncertainty[1] = 1.96 * sqrt(covariance[4]);
+    global_state.velocity_uncertainty[2] = 1.96 * sqrt(covariance[5]);
+
+    global_state.wind_velocity_uncertainty[0] = 1.96 * sqrt(covariance[18]);
+    global_state.wind_velocity_uncertainty[1] = 1.96 * sqrt(covariance[19]);
+    global_state.wind_velocity_uncertainty[2] = 1.96 * sqrt(covariance[20]);
+
+    global_state.attitude_uncertainty[0] = 1.96 *
+        sqrt(covariance[9]) * (180.0 / M_PI);
+    global_state.attitude_uncertainty[1] = 1.96 *
+        sqrt(covariance[10]) * (180.0 / M_PI);
+    global_state.attitude_uncertainty[2] = 1.96 *
+        sqrt(covariance[11]) * (180.0 / M_PI);
+
+    global_state.angular_velocity_uncertainty[0] = 1.96 *
+        sqrt(covariance[12]) * (180.0 / M_PI);
+    global_state.angular_velocity_uncertainty[1] = 1.96 *
+        sqrt(covariance[13]) * (180.0 / M_PI);
+    global_state.angular_velocity_uncertainty[2] = 1.96 *
+        sqrt(covariance[14]) * (180.0 / M_PI);
+
+    /* TODO: Update state mode indicator based on confidence in filter lock */
+    global_state.mode_indicator = 'A';
 }

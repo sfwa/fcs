@@ -27,27 +27,25 @@ SOFTWARE.
 Configuration data types for the AHRS
 */
 
-struct fcs_ahrs_sensor_geometry_v1_t {
-    float accel_1_orientation[4];
-    float accel_2_orientation[4];
-    float mag_1_orientation[4];
-    float mag_2_orientation[4];
-    float accel_1_position[3];
-    float accel_2_position[3];
+struct fcs_ahrs_sensor_geometry_t {
+    float accel_orientation[4];
+    float gyro_orientation[4];
+    float accel_position[3];
 };
-struct fcs_ahrs_sensor_calibration_v1_t {
-    float accel_1_calibration[16];
-    float accel_2_calibration[16];
+
+struct fcs_ahrs_sensor_calibration_t {
+    int16_t accel_bias[3];
+    float accel_scale[3];
     float mag_calibration[16];
-    float gyro_1_scale[3];
-    float gyro_2_scale[3];
-    float pitot_bias;
+    float mag_scale;
+    float gyro_scale[3];
+    int16_t pitot_bias;
     float pitot_scale;
-    float barometer_bias;
+    int16_t barometer_bias;
     float barometer_scale;
 };
 
-struct fcs_ahrs_sensor_covariance_v1_t {
+struct fcs_ahrs_sensor_covariance_t {
     float accel_covariance;
     float gyro_covariance;
     float mag_covariance;
@@ -59,18 +57,18 @@ struct fcs_ahrs_sensor_covariance_v1_t {
     float barometer_amsl_covariance;
 };
 
-struct fcs_ahrs_wmm_field_v1_t {
+struct fcs_ahrs_wmm_field_t {
     float mag_field[3];
 };
 
-struct fcs_ahrs_dynamics_model_v1_t {
+struct fcs_ahrs_dynamics_model_t {
     float process_noise[24];
-
     uint8_t model; /* 0, 1 or 2 */
 };
 
 void fcs_ahrs_init(void);
 void fcs_ahrs_tick(void);
-void fcs_ahrs_update_state(const struct fcs_state_t *new_state);
+
+extern struct fcs_packet_state_t global_state;
 
 #endif

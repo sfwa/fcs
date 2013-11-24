@@ -36,7 +36,9 @@ ADD_EXECUTABLE(unittest
     ../util/util.c
     test_util.cpp
     ../comms/comms.c
-    test_comms.cpp)
+    test_comms.cpp
+    ../ahrs/ahrs.c
+    test_ahrs.cpp)
 
 # Create dependency of test on googletest
 ADD_DEPENDENCIES(unittest googletest)
