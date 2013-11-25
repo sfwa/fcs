@@ -25,8 +25,6 @@ SOFTWARE.
 #include <assert.h>
 
 #include "stream.h"
-#include "int-uart.h"
-#include "emif-uart.h"
 
 static uint8_t rx_buffers[FCS_STREAM_NUM_DEVICES][FCS_STREAM_BUFFER_SIZE];
 static uint8_t tx_buffers[FCS_STREAM_NUM_DEVICES][FCS_STREAM_BUFFER_SIZE];
@@ -75,9 +73,24 @@ uint32_t nbytes) {
     with ACNT = 1, BCNT = 1 and CCNT = number of bytes to send. The same
     output is sent to both external UARTs so only one needs to be written.
     */
+    return 0;
+}
+
+uint32_t fcs_stream_skip_until_after(enum fcs_stream_device_t dev,
+uint8_t ch) {
+    return 0;
+}
+
+uint32_t fcs_stream_read_until_after(enum fcs_stream_device_t dev,
+uint8_t ch, uint8_t *restrict buf, uint32_t nbytes) {
+    return 0;
+}
+
+int16_t fcs_stream_peek(enum fcs_stream_device_t dev) {
+    return -1;
 }
 
 uint32_t fcs_stream_write(enum fcs_stream_device_t dev,
 const uint8_t *restrict buf, uint32_t nbytes) {
-
+    return 0;
 }

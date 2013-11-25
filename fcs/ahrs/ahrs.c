@@ -32,6 +32,7 @@ SOFTWARE.
 #include "../util/3dmath.h"
 #include "../comms/comms.h"
 #include "../ukf/cukf.h"
+#include "../drivers/stream.h"
 #include "ahrs.h"
 
 #define AHRS_DELTA 0.001

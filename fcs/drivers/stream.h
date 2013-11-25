@@ -85,6 +85,13 @@ uint32_t fcs_stream_read_until_after(enum fcs_stream_device_t dev,
 uint8_t ch, uint8_t *restrict buf, uint32_t nbytes);
 
 /*
+fcs_stream_peek - return the next character in the stream, or -1 if none. Does
+not consume the character, so it will be returned by future peeks/reads.
+*/
+int16_t fcs_stream_peek(enum fcs_stream_device_t dev);
+
+
+/*
 fcs_stream_write - writes up to "nbytes" from "buf" into the device's output
 buffer.
 

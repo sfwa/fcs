@@ -36,6 +36,7 @@ ADD_EXECUTABLE(unittest
     test_util.cpp
     ../comms/comms.c
     test_comms.cpp
+    ../drivers/stream.c
     ../ahrs/ahrs.c
     test_ahrs.cpp)
 
