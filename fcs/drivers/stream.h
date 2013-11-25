@@ -58,8 +58,31 @@ fcs_stream_read - reads up to "nbytes" from the device's input buffer into
 
 Returns the number of bytes actually read, in the range [0, nbytes].
 */
-uint32_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *buf,
+uint32_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
 uint32_t nbytes);
+
+/*
+fcs_stream_skip_until_after - discard bytes from the device's input buffer
+until (and including) the first occurrence of "ch".
+
+If "ch" is not present in the input buffer, the discarded bytes are restored.
+
+Returns the number of bytes skipped, in the range [0, nbytes].
+*/
+uint32_t fcs_stream_skip_until_after(enum fcs_stream_device_t dev,
+uint8_t ch);
+
+/*
+fcs_stream_read_until_after - reads up to "nbytes" bytes from the device's
+input buffer up to (and including) the first occurrence of "ch".
+
+If "ch" is not present in the input buffer, the discarded bytes are restored,
+and no bytes are read.
+
+Returns the number of bytes read, in the range [0, nbytes].
+*/
+uint32_t fcs_stream_read_until_after(enum fcs_stream_device_t dev,
+uint8_t ch, uint8_t *restrict buf, uint32_t nbytes);
 
 /*
 fcs_stream_write - writes up to "nbytes" from "buf" into the device's output

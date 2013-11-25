@@ -36,8 +36,8 @@ struct fcs_ahrs_sensor_geometry_t {
 struct fcs_ahrs_sensor_calibration_t {
     int16_t accel_bias[3];
     float accel_scale[3];
-    float mag_calibration[16];
-    float mag_scale;
+    float mag_bias[3];
+    float mag_scale[9];
     float gyro_scale[3];
     int16_t pitot_bias;
     float pitot_scale;

@@ -203,20 +203,18 @@ void fcs_ahrs_init(void) {
         ioboard_calibration[1].gyro_scale[2] = 1.0 / GYRO_SENSITIVITY;
 
     /* Load identity matrices for magnetometer calibration */
-    memset(ioboard_calibration[0].mag_calibration, 0, sizeof(float) * 16);
-    memset(ioboard_calibration[1].mag_calibration, 0, sizeof(float) * 16);
+    memset(ioboard_calibration[0].mag_bias, 0, sizeof(float) * 3);
+    memset(ioboard_calibration[1].mag_bias, 0, sizeof(float) * 3);
 
-    ioboard_calibration[0].mag_calibration[0] =
-        ioboard_calibration[0].mag_calibration[5] =
-        ioboard_calibration[0].mag_calibration[10] =
-        ioboard_calibration[0].mag_calibration[15] = 1.0;
-    ioboard_calibration[1].mag_calibration[0] =
-        ioboard_calibration[1].mag_calibration[5] =
-        ioboard_calibration[1].mag_calibration[10] =
-        ioboard_calibration[1].mag_calibration[15] = 1.0;
+    memset(ioboard_calibration[0].mag_scale, 0, sizeof(float) * 9);
+    memset(ioboard_calibration[1].mag_scale, 0, sizeof(float) * 9);
 
-    ioboard_calibration[0].mag_scale =
-        ioboard_calibration[1].mag_scale = 1.0 / MAG_SENSITIVITY;
+    ioboard_calibration[0].mag_scale[0] =
+        ioboard_calibration[0].mag_scale[4] =
+        ioboard_calibration[0].mag_scale[8] = 1.0 / MAG_SENSITIVITY;
+    ioboard_calibration[1].mag_scale[0] =
+        ioboard_calibration[1].mag_scale[4] =
+        ioboard_calibration[1].mag_scale[8] = 1.0 / MAG_SENSITIVITY;
 
     ioboard_calibration[0].pitot_bias =
         ioboard_calibration[1].pitot_bias = 0;
@@ -322,9 +320,59 @@ void fcs_ahrs_init(void) {
 }
 
 void fcs_ahrs_tick(void) {
-    ukf_sensor_clear();
+    /* Read latest I/O board packets from the UART streams */
+    uint8_t buf[64];
+    uint32_t nbytes;
+    struct fcs_cobsr_decode_result decode_result;
+    uint8_t i;
+    bool ioboard_packet_read[2] = { false, false };
 
-    /* TODO: Read sensor data from latest I/O board packets, and convert */
+    for (i = 0; i < 2; i++) {
+        /*
+        Skip until after the next NUL byte -- if there was a successful read
+        last tick, this will bring us to the first byte of the message
+        */
+        nbytes = fcs_stream_skip_until_after(
+            FCS_STREAM_UART_INT0 + i, (uint8_t)0);
+
+        /*
+        If no bytes were skipped, there must have been no NUL byte in the
+        buffer, and therefore no complete message -- don't bother trying to
+        read anything yet.
+        */
+        if (!nbytes) {
+            continue;
+        }
+
+        if (fcs_stream_peek(FCS_STREAM_UART_INT0 + i) == 0) {
+            /*
+            Must have skipped over some (incomplete) message bytes, so we're
+            now at the terminating NUL byte of the message we skipped -- skip
+            again to get past the starting NUL byte of the next message
+            */
+            fcs_stream_skip_until_after(FCS_STREAM_UART_INT0 + i, (uint8_t)0);
+        }
+
+        /* Read until after the next (terminating) NUL */
+        nbytes = fcs_stream_read_until_after(
+            FCS_STREAM_UART_INT0 + i, (uint8_t)0, buf, 64u);
+        if (nbytes >= sizeof(struct sensor_packet_t) + 1) {
+            /* Decode the message into the packet buffer */
+            decode_result = fcs_cobsr_decode(
+                (uint8_t*)&ioboard[i],
+                sizeof(struct sensor_packet_t),
+                buf,
+                nbytes - 1
+            );
+
+            if (decode_result.status == FCS_COBSR_DECODE_OK &&
+                    decode_result.out_len == sizeof(struct sensor_packet_t)) {
+                ioboard_packet_read[i] = true;
+            }
+        }
+    }
+
+    /* Read sensor data from latest I/O board packets, and convert */
     float accel_data[3] = {0.0, 0.0, 0.0},
           gyro_data[3] = {0.0, 0.0, 0.0},
           mag_data[3] = {0.0, 0.0, 0.0},
@@ -335,12 +383,11 @@ void fcs_ahrs_tick(void) {
     uint8_t n_accel = 0, n_gyro = 0, n_mag = 0,
             n_gps = 0, n_pitot = 0,
             n_barometer = 0;
-
-    uint8_t i;
-    float v[4], rv[4];
+    float v[3], rv[3];
 
     for (i = 0; i < 2u; i++) {
-        if (ioboard[i].tick == ioboard_last_tick[i]) {
+        if (!ioboard_packet_read[i] ||
+                ioboard[i].tick == ioboard_last_tick[i]) {
             continue;
         }
 
@@ -390,15 +437,17 @@ void fcs_ahrs_tick(void) {
         }
 
         if (ioboard[i].sensor_update_flags & UPDATED_MAG) {
-            v[0] = (float)ioboard[i].mag.x * ioboard_calibration[i].mag_scale;
-            v[1] = (float)ioboard[i].mag.y * ioboard_calibration[i].mag_scale;
-            v[2] = (float)ioboard[i].mag.z * ioboard_calibration[i].mag_scale;
-            v[3] = 1.0;
+            v[0] = (float)ioboard[i].mag.x -
+                   ioboard_calibration[i].mag_bias[0];
+            v[1] = (float)ioboard[i].mag.y -
+                   ioboard_calibration[i].mag_bias[1];
+            v[2] = (float)ioboard[i].mag.z -
+                   ioboard_calibration[i].mag_bias[2];
 
             /* Multiply v by magnetometer calibration matrix */
             /* FIXME: confirm order of parameters etc */
-            matrix_multiply_f(rv, ioboard_calibration[i].mag_calibration,
-                              v, 1, 4, 4, 4, 1.0);
+            matrix_multiply_f(rv, ioboard_calibration[i].mag_scale,
+                              v, 1, 3, 3, 3, 1.0);
 
             mag_data[0] += rv[0];
             mag_data[1] += rv[1];
@@ -439,6 +488,8 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Load converted/averaged sensor data */
+    ukf_sensor_clear();
+
     float scale[3] = {0.0, 0.5, 1.0};
     if (n_accel) {
         ukf_sensor_set_accelerometer(
