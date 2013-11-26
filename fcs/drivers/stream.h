@@ -43,6 +43,11 @@ enum fcs_stream_result_t {
 };
 
 /*
+fcs_stream_open -- configure a stream and reset its buffer state
+*/
+enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev);
+
+/*
 fcs_stream_set_rate - if the stream device is a UART, sets the connection
 baud rate to the value provided in "baud".
 
@@ -100,6 +105,6 @@ Assuming the caller is writing at a rate lower than the maximum send rate of
 the device, the return value will always be equal to "nbytes".
 */
 uint32_t fcs_stream_write(enum fcs_stream_device_t dev,
-const uint8_t *buf, uint32_t nbytes);
+const uint8_t *restrict buf, uint32_t nbytes);
 
 #endif

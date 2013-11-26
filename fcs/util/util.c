@@ -48,10 +48,6 @@ static int32_t exp10i[11] = {
     -1000000000
 };
 
-/* Digits for hex conversion routines */
-static uint8_t hex_digits[] = "0123456789ABCDEF";
-
-
 void fcs_util_init(void) {
 	fcs_crc8_init(FCS_CRC8_POLY);
 }
@@ -260,6 +256,7 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
 
     double output = 0.0;
 
+    /* Convert the integral part of the number */
     if (integral_length != 0) {
         if (fcs_int32_from_ascii(&integral, value, integral_length) !=
             FCS_CONVERSION_OK) {
@@ -269,6 +266,7 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
         output = integral;
     }
 
+    /* If there's a fractional part, convert that too */
     fractional_length = len - integral_length;
     if (fractional_length > 8u) { /* allow an extra 1 for the DP */
         goto invalid;
@@ -282,6 +280,10 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
             fractional = -fractional;
         }
 
+        /*
+        Since the fractional part was converted to an integer, we need to
+        determine the place value of the integer component.
+        */
         output += (double)fractional * exp10neg[fractional_length - 2];
     }
 
@@ -353,6 +355,8 @@ invalid:
 /* fcs_ascii_hex_from_uint8 -- convert a uint8_t value to two uppercase hex
 digits */
 size_t fcs_ascii_hex_from_uint8(uint8_t *restrict result, uint8_t value) {
+    static uint8_t hex_digits[] = "0123456789ABCDEF";
+
     assert(result);
 
     result[0] = hex_digits[(value & 0xF0u) >> 4];

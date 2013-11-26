@@ -168,6 +168,7 @@ static double control_pos[4];
 /* Latest I/O board state packets */
 static struct sensor_packet_t ioboard[2];
 static uint16_t ioboard_last_tick[2];
+static bool ioboard_got_packet[2];
 
 /* Global FCS state structure */
 struct fcs_packet_state_t global_state;
@@ -175,12 +176,28 @@ struct fcs_packet_state_t global_state;
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
 
+/* Internal functions */
+void _fcs_ahrs_read_ioboard_packets(void);
+
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
     assert(ukf_config_get_state_dim() == 24);
     assert(ukf_config_get_control_dim() == 4);
     assert(ukf_config_get_measurement_dim() == 20);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
+
+    /* Open I/O board streams */
+    assert(
+        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 921600) == FCS_STREAM_OK);
+    assert(
+        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 921600) == FCS_STREAM_OK);
+    assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
+    assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
+
+    /* Open the CPU comms stream */
+    assert(
+        fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 921600) == FCS_STREAM_OK);
+    assert(fcs_stream_open(FCS_STREAM_UART_EXT0) == FCS_STREAM_OK);
 
     /* Set up global state */
     memset(&global_state, 0, sizeof(global_state));
@@ -321,57 +338,8 @@ void fcs_ahrs_init(void) {
 }
 
 void fcs_ahrs_tick(void) {
-    /* Read latest I/O board packets from the UART streams */
-    uint8_t buf[64];
-    uint32_t nbytes;
-    struct fcs_cobsr_decode_result decode_result;
-    uint8_t i;
-    bool ioboard_packet_read[2] = { false, false };
-
-    for (i = 0; i < 2; i++) {
-        /*
-        Skip until after the next NUL byte -- if there was a successful read
-        last tick, this will bring us to the first byte of the message
-        */
-        nbytes = fcs_stream_skip_until_after(
-            FCS_STREAM_UART_INT0 + i, (uint8_t)0);
-
-        /*
-        If no bytes were skipped, there must have been no NUL byte in the
-        buffer, and therefore no complete message -- don't bother trying to
-        read anything yet.
-        */
-        if (!nbytes) {
-            continue;
-        }
-
-        if (fcs_stream_peek(FCS_STREAM_UART_INT0 + i) == 0) {
-            /*
-            Must have skipped over some (incomplete) message bytes, so we're
-            now at the terminating NUL byte of the message we skipped -- skip
-            again to get past the starting NUL byte of the next message
-            */
-            fcs_stream_skip_until_after(FCS_STREAM_UART_INT0 + i, (uint8_t)0);
-        }
-
-        /* Read until after the next (terminating) NUL */
-        nbytes = fcs_stream_read_until_after(
-            FCS_STREAM_UART_INT0 + i, (uint8_t)0, buf, 64u);
-        if (nbytes >= sizeof(struct sensor_packet_t) + 1) {
-            /* Decode the message into the packet buffer */
-            decode_result = fcs_cobsr_decode(
-                (uint8_t*)&ioboard[i],
-                sizeof(struct sensor_packet_t),
-                buf,
-                nbytes - 1
-            );
-
-            if (decode_result.status == FCS_COBSR_DECODE_OK &&
-                    decode_result.out_len == sizeof(struct sensor_packet_t)) {
-                ioboard_packet_read[i] = true;
-            }
-        }
-    }
+    ioboard_got_packet[0] = ioboard_got_packet[1] = false;
+    _fcs_ahrs_read_ioboard_packets();
 
     /* Read sensor data from latest I/O board packets, and convert */
     float accel_data[3] = {0.0, 0.0, 0.0},
@@ -383,11 +351,11 @@ void fcs_ahrs_tick(void) {
           barometer_data = 0.0;
     uint8_t n_accel = 0, n_gyro = 0, n_mag = 0,
             n_gps = 0, n_pitot = 0,
-            n_barometer = 0;
+            n_barometer = 0, i;
     float v[3], rv[3];
 
     for (i = 0; i < 2u; i++) {
-        if (!ioboard_packet_read[i] ||
+        if (!ioboard_got_packet[i] ||
                 ioboard[i].tick == ioboard_last_tick[i]) {
             continue;
         }
@@ -619,12 +587,13 @@ void fcs_ahrs_tick(void) {
     global_state.wind_velocity_uncertainty[1] = 1.96 * sqrt(covariance[19]);
     global_state.wind_velocity_uncertainty[2] = 1.96 * sqrt(covariance[20]);
 
+    /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
     global_state.attitude_uncertainty[0] = 1.96 *
-        sqrt(covariance[9]) * (180.0 / M_PI);
+        sqrt(covariance[11]) * (180.0 / M_PI);
     global_state.attitude_uncertainty[1] = 1.96 *
         sqrt(covariance[10]) * (180.0 / M_PI);
     global_state.attitude_uncertainty[2] = 1.96 *
-        sqrt(covariance[11]) * (180.0 / M_PI);
+        sqrt(covariance[9]) * (180.0 / M_PI);
 
     global_state.angular_velocity_uncertainty[0] = 1.96 *
         sqrt(covariance[12]) * (180.0 / M_PI);
@@ -635,4 +604,57 @@ void fcs_ahrs_tick(void) {
 
     /* TODO: Update state mode indicator based on confidence in filter lock */
     global_state.mode_indicator = 'A';
+}
+
+void _fcs_ahrs_read_ioboard_packets(void) {
+        /* Read latest I/O board packets from the UART streams */
+    uint8_t buf[64];
+    uint32_t nbytes;
+    struct fcs_cobsr_decode_result decode_result;
+    uint8_t i;
+
+    for (i = 0; i < 2; i++) {
+        /*
+        Skip until after the next NUL byte -- if there was a successful read
+        last tick, this will bring us to the first byte of the message
+        */
+        nbytes = fcs_stream_skip_until_after(
+            FCS_STREAM_UART_INT0 + i, (uint8_t)0);
+
+        /*
+        If no bytes were skipped, there must have been no NUL byte in the
+        buffer, and therefore no complete message -- don't bother trying to
+        read anything yet.
+        */
+        if (!nbytes) {
+            continue;
+        }
+
+        if (fcs_stream_peek(FCS_STREAM_UART_INT0 + i) == 0) {
+            /*
+            Must have skipped over some (incomplete) message bytes, so we're
+            now at the terminating NUL byte of the message we skipped -- skip
+            again to get past the starting NUL byte of the next message
+            */
+            fcs_stream_skip_until_after(FCS_STREAM_UART_INT0 + i, (uint8_t)0);
+        }
+
+        /* Read until after the next (terminating) NUL */
+        nbytes = fcs_stream_read_until_after(
+            FCS_STREAM_UART_INT0 + i, (uint8_t)0, buf, 64u);
+        if (nbytes >= sizeof(struct sensor_packet_t) + 1) {
+            /* Decode the message into the packet buffer */
+            decode_result = fcs_cobsr_decode(
+                (uint8_t*)&ioboard[i],
+                sizeof(struct sensor_packet_t),
+                buf,
+                nbytes - 1
+            );
+
+            if (decode_result.status == FCS_COBSR_DECODE_OK &&
+                    decode_result.out_len == sizeof(struct sensor_packet_t)) {
+                ioboard_got_packet[i] = true;
+            }
+        }
+    }
 }

@@ -95,6 +95,14 @@ struct fcs_cobsr_decode_result {
     enum fcs_cobsr_decode_status status;
 };
 
+/*
+COBS-R encode/decode routines. The format is described here:
+http://pythonhosted.org/cobs/cobsr-intro.html
+
+COBS-R is used by the I/O board serial protocol to ensure that NUL bytes never
+appear within packets, allowing them to be used as packet delimiters. Encoding
+packets < 256 bytes with COBS-R results in an overhead of at most one byte.
+*/
 struct fcs_cobsr_encode_result fcs_cobsr_encode(uint8_t *dst_buf_ptr,
 uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len);
 struct fcs_cobsr_decode_result fcs_cobsr_decode(uint8_t *dst_buf_ptr,
@@ -132,9 +140,21 @@ enum fcs_conversion_result_t {
     FCS_CONVERSION_ERROR
 };
 
+/*
+fcs_double_from_ascii_fixed -- convert an ASCII string (nnnn.nnn, nnn, or
+.nnn) to double. Returns FCS_CONVERSION_OK if the result is valid, or
+ FCS_CONVERSION_ERROR if not.
+
+The integral part of the fixed-point value must have 6 digits or fewer, and
+the fractional part must have 7 digits or fewer.
+*/
 enum fcs_conversion_result_t fcs_double_from_ascii_fixed(
 double *restrict result, const uint8_t *restrict value, size_t len);
 
+/*
+fcs_int32_from_ascii -- convert an ASCII string (nnnn) to int32_t. Returns
+FCS_CONVERSION_OK if the result is valid, or FCS_CONVERSION_ERROR if not.
+*/
 enum fcs_conversion_result_t fcs_int32_from_ascii(int32_t *restrict result,
 const uint8_t *restrict value, size_t len);
 
