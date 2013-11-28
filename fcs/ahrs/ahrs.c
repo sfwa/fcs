@@ -181,13 +181,22 @@ void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
 double *restrict covariance);
 bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
 struct sensor_packet_t *dest);
-bool _fcs_ahrs_process_accelerometers(float *restrict output);
-bool _fcs_ahrs_process_gyroscopes(float *restrict output);
-bool _fcs_ahrs_process_magnetometers(float *restrict output);
+bool _fcs_ahrs_process_accelerometers(float *restrict output,
+const struct sensor_packet_t *restrict packets);
+bool _fcs_ahrs_process_gyroscopes(float *restrict output,
+const struct sensor_packet_t *restrict packets);
+bool _fcs_ahrs_process_magnetometers(float *restrict output,
+const struct sensor_packet_t *restrict packets);
 bool _fcs_ahrs_process_gps(double *restrict p_output,
-float *restrict v_output);
-bool _fcs_ahrs_process_pitots(float *restrict output);
-bool _fcs_ahrs_process_barometers(float *restrict output);
+float *restrict v_output, const struct sensor_packet_t *restrict packets);
+bool _fcs_ahrs_process_pitots(float *restrict output,
+const struct sensor_packet_t *restrict packets);
+bool _fcs_ahrs_process_barometers(float *restrict output,
+const struct sensor_packet_t *restrict packets);
+void _fcs_ahrs_ioboard_reset_geometry(
+struct fcs_ahrs_sensor_geometry_t *restrict geometry);
+void _fcs_ahrs_ioboard_reset_calibration(
+struct fcs_ahrs_sensor_calibration_t *restrict calibration);
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
@@ -213,73 +222,11 @@ void fcs_ahrs_init(void) {
     memset(&global_state, 0, sizeof(global_state));
 
     /* Set default geometry and calibration */
-    memset(ioboard_calibration[0].accel_bias, 0, sizeof(int16_t) * 3);
-    memset(ioboard_calibration[1].accel_bias, 0, sizeof(int16_t) * 3);
+    _fcs_ahrs_ioboard_reset_calibration(&ioboard_calibration[0]);
+    _fcs_ahrs_ioboard_reset_calibration(&ioboard_calibration[1]);
 
-    ioboard_calibration[0].accel_scale[0] =
-        ioboard_calibration[0].accel_scale[1] =
-        ioboard_calibration[0].accel_scale[2] = 1.0 / ACCEL_SENSITIVITY;
-    ioboard_calibration[1].accel_scale[0] =
-        ioboard_calibration[1].accel_scale[1] =
-        ioboard_calibration[1].accel_scale[2] = 1.0 / ACCEL_SENSITIVITY;
-
-    ioboard_calibration[0].gyro_scale[0] =
-        ioboard_calibration[0].gyro_scale[1] =
-        ioboard_calibration[0].gyro_scale[2] = 1.0 / GYRO_SENSITIVITY;
-    ioboard_calibration[1].gyro_scale[0] =
-        ioboard_calibration[1].gyro_scale[1] =
-        ioboard_calibration[1].gyro_scale[2] = 1.0 / GYRO_SENSITIVITY;
-
-    /* Load identity matrices for magnetometer calibration */
-    memset(ioboard_calibration[0].mag_bias, 0, sizeof(float) * 3);
-    memset(ioboard_calibration[1].mag_bias, 0, sizeof(float) * 3);
-
-    memset(ioboard_calibration[0].mag_scale, 0, sizeof(float) * 9);
-    memset(ioboard_calibration[1].mag_scale, 0, sizeof(float) * 9);
-
-    ioboard_calibration[0].mag_scale[0] =
-        ioboard_calibration[0].mag_scale[4] =
-        ioboard_calibration[0].mag_scale[8] = 1.0 / MAG_SENSITIVITY;
-    ioboard_calibration[1].mag_scale[0] =
-        ioboard_calibration[1].mag_scale[4] =
-        ioboard_calibration[1].mag_scale[8] = 1.0 / MAG_SENSITIVITY;
-
-    ioboard_calibration[0].pitot_bias =
-        ioboard_calibration[1].pitot_bias = 0;
-
-    ioboard_calibration[0].pitot_scale =
-        ioboard_calibration[1].pitot_scale = 1.0 / 65535.0;
-
-    ioboard_calibration[0].barometer_bias =
-        ioboard_calibration[1].barometer_bias = 0;
-
-    ioboard_calibration[0].barometer_scale =
-        ioboard_calibration[1].barometer_scale = 0.02;
-
-    ioboard_geometry[0].accel_orientation[0] = 0.0;
-    ioboard_geometry[0].accel_orientation[1] = 0.0;
-    ioboard_geometry[0].accel_orientation[2] = 0.0;
-    ioboard_geometry[0].accel_orientation[3] = 1.0;
-    ioboard_geometry[1].accel_orientation[0] = 0.0;
-    ioboard_geometry[1].accel_orientation[1] = 0.0;
-    ioboard_geometry[1].accel_orientation[2] = 0.0;
-    ioboard_geometry[1].accel_orientation[3] = 1.0;
-
-    ioboard_geometry[0].gyro_orientation[0] = 0.0;
-    ioboard_geometry[0].gyro_orientation[1] = 0.0;
-    ioboard_geometry[0].gyro_orientation[2] = 0.0;
-    ioboard_geometry[0].gyro_orientation[3] = 1.0;
-    ioboard_geometry[1].gyro_orientation[0] = 0.0;
-    ioboard_geometry[1].gyro_orientation[1] = 0.0;
-    ioboard_geometry[1].gyro_orientation[2] = 0.0;
-    ioboard_geometry[1].gyro_orientation[3] = 1.0;
-
-    ioboard_geometry[0].accel_position[0] = 0.0;
-    ioboard_geometry[0].accel_position[1] = 0.0;
-    ioboard_geometry[0].accel_position[2] = 0.0;
-    ioboard_geometry[1].accel_position[0] = 0.0;
-    ioboard_geometry[1].accel_position[1] = 0.0;
-    ioboard_geometry[1].accel_position[2] = 0.0;
+    _fcs_ahrs_ioboard_reset_geometry(&ioboard_geometry[0]);
+    _fcs_ahrs_ioboard_reset_geometry(&ioboard_geometry[1]);
 
     /*
     TODO: read state from NMPC shared memory, just in case we're booting up
@@ -370,23 +317,23 @@ void fcs_ahrs_tick(void) {
 
     ukf_sensor_clear();
 
-    if (_fcs_ahrs_process_accelerometers(v)) {
+    if (_fcs_ahrs_process_accelerometers(v, ioboard)) {
         ukf_sensor_set_accelerometer(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_gyroscopes(v)) {
+    if (_fcs_ahrs_process_gyroscopes(v, ioboard)) {
         ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_magnetometers(v)) {
+    if (_fcs_ahrs_process_magnetometers(v, ioboard)) {
         ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_gps(p, v)) {
+    if (_fcs_ahrs_process_gps(p, v, ioboard)) {
         ukf_sensor_set_gps_position(p[0], p[1], p[2]);
         ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_pitots(v)) {
+    if (_fcs_ahrs_process_pitots(v, ioboard)) {
         ukf_sensor_set_pitot_tas(v[0]);
     }
-    if (_fcs_ahrs_process_barometers(v)) {
+    if (_fcs_ahrs_process_barometers(v, ioboard)) {
         ukf_sensor_set_barometer_amsl(v[0]);
     }
 
@@ -562,25 +509,26 @@ struct sensor_packet_t *dest) {
     return false;
 }
 
-bool _fcs_ahrs_process_accelerometers(float *restrict output) {
+bool _fcs_ahrs_process_accelerometers(float *restrict output,
+const struct sensor_packet_t *restrict packets) {
     float rv[3], v[3];
     uint8_t i;
     bool read = false;
 
     for (i = 0; i < 2; i++) {
-        if (!(ioboard[i].sensor_update_flags & UPDATED_ACCEL)) {
+        if (!(packets[i].sensor_update_flags & UPDATED_ACCEL)) {
             continue;
         }
 
-        v[0] = ((float)ioboard[i].accel.x -
+        v[0] = ((float)packets[i].accel.x -
                 (float)ioboard_calibration[i].accel_bias[0]) *
                ioboard_calibration[i].accel_scale[0];
 
-        v[1] = ((float)ioboard[i].accel.y -
+        v[1] = ((float)packets[i].accel.y -
                 (float)ioboard_calibration[i].accel_bias[1]) *
                ioboard_calibration[i].accel_scale[1];
 
-        v[2] = ((float)ioboard[i].accel.z -
+        v[2] = ((float)packets[i].accel.z -
                 (float)ioboard_calibration[i].accel_bias[2]) *
                ioboard_calibration[i].accel_scale[2];
 
@@ -603,23 +551,24 @@ bool _fcs_ahrs_process_accelerometers(float *restrict output) {
     return read;
 }
 
-bool _fcs_ahrs_process_gyroscopes(float *restrict output) {
+bool _fcs_ahrs_process_gyroscopes(float *restrict output,
+const struct sensor_packet_t *restrict packets) {
     float rv[3], v[3];
     uint8_t i;
     bool read = false;
 
     for (i = 0; i < 2; i++) {
-        if (!(ioboard[i].sensor_update_flags & UPDATED_GYRO)) {
+        if (!(packets[i].sensor_update_flags & UPDATED_GYRO)) {
             continue;
         }
 
-        v[0] = (float)ioboard[i].gyro.x *
+        v[0] = (float)packets[i].gyro.x *
                ioboard_calibration[i].gyro_scale[0];
 
-        v[1] = (float)ioboard[i].gyro.y *
+        v[1] = (float)packets[i].gyro.y *
                ioboard_calibration[i].gyro_scale[1];
 
-        v[2] = (float)ioboard[i].gyro.z *
+        v[2] = (float)packets[i].gyro.z *
                ioboard_calibration[i].gyro_scale[2];
 
         /* Transform v by gyro orientation */
@@ -641,27 +590,28 @@ bool _fcs_ahrs_process_gyroscopes(float *restrict output) {
     return read;
 }
 
-bool _fcs_ahrs_process_magnetometers(float *restrict output) {
+bool _fcs_ahrs_process_magnetometers(float *restrict output,
+const struct sensor_packet_t *restrict packets) {
     float rv[3], v[3];
     uint8_t i;
     bool read = false;
 
     for (i = 0; i < 2; i++) {
-        if (!(ioboard[i].sensor_update_flags & UPDATED_MAG)) {
+        if (!(packets[i].sensor_update_flags & UPDATED_MAG)) {
             continue;
         }
 
-        v[0] = (float)ioboard[i].mag.x -
+        v[0] = (float)packets[i].mag.x -
                ioboard_calibration[i].mag_bias[0];
-        v[1] = (float)ioboard[i].mag.y -
+        v[1] = (float)packets[i].mag.y -
                ioboard_calibration[i].mag_bias[1];
-        v[2] = (float)ioboard[i].mag.z -
+        v[2] = (float)packets[i].mag.z -
                ioboard_calibration[i].mag_bias[2];
 
         /* Multiply v by magnetometer calibration matrix */
         /* FIXME: confirm order of parameters etc */
         matrix_multiply_f(rv, ioboard_calibration[i].mag_scale,
-                          v, 1, 3, 3, 3, 1.0f);
+                          v, 3, 1, 3, 3, 1.0f);
 
         if (!read) {
             output[0] = rv[0];
@@ -679,37 +629,46 @@ bool _fcs_ahrs_process_magnetometers(float *restrict output) {
 }
 
 bool _fcs_ahrs_process_gps(double *restrict p_output,
-float *restrict v_output) {
+float *restrict v_output, const struct sensor_packet_t *restrict packets) {
     double deg_mul = 1e-7;
     float cm_mul = 1e-2f;
     bool read = false;
 
-    if (ioboard[0].sensor_update_flags & UPDATED_GPS_POS) {
-        p_output[0] = (double)ioboard[0].gps.position.lat;
-        p_output[1] = (double)ioboard[0].gps.position.lng;
-        p_output[2] = (double)ioboard[0].gps.position.alt;
+    if (packets[0].sensor_update_flags & UPDATED_GPS_POS) {
+        p_output[0] = (double)packets[0].gps.position.lat;
+        p_output[1] = (double)packets[0].gps.position.lng;
+        p_output[2] = (double)packets[0].gps.position.alt;
 
-        v_output[0] = (float)ioboard[0].gps.velocity.n;
-        v_output[1] = (float)ioboard[0].gps.velocity.e;
-        v_output[2] = (float)ioboard[0].gps.velocity.d;
+        v_output[0] = (float)packets[0].gps.velocity.n;
+        v_output[1] = (float)packets[0].gps.velocity.e;
+        v_output[2] = (float)packets[0].gps.velocity.d;
 
         read = true;
     }
 
-    if (ioboard[1].sensor_update_flags & UPDATED_GPS_POS) {
-        p_output[0] += (double)ioboard[1].gps.position.lat;
-        p_output[1] += (double)ioboard[1].gps.position.lng;
-        p_output[2] += (double)ioboard[1].gps.position.alt;
-
-        v_output[0] += (float)ioboard[1].gps.velocity.n;
-        v_output[1] += (float)ioboard[1].gps.velocity.e;
-        v_output[2] += (float)ioboard[1].gps.velocity.d;
-
+    if (packets[1].sensor_update_flags & UPDATED_GPS_POS) {
         if (read) {
+            p_output[0] += (double)packets[1].gps.position.lat;
+            p_output[1] += (double)packets[1].gps.position.lng;
+            p_output[2] += (double)packets[1].gps.position.alt;
+
+            v_output[0] += (float)packets[1].gps.velocity.n;
+            v_output[1] += (float)packets[1].gps.velocity.e;
+            v_output[2] += (float)packets[1].gps.velocity.d;
+
             deg_mul = 0.5e-7;
             cm_mul = 0.5e-2f;
+        } else {
+            p_output[0] = (double)packets[1].gps.position.lat;
+            p_output[1] = (double)packets[1].gps.position.lng;
+            p_output[2] = (double)packets[1].gps.position.alt;
+
+            v_output[0] = (float)packets[1].gps.velocity.n;
+            v_output[1] = (float)packets[1].gps.velocity.e;
+            v_output[2] = (float)packets[1].gps.velocity.d;
+
+            read = true;
         }
-        read = true;
     }
 
     p_output[0] *= deg_mul;
@@ -723,50 +682,100 @@ float *restrict v_output) {
     return read;
 }
 
-bool _fcs_ahrs_process_pitots(float *restrict output) {
+bool _fcs_ahrs_process_pitots(float *restrict output,
+const struct sensor_packet_t *restrict packets) {
     bool read = false;
+    float v;
 
-    if (ioboard[0].sensor_update_flags & UPDATED_ADC_GPIO) {
-        *output = ((float)ioboard[0].pitot +
+    if (packets[0].sensor_update_flags & UPDATED_ADC_GPIO) {
+        *output = ((float)packets[0].pitot +
                    (float)ioboard_calibration[0].pitot_bias) *
                   ioboard_calibration[0].pitot_scale;
         read = true;
     }
 
-    if (ioboard[1].sensor_update_flags & UPDATED_ADC_GPIO) {
-        *output += ((float)ioboard[1].pitot +
-                    (float)ioboard_calibration[1].pitot_bias) *
-                   ioboard_calibration[1].pitot_scale;
+    if (packets[1].sensor_update_flags & UPDATED_ADC_GPIO) {
+        v = ((float)packets[1].pitot +
+             (float)ioboard_calibration[1].pitot_bias) *
+            ioboard_calibration[1].pitot_scale;
 
         if (read) {
-            *output *= 0.5f;
+            *output = (*output + v) * 0.5f;
+        } else {
+            *output = v;
+            read = true;
         }
-        read = true;
     }
 
     return read;
 }
 
-bool _fcs_ahrs_process_barometers(float *restrict output) {
+bool _fcs_ahrs_process_barometers(float *restrict output,
+const struct sensor_packet_t *restrict packets) {
     bool read = false;
+    float v;
 
-    if (ioboard[0].sensor_update_flags & UPDATED_BAROMETER) {
-        *output = ((float)ioboard[0].pressure +
+    if (packets[0].sensor_update_flags & UPDATED_BAROMETER) {
+        *output = ((float)packets[0].pressure +
                    (float)ioboard_calibration[0].barometer_bias) *
                   ioboard_calibration[0].barometer_scale;
         read = true;
     }
 
-    if (ioboard[1].sensor_update_flags & UPDATED_BAROMETER) {
-        *output += ((float)ioboard[1].pressure +
-                    (float)ioboard_calibration[1].barometer_bias) *
-                   ioboard_calibration[1].barometer_scale;
+    if (packets[1].sensor_update_flags & UPDATED_BAROMETER) {
+        v = ((float)packets[1].pressure +
+             (float)ioboard_calibration[1].barometer_bias) *
+            ioboard_calibration[1].barometer_scale;
 
         if (read) {
-            *output *= 0.5f;
+            *output = (*output + v) * 0.5f;
+        } else {
+            *output = v;
+            read = true;
         }
-        read = true;
     }
 
     return read;
+}
+
+void _fcs_ahrs_ioboard_reset_geometry(
+struct fcs_ahrs_sensor_geometry_t *restrict geometry) {
+    geometry->accel_orientation[0] = 0.0;
+    geometry->accel_orientation[1] = 0.0;
+    geometry->accel_orientation[2] = 0.0;
+    geometry->accel_orientation[3] = 1.0;
+
+    geometry->gyro_orientation[0] = 0.0;
+    geometry->gyro_orientation[1] = 0.0;
+    geometry->gyro_orientation[2] = 0.0;
+    geometry->gyro_orientation[3] = 1.0;
+
+    geometry->accel_position[0] = 0.0;
+    geometry->accel_position[1] = 0.0;
+    geometry->accel_position[2] = 0.0;
+}
+
+void _fcs_ahrs_ioboard_reset_calibration(
+struct fcs_ahrs_sensor_calibration_t *restrict calibration) {
+    memset(calibration->accel_bias, 0, sizeof(int16_t) * 3);
+    calibration->accel_scale[0] =
+        calibration->accel_scale[1] =
+        calibration->accel_scale[2] = 1.0 / ACCEL_SENSITIVITY;
+
+    calibration->gyro_scale[0] =
+        calibration->gyro_scale[1] =
+        calibration->gyro_scale[2] = 1.0 / GYRO_SENSITIVITY;
+
+    /* Load identity matrices for magnetometer calibration */
+    memset(calibration->mag_bias, 0, sizeof(float) * 3);
+    memset(calibration->mag_scale, 0, sizeof(float) * 9);
+    calibration->mag_scale[0] =
+        calibration->mag_scale[4] =
+        calibration->mag_scale[8] = 1.0 / MAG_SENSITIVITY;
+
+    calibration->pitot_bias = 0;
+    calibration->pitot_scale = 1.0 / 65535.0;
+
+    calibration->barometer_bias = 0;
+    calibration->barometer_scale = 0.02;
 }
