@@ -63,19 +63,14 @@ data
 
 First steps:
 * Set up SPI bootloader with multicore enabled (same app) [can start on EVM?]
-* Decide on configuration structures, checksum/error-correction approach
-[no hardware required]
-* Write UART drivers and I/O board parser
+* Write UART drivers
 
 ##############################################################################
 
 Code needed:
 * Internal UART read/write driver -- DMA [can start on EVM]
-* I/O board packet parsing and conversion [can start on EVM]
 * EMIF UART read/write driver -- DMA [requires prototype]
 * CPU packet serialisation / deserialisation and command handling [can start on EVM]
-* Configuration structure encoding and decoding [can start on EVM]
 * Power management -- disable unused peripherals [can start on EVM]
 * Code for PLLs, DDR3 check etc [can start on EVM]
 * GPIO driver (?) [can start on EVM]
-* EMIF USB driver (?) [requires prototype]

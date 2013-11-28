@@ -28,14 +28,42 @@ SOFTWARE.
 
 #include "../config/config.h"
 #include "../util/util.h"
+#include "../drivers/stream.h"
 #include "comms.h"
+#include "../ahrs/ahrs.h"
+
+static uint32_t tick;
+static uint8_t comms_buf[256];
 
 void fcs_comms_init(void) {
-
+    /* Open the CPU comms stream */
+    assert(
+        fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 230400) == FCS_STREAM_OK);
+    assert(fcs_stream_open(FCS_STREAM_UART_EXT0) == FCS_STREAM_OK);
 }
 
 void fcs_comms_tick(void) {
-    /* every 50 ticks, send current state to CPU */
+    /* Send a state update packet to the CPU every 20ms (50Hz) */
+    if (tick % 20 == 0) {
+        size_t packet_len, write_len;
+        packet_len = fcs_comms_serialize_state(comms_buf, global_state);
+        assert(packet_len && packet_len < 256u);
+
+        write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
+                                     packet_len);
+
+        /* We should definitely have enough room in the write buffer */
+        assert(packet_len == write_len);
+    }
+
+    /*
+    Increment tick, but wrap to 0 at a (decimal) round number in order to keep
+    the output packet rate steady.
+    */
+    tick++;
+    if (tick == 4000000000u) {
+        tick = 0;
+    }
 }
 
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,

@@ -318,7 +318,13 @@ const uint8_t *restrict buf, uint32_t nbytes) {
         return 0;
     }
 
+    size_t i;
+    for (i = 0; i < nbytes && tx_write_idx[dev] - tx_read_idx[dev] < 256u;
+            tx_write_idx[dev]++, i++) {
+        tx_buffers[dev][tx_write_idx[dev] & 0xFFu] = buf[i];
+    }
+
     /* TODO: trigger a DMA transfer / copy the number of bytes to the PaRAM */
 
-    return 0;
+    return i;
 }
