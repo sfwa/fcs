@@ -67,6 +67,13 @@ uint32_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
 uint32_t nbytes);
 
 /*
+fcs_stream_bytes_available - returns the number of bytes available to read in
+"dev". This count won't necessarily be accurate for long since the bytes are
+transferred via DMA.
+*/
+uint32_t fcs_stream_bytes_available(enum fcs_stream_device_t dev);
+
+/*
 fcs_stream_skip_until_after - discard bytes from the device's input buffer
 until (and including) the first occurrence of "ch".
 

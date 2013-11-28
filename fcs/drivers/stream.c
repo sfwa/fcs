@@ -160,6 +160,23 @@ enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev) {
 }
 
 /*
+fcs_stream_bytes_available - returns the number of bytes available to read in
+"dev". This count won't necessarily be accurate for long since the bytes are
+transferred via DMA.
+*/
+uint32_t fcs_stream_bytes_available(enum fcs_stream_device_t dev) {
+    assert(FCS_STREAM_BUFFER_SIZE == 256u); /* & 0xFF is faster than % 256 */
+    assert(dev < FCS_STREAM_NUM_DEVICES);
+
+    /* Reset the stream and abort if there's an overrun */
+    if (_fcs_stream_check_overrun(dev)) {
+        return 0;
+    }
+
+    return rx_write_idx[dev] - rx_read_idx[dev];
+}
+
+/*
 fcs_stream_read - reads up to "nbytes" from the device's input buffer into
 "buf".
 

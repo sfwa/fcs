@@ -177,7 +177,17 @@ struct fcs_packet_state_t global_state;
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
 
 /* Internal functions */
-void _fcs_ahrs_read_ioboard_packets(void);
+void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
+double *restrict covariance);
+bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
+struct sensor_packet_t *dest);
+bool _fcs_ahrs_process_accelerometers(float *restrict output);
+bool _fcs_ahrs_process_gyroscopes(float *restrict output);
+bool _fcs_ahrs_process_magnetometers(float *restrict output);
+bool _fcs_ahrs_process_gps(double *restrict p_output,
+float *restrict v_output);
+bool _fcs_ahrs_process_pitots(float *restrict output);
+bool _fcs_ahrs_process_barometers(float *restrict output);
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
@@ -338,170 +348,51 @@ void fcs_ahrs_init(void) {
 }
 
 void fcs_ahrs_tick(void) {
-    ioboard_got_packet[0] = ioboard_got_packet[1] = false;
-    _fcs_ahrs_read_ioboard_packets();
+    if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &ioboard[0])) {
+        ioboard_got_packet[0] = true;
+        ioboard_last_tick[0] = ioboard[0].tick;
+    } else {
+        ioboard_got_packet[0] = false;
+        ioboard[0].sensor_update_flags = 0;
+    }
+
+    if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT1, &ioboard[1])) {
+        ioboard_got_packet[1] = true;
+        ioboard_last_tick[1] = ioboard[1].tick;
+    } else {
+        ioboard_got_packet[1] = false;
+        ioboard[1].sensor_update_flags = 0;
+    }
 
     /* Read sensor data from latest I/O board packets, and convert */
-    float accel_data[3] = {0.0, 0.0, 0.0},
-          gyro_data[3] = {0.0, 0.0, 0.0},
-          mag_data[3] = {0.0, 0.0, 0.0},
-          gps_position_data[3] = {0.0, 0.0, 0.0},
-          gps_velocity_data[3] = {0.0, 0.0, 0.0},
-          pitot_data = 0.0,
-          barometer_data = 0.0;
-    uint8_t n_accel = 0, n_gyro = 0, n_mag = 0,
-            n_gps = 0, n_pitot = 0,
-            n_barometer = 0, i;
-    float v[3], rv[3];
+    float v[3];
+    double p[3];
 
-    for (i = 0; i < 2u; i++) {
-        if (!ioboard_got_packet[i] ||
-                ioboard[i].tick == ioboard_last_tick[i]) {
-            continue;
-        }
-
-        if (ioboard[i].sensor_update_flags & UPDATED_ACCEL) {
-            v[0] = ((float)ioboard[i].accel.x -
-                    (float)ioboard_calibration[i].accel_bias[0]) *
-                   ioboard_calibration[i].accel_scale[0];
-
-            v[1] = ((float)ioboard[i].accel.y -
-                    (float)ioboard_calibration[i].accel_bias[1]) *
-                   ioboard_calibration[i].accel_scale[1];
-
-            v[2] = ((float)ioboard[i].accel.z -
-                    (float)ioboard_calibration[i].accel_bias[2]) *
-                   ioboard_calibration[i].accel_scale[2];
-
-            /* Transform v by accelerometer orientation */
-            quaternion_vector3_multiply_f(
-                rv, ioboard_geometry[i].accel_orientation, v);
-
-            accel_data[0] += rv[0];
-            accel_data[1] += rv[1];
-            accel_data[2] += rv[2];
-
-            n_accel++;
-        }
-
-        if (ioboard[i].sensor_update_flags & UPDATED_GYRO) {
-            v[0] = (float)ioboard[i].gyro.x *
-                   ioboard_calibration[i].gyro_scale[0];
-
-            v[1] = (float)ioboard[i].gyro.y *
-                   ioboard_calibration[i].gyro_scale[1];
-
-            v[2] = (float)ioboard[i].gyro.z *
-                   ioboard_calibration[i].gyro_scale[2];
-
-            /* Transform v by gyro orientation */
-            quaternion_vector3_multiply_f(
-                rv, ioboard_geometry[i].gyro_orientation, v);
-
-            gyro_data[0] += rv[0];
-            gyro_data[1] += rv[1];
-            gyro_data[2] += rv[2];
-
-            n_gyro++;
-        }
-
-        if (ioboard[i].sensor_update_flags & UPDATED_MAG) {
-            v[0] = (float)ioboard[i].mag.x -
-                   ioboard_calibration[i].mag_bias[0];
-            v[1] = (float)ioboard[i].mag.y -
-                   ioboard_calibration[i].mag_bias[1];
-            v[2] = (float)ioboard[i].mag.z -
-                   ioboard_calibration[i].mag_bias[2];
-
-            /* Multiply v by magnetometer calibration matrix */
-            /* FIXME: confirm order of parameters etc */
-            matrix_multiply_f(rv, ioboard_calibration[i].mag_scale,
-                              v, 1, 3, 3, 3, 1.0);
-
-            mag_data[0] += rv[0];
-            mag_data[1] += rv[1];
-            mag_data[2] += rv[2];
-
-            n_mag++;
-        }
-
-        if (ioboard[i].sensor_update_flags & UPDATED_GPS_POS) {
-            gps_position_data[0] += (float)ioboard[i].gps.position.lat * 1e-7;
-            gps_position_data[1] += (float)ioboard[i].gps.position.lng * 1e-7;
-            gps_position_data[2] += (float)ioboard[i].gps.position.alt * 1e-2;
-
-            gps_velocity_data[0] += (float)ioboard[i].gps.velocity.n * 1e-2;
-            gps_velocity_data[1] += (float)ioboard[i].gps.velocity.e * 1e-2;
-            gps_velocity_data[2] += (float)ioboard[i].gps.velocity.d * 1e-2;
-
-            n_gps++;
-        }
-
-        if (ioboard[i].sensor_update_flags & UPDATED_BAROMETER) {
-            barometer_data += ((float)ioboard[i].pressure +
-                               (float)ioboard_calibration[i].barometer_bias) *
-                              ioboard_calibration[i].barometer_scale;
-
-            n_barometer++;
-        }
-
-        if (ioboard[i].sensor_update_flags & UPDATED_ADC_GPIO) {
-            pitot_data += ((float)ioboard[i].pitot +
-                           (float)ioboard_calibration[i].pitot_bias) *
-                          ioboard_calibration[i].pitot_scale;
-
-            n_pitot++;
-        }
-
-        ioboard_last_tick[i] = ioboard[i].tick;
-    }
-
-    /* Load converted/averaged sensor data */
     ukf_sensor_clear();
 
-    float scale[3] = {0.0, 0.5, 1.0};
-    if (n_accel) {
-        ukf_sensor_set_accelerometer(
-            accel_data[0] * scale[n_accel],
-            accel_data[1] * scale[n_accel],
-            accel_data[2] * scale[n_accel]
-        );
+    if (_fcs_ahrs_process_accelerometers(v)) {
+        ukf_sensor_set_accelerometer(v[0], v[1], v[2]);
     }
-    if (n_gyro) {
-        ukf_sensor_set_gyroscope(
-            gyro_data[0] * scale[n_gyro],
-            gyro_data[1] * scale[n_gyro],
-            gyro_data[2] * scale[n_gyro]
-        );
+    if (_fcs_ahrs_process_gyroscopes(v)) {
+        ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
     }
-    if (n_mag) {
-        ukf_sensor_set_magnetometer(
-            mag_data[0] * scale[n_mag],
-            mag_data[1] * scale[n_mag],
-            mag_data[2] * scale[n_mag]
-        );
+    if (_fcs_ahrs_process_magnetometers(v)) {
+        ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
     }
-    if (n_gps) {
-        ukf_sensor_set_gps_position(
-            gps_position_data[0] * scale[n_gps],
-            gps_position_data[1] * scale[n_gps],
-            gps_position_data[2] * scale[n_gps]
-        );
-        ukf_sensor_set_gps_velocity(
-            gps_velocity_data[0] * scale[n_gps],
-            gps_velocity_data[1] * scale[n_gps],
-            gps_velocity_data[2] * scale[n_gps]
-        );
+    if (_fcs_ahrs_process_gps(p, v)) {
+        ukf_sensor_set_gps_position(p[0], p[1], p[2]);
+        ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
     }
-    if (n_pitot) {
-        ukf_sensor_set_pitot_tas(pitot_data * scale[n_pitot]);
+    if (_fcs_ahrs_process_pitots(v)) {
+        ukf_sensor_set_pitot_tas(v[0]);
     }
-    if (n_barometer) {
-        ukf_sensor_set_barometer_amsl(barometer_data * scale[n_barometer]);
+    if (_fcs_ahrs_process_barometers(v)) {
+        ukf_sensor_set_barometer_amsl(v[0]);
     }
 
     /* TODO: Read control set values from NMPC */
     double control_set[4] = { 0.0, 0.0, 0.0, 0.0 };
+    uint8_t i;
 
     /*
     Work out the nominal current control position, taking into account the
@@ -523,6 +414,15 @@ void fcs_ahrs_tick(void) {
     struct ukf_state_t s;
     ukf_get_state(&s);
 
+    /* Get the state covariance matrix */
+    double covariance[UKF_STATE_DIM];
+    ukf_get_state_covariance_diagonal(covariance);
+
+    _fcs_ahrs_update_global_state(&s, covariance);
+}
+
+void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
+double *restrict covariance) {
     if (global_state.solution_time < INT32_MAX) {
         global_state.solution_time++;
     } else {
@@ -530,23 +430,23 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Convert lat/lon to degrees */
-    global_state.lat = s.position[0] * (180.0 / M_PI);
-    global_state.lon = s.position[1] * (180.0 / M_PI);
-    global_state.alt = s.position[2];
+    global_state.lat = s->position[0] * (180.0/M_PI);
+    global_state.lon = s->position[1] * (180.0/M_PI);
+    global_state.alt = s->position[2];
 
-    memcpy(global_state.velocity, s.velocity, 3 * sizeof(double));
-    memcpy(global_state.wind_velocity, s.wind_velocity,
+    memcpy(global_state.velocity, s->velocity, 3 * sizeof(double));
+    memcpy(global_state.wind_velocity, s->wind_velocity,
            3 * sizeof(double));
 
     /* Convert angular velocity to degrees/s */
-    global_state.angular_velocity[0] = s.angular_velocity[0] * (180.0 / M_PI);
-    global_state.angular_velocity[1] = s.angular_velocity[1] * (180.0 / M_PI);
-    global_state.angular_velocity[2] = s.angular_velocity[2] * (180.0 / M_PI);
+    global_state.angular_velocity[0] = s->angular_velocity[0] * (180.0/M_PI);
+    global_state.angular_velocity[1] = s->angular_velocity[1] * (180.0/M_PI);
+    global_state.angular_velocity[2] = s->angular_velocity[2] * (180.0/M_PI);
 
     /* Convert state.attitude to yaw/pitch/roll */
     double yaw, pitch, roll;
 
-    #define q s.attitude
+    #define q s->attitude
     yaw = atan2(2.0f * (q[W] * q[Z] + q[X] * q[Y]),
                 1.0f - 2.0f * (q[Y] * q[Y] + q[Z] * q[Z]));
     pitch = asin(2.0f * (q[W] * q[X] - q[Z] * q[X]));
@@ -566,13 +466,6 @@ void fcs_ahrs_tick(void) {
     global_state.attitude[2] = roll;
 
     /*
-    Get the state covariance matrix, and work out the 95th percentile
-    confidence interval assuming Gaussian distribution
-    */
-    double covariance[UKF_STATE_DIM];
-    ukf_get_state_covariance_diagonal(covariance);
-
-    /*
     Ignore changes in lon with varying lat -- this should be close enough
     */
     global_state.lat_lon_uncertainty = 1.96 *
@@ -589,72 +482,291 @@ void fcs_ahrs_tick(void) {
 
     /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
     global_state.attitude_uncertainty[0] = 1.96 *
-        sqrt(covariance[11]) * (180.0 / M_PI);
+        sqrt(covariance[11]) * (180.0/M_PI);
     global_state.attitude_uncertainty[1] = 1.96 *
-        sqrt(covariance[10]) * (180.0 / M_PI);
+        sqrt(covariance[10]) * (180.0/M_PI);
     global_state.attitude_uncertainty[2] = 1.96 *
-        sqrt(covariance[9]) * (180.0 / M_PI);
+        sqrt(covariance[9]) * (180.0/M_PI);
 
     global_state.angular_velocity_uncertainty[0] = 1.96 *
-        sqrt(covariance[12]) * (180.0 / M_PI);
+        sqrt(covariance[12]) * (180.0/M_PI);
     global_state.angular_velocity_uncertainty[1] = 1.96 *
-        sqrt(covariance[13]) * (180.0 / M_PI);
+        sqrt(covariance[13]) * (180.0/M_PI);
     global_state.angular_velocity_uncertainty[2] = 1.96 *
-        sqrt(covariance[14]) * (180.0 / M_PI);
+        sqrt(covariance[14]) * (180.0/M_PI);
 
     /* TODO: Update state mode indicator based on confidence in filter lock */
     global_state.mode_indicator = 'A';
 }
 
-void _fcs_ahrs_read_ioboard_packets(void) {
-        /* Read latest I/O board packets from the UART streams */
-    uint8_t buf[64];
+bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
+struct sensor_packet_t *dest) {
+    assert(dest);
+
+    /* Read latest I/O board packets from the UART streams */
+    uint8_t buf[64], i = 0;
     uint32_t nbytes;
-    struct fcs_cobsr_decode_result decode_result;
+    struct fcs_cobsr_decode_result result;
+
+    nbytes = fcs_stream_bytes_available(dev);
+
+    /*
+    If the initial byte is not 0, we haven't synchronised with the start of a
+    message -- try to do that now by skipping until we see a zero followed by
+    another zero.
+
+    Give up after 4 tries.
+    */
+    while (i < 4 && fcs_stream_peek(dev) > 0 &&
+           nbytes > sizeof(struct sensor_packet_t) + 1) {
+        fcs_stream_skip_until_after(dev, (uint8_t)0);
+        nbytes = fcs_stream_bytes_available(dev);
+        i++;
+    }
+
+    /* Give up if there aren't enough bytes remaining */
+    if (nbytes < sizeof(struct sensor_packet_t) + 2 || i == 4) {
+        return false;
+    }
+
+    /*
+    Skip until after the next NUL byte -- if there was a successful read
+    last tick, this will bring us to the first byte of the message
+    */
+    nbytes = fcs_stream_skip_until_after(dev, (uint8_t)0);
+
+    /*
+    If no bytes were skipped, there must have been no NUL byte in the
+    buffer, and therefore no complete message -- don't bother trying to
+    read anything yet.
+    */
+    if (!nbytes) {
+        return false;
+    }
+
+    /* Read until after the next (terminating) NUL */
+    nbytes = fcs_stream_read_until_after(dev, (uint8_t)0, buf, 64u);
+    if (nbytes >= sizeof(struct sensor_packet_t)) {
+        /* Decode the message into the packet buffer */
+        result = fcs_cobsr_decode((uint8_t*)dest,
+                                  sizeof(struct sensor_packet_t),
+                                  buf, nbytes - 1);
+
+        if (result.status == FCS_COBSR_DECODE_OK &&
+                result.out_len == sizeof(struct sensor_packet_t)) {
+            /* TODO: validate the packet checksum */
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool _fcs_ahrs_process_accelerometers(float *restrict output) {
+    float rv[3], v[3];
     uint8_t i;
+    bool read = false;
 
     for (i = 0; i < 2; i++) {
-        /*
-        Skip until after the next NUL byte -- if there was a successful read
-        last tick, this will bring us to the first byte of the message
-        */
-        nbytes = fcs_stream_skip_until_after(
-            FCS_STREAM_UART_INT0 + i, (uint8_t)0);
-
-        /*
-        If no bytes were skipped, there must have been no NUL byte in the
-        buffer, and therefore no complete message -- don't bother trying to
-        read anything yet.
-        */
-        if (!nbytes) {
+        if (!(ioboard[i].sensor_update_flags & UPDATED_ACCEL)) {
             continue;
         }
 
-        if (fcs_stream_peek(FCS_STREAM_UART_INT0 + i) == 0) {
-            /*
-            Must have skipped over some (incomplete) message bytes, so we're
-            now at the terminating NUL byte of the message we skipped -- skip
-            again to get past the starting NUL byte of the next message
-            */
-            fcs_stream_skip_until_after(FCS_STREAM_UART_INT0 + i, (uint8_t)0);
-        }
+        v[0] = ((float)ioboard[i].accel.x -
+                (float)ioboard_calibration[i].accel_bias[0]) *
+               ioboard_calibration[i].accel_scale[0];
 
-        /* Read until after the next (terminating) NUL */
-        nbytes = fcs_stream_read_until_after(
-            FCS_STREAM_UART_INT0 + i, (uint8_t)0, buf, 64u);
-        if (nbytes >= sizeof(struct sensor_packet_t) + 1) {
-            /* Decode the message into the packet buffer */
-            decode_result = fcs_cobsr_decode(
-                (uint8_t*)&ioboard[i],
-                sizeof(struct sensor_packet_t),
-                buf,
-                nbytes - 1
-            );
+        v[1] = ((float)ioboard[i].accel.y -
+                (float)ioboard_calibration[i].accel_bias[1]) *
+               ioboard_calibration[i].accel_scale[1];
 
-            if (decode_result.status == FCS_COBSR_DECODE_OK &&
-                    decode_result.out_len == sizeof(struct sensor_packet_t)) {
-                ioboard_got_packet[i] = true;
-            }
+        v[2] = ((float)ioboard[i].accel.z -
+                (float)ioboard_calibration[i].accel_bias[2]) *
+               ioboard_calibration[i].accel_scale[2];
+
+        /* Transform v by accelerometer orientation */
+        quaternion_vector3_multiply_f(
+            rv, ioboard_geometry[i].accel_orientation, v);
+
+        if (!read) {
+            output[0] = rv[0];
+            output[1] = rv[1];
+            output[2] = rv[2];
+            read = true;
+        } else {
+            output[0] = (output[0] + rv[0]) * 0.5f;
+            output[1] = (output[1] + rv[1]) * 0.5f;
+            output[2] = (output[2] + rv[2]) * 0.5f;
         }
     }
+
+    return read;
+}
+
+bool _fcs_ahrs_process_gyroscopes(float *restrict output) {
+    float rv[3], v[3];
+    uint8_t i;
+    bool read = false;
+
+    for (i = 0; i < 2; i++) {
+        if (!(ioboard[i].sensor_update_flags & UPDATED_GYRO)) {
+            continue;
+        }
+
+        v[0] = (float)ioboard[i].gyro.x *
+               ioboard_calibration[i].gyro_scale[0];
+
+        v[1] = (float)ioboard[i].gyro.y *
+               ioboard_calibration[i].gyro_scale[1];
+
+        v[2] = (float)ioboard[i].gyro.z *
+               ioboard_calibration[i].gyro_scale[2];
+
+        /* Transform v by gyro orientation */
+        quaternion_vector3_multiply_f(
+            rv, ioboard_geometry[i].gyro_orientation, v);
+
+        if (!read) {
+            output[0] = rv[0];
+            output[1] = rv[1];
+            output[2] = rv[2];
+            read = true;
+        } else {
+            output[0] = (output[0] + rv[0]) * 0.5f;
+            output[1] = (output[1] + rv[1]) * 0.5f;
+            output[2] = (output[2] + rv[2]) * 0.5f;
+        }
+    }
+
+    return read;
+}
+
+bool _fcs_ahrs_process_magnetometers(float *restrict output) {
+    float rv[3], v[3];
+    uint8_t i;
+    bool read = false;
+
+    for (i = 0; i < 2; i++) {
+        if (!(ioboard[i].sensor_update_flags & UPDATED_MAG)) {
+            continue;
+        }
+
+        v[0] = (float)ioboard[i].mag.x -
+               ioboard_calibration[i].mag_bias[0];
+        v[1] = (float)ioboard[i].mag.y -
+               ioboard_calibration[i].mag_bias[1];
+        v[2] = (float)ioboard[i].mag.z -
+               ioboard_calibration[i].mag_bias[2];
+
+        /* Multiply v by magnetometer calibration matrix */
+        /* FIXME: confirm order of parameters etc */
+        matrix_multiply_f(rv, ioboard_calibration[i].mag_scale,
+                          v, 1, 3, 3, 3, 1.0f);
+
+        if (!read) {
+            output[0] = rv[0];
+            output[1] = rv[1];
+            output[2] = rv[2];
+            read = true;
+        } else {
+            output[0] = (output[0] + rv[0]) * 0.5f;
+            output[1] = (output[1] + rv[1]) * 0.5f;
+            output[2] = (output[2] + rv[2]) * 0.5f;
+        }
+    }
+
+    return read;
+}
+
+bool _fcs_ahrs_process_gps(double *restrict p_output,
+float *restrict v_output) {
+    double deg_mul = 1e-7;
+    float cm_mul = 1e-2f;
+    bool read = false;
+
+    if (ioboard[0].sensor_update_flags & UPDATED_GPS_POS) {
+        p_output[0] = (double)ioboard[0].gps.position.lat;
+        p_output[1] = (double)ioboard[0].gps.position.lng;
+        p_output[2] = (double)ioboard[0].gps.position.alt;
+
+        v_output[0] = (float)ioboard[0].gps.velocity.n;
+        v_output[1] = (float)ioboard[0].gps.velocity.e;
+        v_output[2] = (float)ioboard[0].gps.velocity.d;
+
+        read = true;
+    }
+
+    if (ioboard[1].sensor_update_flags & UPDATED_GPS_POS) {
+        p_output[0] += (double)ioboard[1].gps.position.lat;
+        p_output[1] += (double)ioboard[1].gps.position.lng;
+        p_output[2] += (double)ioboard[1].gps.position.alt;
+
+        v_output[0] += (float)ioboard[1].gps.velocity.n;
+        v_output[1] += (float)ioboard[1].gps.velocity.e;
+        v_output[2] += (float)ioboard[1].gps.velocity.d;
+
+        if (read) {
+            deg_mul = 0.5e-7;
+            cm_mul = 0.5e-2f;
+        }
+        read = true;
+    }
+
+    p_output[0] *= deg_mul;
+    p_output[1] *= deg_mul;
+    p_output[2] *= (double)cm_mul;
+
+    v_output[0] *= cm_mul;
+    v_output[1] *= cm_mul;
+    v_output[2] *= cm_mul;
+
+    return read;
+}
+
+bool _fcs_ahrs_process_pitots(float *restrict output) {
+    bool read = false;
+
+    if (ioboard[0].sensor_update_flags & UPDATED_ADC_GPIO) {
+        *output = ((float)ioboard[0].pitot +
+                   (float)ioboard_calibration[0].pitot_bias) *
+                  ioboard_calibration[0].pitot_scale;
+        read = true;
+    }
+
+    if (ioboard[1].sensor_update_flags & UPDATED_ADC_GPIO) {
+        *output += ((float)ioboard[1].pitot +
+                    (float)ioboard_calibration[1].pitot_bias) *
+                   ioboard_calibration[1].pitot_scale;
+
+        if (read) {
+            *output *= 0.5f;
+        }
+        read = true;
+    }
+
+    return read;
+}
+
+bool _fcs_ahrs_process_barometers(float *restrict output) {
+    bool read = false;
+
+    if (ioboard[0].sensor_update_flags & UPDATED_BAROMETER) {
+        *output = ((float)ioboard[0].pressure +
+                   (float)ioboard_calibration[0].barometer_bias) *
+                  ioboard_calibration[0].barometer_scale;
+        read = true;
+    }
+
+    if (ioboard[1].sensor_update_flags & UPDATED_BAROMETER) {
+        *output += ((float)ioboard[1].pressure +
+                    (float)ioboard_calibration[1].barometer_bias) *
+                   ioboard_calibration[1].barometer_scale;
+
+        if (read) {
+            *output *= 0.5f;
+        }
+        read = true;
+    }
+
+    return read;
 }
