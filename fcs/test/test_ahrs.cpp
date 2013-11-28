@@ -934,3 +934,26 @@ TEST(AHRSOutput, UpdateGlobalState) {
     EXPECT_EQ('A', global_state.mode_indicator);
 }
 
+TEST(AHRSOutput, UpdateGlobalStateAttitude1) {
+    struct ukf_state_t s = {
+        .position = { 0.0, 0.0, 0.0 },
+        .velocity = { 0.0, 0.0, 0.0 },
+        .acceleration = { 0.0, 0.0, 0.0 },
+        .attitude = { 0.0, 0.0, 0.707107, 0.707107 },
+        .angular_velocity = { 0.0, 0.0, 0.0 },
+        .angular_acceleration = { 0.0, 0.0, 0.0 },
+        .wind_velocity = { 0.0, 0.0, 0.0 },
+        .gyro_bias = { 0.0, 0.0, 0.0 }
+    };
+    double covariance[24];
+
+    memset(covariance, 0, sizeof(covariance));
+
+    global_state.solution_time = 0;
+    _fcs_ahrs_update_global_state(&s, covariance);
+    ASSERT_EQ(1u, global_state.solution_time);
+
+    EXPECT_NEAR(90.0, global_state.attitude[0], 1e-3);
+    EXPECT_NEAR(0.0, global_state.attitude[1], 1e-3);
+    EXPECT_NEAR(0.0, global_state.attitude[2], 1e-3);
+}

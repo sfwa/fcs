@@ -395,10 +395,10 @@ double *restrict covariance) {
 
     #define q s->attitude
     yaw = atan2(2.0f * (q[W] * q[Z] + q[X] * q[Y]),
-                1.0f - 2.0f * (q[Y] * q[Y] + q[Z] * q[Z]));
-    pitch = asin(2.0f * (q[W] * q[X] - q[Z] * q[X]));
+                1.0f - 2.0f * (q[Y] * q[Y] + q[Z] * q[Z])) * (180.0/M_PI);
+    pitch = asin(2.0f * (q[W] * q[X] - q[Z] * q[X])) * (180.0/M_PI);
     roll = atan2(2.0f * (q[W] * q[X] + q[Y] * q[Z]),
-                 1.0f - 2.0f * (q[X] * q[X] + q[Y] * q[Y]));
+                 1.0f - 2.0f * (q[X] * q[X] + q[Y] * q[Y])) * (180.0/M_PI);
     #undef q
 
     if (yaw < 0.0) {
