@@ -63,3 +63,18 @@ TARGET_LINK_LIBRARIES(unittest
 
 ADD_TEST(unittest unittest)
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
+
+# Add a dynamic library target for the test driver
+ADD_LIBRARY(fcs SHARED
+    ../util/cobsr.c
+    ../util/crc8.c
+    ../util/crc32.c
+    ../util/util.c
+    ../piksi/piksi.c
+    ../nmpc/nmpc.c
+    ../drivers/stream.c
+    ../config/config.c
+    ../ahrs/ahrs.c)
+
+TARGET_LINK_LIBRARIES(fcs
+    ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsukf.a)

@@ -25,6 +25,5 @@ SOFTWARE.
 
 void fcs_nmpc_init(void);
 void fcs_nmpc_tick(void);
-void fcs_nmpc_update_state(const struct fcs_state_t *new_state);
 
 #endif

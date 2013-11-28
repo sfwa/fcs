@@ -29,22 +29,9 @@ SOFTWARE.
 #include "../ahrs/ahrs.h"
 
 void fcs_nmpc_init(void) {
-    /*
-    Ensure this isn't called more than once, and the initial configuration is
-    good
-    */
-    fcs_config_t current_config;
-    current_config = fcs_config_get_current();
-    assert(fcs_nmpc_validate_config(current_config) == FCS_CONFIG_OK);
-    fcs_nmpc_load_config(current_config);
-
     /* TODO */
 }
 
 void fcs_nmpc_tick(void) {
-    /* TODO */
-}
-
-void fcs_nmpc_update_state(const struct fcs_state_t *new_state) {
     /* TODO */
 }
