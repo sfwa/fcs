@@ -46,7 +46,7 @@ void fcs_comms_tick(void) {
     /* Send a state update packet to the CPU every 20ms (50Hz) */
     if (tick % 20 == 0) {
         size_t packet_len, write_len;
-        packet_len = fcs_comms_serialize_state(comms_buf, global_state);
+        packet_len = fcs_comms_serialize_state(comms_buf, &global_state);
         assert(packet_len && packet_len < 256u);
 
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
