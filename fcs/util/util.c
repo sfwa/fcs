@@ -88,7 +88,7 @@ uint8_t max_digits) {
     Since -INT_MIN is undefined but -INT_MAX is OK, do the math on negative
     numbers.
     */
-    if (value > 0) {
+    if (value >= 0) {
         value = -value;
     } else {
         result[0] = '-';

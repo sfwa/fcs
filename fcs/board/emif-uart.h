@@ -19,3 +19,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
+#ifndef _FCS_EMIF_UART_H
+#define _FCS_EMIF_UART_H
+
+void fcs_emif_uart_reset(uint8_t uart_idx);
+void fcs_emif_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud);
+
+void fcs_emif_uart_start_rx_dma(uint8_t uart_idx, uint8_t *restrict buf,
+uint16_t buf_size);
+void fcs_emif_uart_start_tx_dma(uint8_t uart_idx, uint8_t *restrict buf,
+uint16_t buf_size);
+
+uint16_t fcs_emif_uart_get_rx_dma_count(uint8_t uart_idx);
+uint16_t fcs_emif_uart_get_tx_dma_count(uint8_t uart_idx);
+
+#endif

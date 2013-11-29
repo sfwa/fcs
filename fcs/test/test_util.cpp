@@ -418,6 +418,11 @@ TEST(ASCIIFromInt32, Valid) {
     size_t result_length;
     uint8_t result[32];
 
+    result_length = fcs_ascii_from_int32(result, 0, 4u);
+    ASSERT_EQ(1u, result_length);
+    result[result_length] = 0;
+    EXPECT_STREQ("0", (char*)result);
+
     result_length = fcs_ascii_from_int32(result, 1, 4u);
     ASSERT_EQ(1u, result_length);
     result[result_length] = 0;

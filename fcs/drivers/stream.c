@@ -28,6 +28,11 @@ SOFTWARE.
 
 #include "stream.h"
 
+#ifdef __TI_COMPILER_VERSION__
+#include "../board/int-uart.h"
+#include "../board/emif-uart.h"
+#endif
+
 /*
 RX/TX buffers per serial link, with read/write indices -- these form circular
 buffers.
@@ -82,7 +87,32 @@ size_t len) {
 int32_t _fcs_stream_check_overrun(enum fcs_stream_device_t dev) {
     assert(dev < FCS_STREAM_NUM_DEVICES);
 
-    /* TODO: update rx_write_idx / tx_read_idx based on current DMA state */
+#ifdef __TI_COMPILER_VERSION__
+    /* Update rx_write_idx / tx_read_idx based on current DMA state */
+    if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
+        uint8_t dev_idx = dev == FCS_STREAM_UART_INT0 ? 0 : 1;
+
+        /*
+        Wrap the read index to ensure it's in the same range as the write
+        index
+        */
+        rx_write_idx[dev] = fcs_int_uart_get_rx_dma_count(dev_idx);
+        rx_read_idx[dev] = rx_read_idx[dev] & 0xFFu;
+
+        tx_read_idx[dev] = fcs_int_uart_get_tx_dma_count(dev_idx);
+        tx_write_idx[dev] = tx_write_idx[dev] & 0xFFu;
+    } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
+        uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
+
+        rx_write_idx[dev] = fcs_emif_uart_get_rx_dma_count(dev_idx);
+        rx_read_idx[dev] = rx_read_idx[dev] & 0xFFu;
+
+        tx_read_idx[dev] = fcs_emif_uart_get_tx_dma_count(dev_idx);
+        tx_write_idx[dev] = tx_write_idx[dev] & 0xFFu;
+    } else {
+        assert(false);
+    }
+#endif
 
     /*
     If the write index gets more than 255 values ahead of the read index,
@@ -115,46 +145,53 @@ uint32_t baud) {
         return FCS_STREAM_ERROR;
     }
 
+#ifdef __TI_COMPILER_VERSION__
     if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
-        /* TODO: configure internal UART baud rate */
+        /* Configure internal UART baud rate */
+        uint8_t dev_idx = dev == FCS_STREAM_UART_INT0 ? 0 : 1;
+        fcs_int_uart_set_baud_rate(dev_idx, baud);
+        fcs_int_uart_reset(dev_idx);
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
-        /* TODO: configure external UART baud rate */
+        /* Configure external UART baud rate */
+        uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
+        fcs_emif_uart_set_baud_rate(dev_idx, baud);
+        fcs_emif_uart_reset(dev_idx);
     } else {
         assert(false);
     }
+#endif
 
     return FCS_STREAM_OK;
 }
 
+/*
+fcs_stream_open -- configure a stream and reset its buffer state
+*/
 enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev) {
-    /*
-    For an internal UART, we configure it in the mode required for DMA, and
-    set up a single DMA transfer per buffer with ACNT = 1, BCNT = 1, CCNT > 2,
-    and we poll periodically to see if the buffer is full based on changes in
-    CCNT and/or the destination index. The transfer mode is set to
-    AB-synchronised, with no interrupts; when CCNT gets too low we increase it.
-
-    For an external UART, on startup we configure it with FIFOs disabled, an
-    RHR interrupt, and no THR interrupt. The RHR interrupt triggers an
-    AB-synchronised DMA transfer with ACNT = 1, BCNT = 1 and CCNT > 2. When
-    CCNT gets too low we increase it; the number of bytes read is indicated by
-    the change in CCNT.
-
-    For TX in interal UARTs, we QDMA-trigger an A-synchronised transfer with
-    ACNT = 1, BCNT = number of bytes to send, and CCNT = 1.
-
-    For TX in external UARTs, we set up a timer firing every ~ 1.5 byte
-    periods (1/16th of baud rate), which triggers an AB-synchronised transfer
-    with ACNT = 1, BCNT = 1 and CCNT = number of bytes to send. The same
-    output is sent to both external UARTs so only one needs to be written.
-    */
-
     assert(dev < FCS_STREAM_NUM_DEVICES);
 
     rx_read_idx[dev] = 0;
     rx_write_idx[dev] = 0;
     tx_read_idx[dev] = 0;
     tx_write_idx[dev] = 0;
+
+#ifdef __TI_COMPILER_VERSION__
+    if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
+        /* Configure internal UART baud rate */
+        uint8_t dev_idx = dev == FCS_STREAM_UART_INT0 ? 0 : 1;
+        fcs_int_uart_reset(dev_idx);
+        fcs_int_uart_start_rx_dma(
+            dev_idx, rx_buffers[dev], FCS_STREAM_BUFFER_SIZE);
+    } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
+        /* Configure external UART baud rate */
+        uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
+        fcs_emif_uart_reset(dev_idx);
+        fcs_emif_uart_start_rx_dma(
+            dev_idx, rx_buffers[dev], FCS_STREAM_BUFFER_SIZE);
+    } else {
+        assert(false);
+    }
+#endif
 
     return FCS_STREAM_OK;
 }
@@ -324,7 +361,9 @@ const uint8_t *restrict buf, uint32_t nbytes) {
         tx_buffers[dev][tx_write_idx[dev] & 0xFFu] = buf[i];
     }
 
+#ifdef __TI_COMPILER_VERSION__
     /* TODO: trigger a DMA transfer / copy the number of bytes to the PaRAM */
+#endif
 
     return i;
 }
