@@ -10,7 +10,7 @@ set(CMAKE_C_FLAGS "-O3 -mssse3 -oaddmul")
 # Set default ExternalProject root directory
 SET_DIRECTORY_PROPERTIES(PROPERTIES EP_PREFIX .)
 
-# Add gtest
+# Add googletest
 ExternalProject_Add(googletest
 SVN_REPOSITORY http://googletest.googlecode.com/svn/trunk/
 TIMEOUT 30
@@ -21,9 +21,16 @@ LOG_DOWNLOAD ON
 LOG_CONFIGURE ON
 LOG_BUILD ON)
 
-# Specify include dir
+# Specify googletest include dir
 ExternalProject_Get_Property(googletest source_dir)
 SET(googletest_dir ${source_dir})
+
+# Add UKF library
+ExternalProject_Add(ukf
+  GIT_REPOSITORY https://github.com/sfwa/ukf.git
+  BUILD_COMMAND $(MAKE) fcsukf
+  INSTALL_COMMAND ""
+)
 
 INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
 
@@ -52,12 +59,7 @@ TARGET_LINK_LIBRARIES(unittest
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}gtest_main.a
     pthread)
 
-# Add UKF library
-ExternalProject_Add(ukf
-  GIT_REPOSITORY https://github.com/sfwa/ukf.git
-  BUILD_COMMAND $(MAKE) fcsukf
-  INSTALL_COMMAND ""
-)
+# Find UKF library build location
 ExternalProject_Get_Property(ukf binary_dir)
 TARGET_LINK_LIBRARIES(unittest
     ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsukf.a)
