@@ -52,7 +52,7 @@ TEST(StreamRX, BasicRead) {
     EXPECT_EQ(8, len);
 
     /* Read it back */
-    len = fcs_stream_read(FCS_STREAM_UART_INT0, buf, 256);
+    len = fcs_stream_read(FCS_STREAM_UART_INT0, buf, 255);
     EXPECT_EQ(8, len);
     EXPECT_STREQ((char*)s, (char*)buf);
 
@@ -121,7 +121,7 @@ TEST(StreamRX, MixedReadsWrites) {
     EXPECT_EQ(4, len);
     EXPECT_STREQ("ing", (char*)buf);
 
-    len = fcs_stream_read(FCS_STREAM_UART_INT0, buf, 256);
+    len = fcs_stream_read(FCS_STREAM_UART_INT0, buf, 255);
     EXPECT_EQ(8, len);
     EXPECT_STREQ("testing", (char*)buf);
 }
@@ -148,7 +148,7 @@ TEST(StreamRX, MixedReadsPeeks) {
     EXPECT_EQ((int16_t)'i', fcs_stream_peek(FCS_STREAM_UART_INT0));
     EXPECT_EQ((int16_t)'i', fcs_stream_peek(FCS_STREAM_UART_INT0));
 
-    len = fcs_stream_read(FCS_STREAM_UART_INT0, buf, 256);
+    len = fcs_stream_read(FCS_STREAM_UART_INT0, buf, 255);
     EXPECT_EQ(4, len);
     EXPECT_STREQ("ing", (char*)buf);
 
@@ -208,28 +208,28 @@ TEST(StreamRX, ReadUntilAfter) {
     EXPECT_EQ(8, len);
 
     /* Skip the first 't' */
-    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 't', buf, 256);
+    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 't', buf, 255);
     buf[1] = 0;
     EXPECT_EQ(1, len);
     EXPECT_EQ((int16_t)'e', fcs_stream_peek(FCS_STREAM_UART_INT0));
     EXPECT_STREQ("t", (char*)buf);
 
     /* Now the second */
-    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 't', buf, 256);
+    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 't', buf, 255);
     buf[3] = 0;
     EXPECT_EQ(3, len);
     EXPECT_EQ((int16_t)'i', fcs_stream_peek(FCS_STREAM_UART_INT0));
     EXPECT_STREQ("est", (char*)buf);
 
     /* Now we should get 0 returned */
-    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 't', buf, 256);
+    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 't', buf, 255);
     EXPECT_EQ(0, len);
 
     /* But the current read pointer shouldn't change */
     EXPECT_EQ((int16_t)'i', fcs_stream_peek(FCS_STREAM_UART_INT0));
 
     /* Now read the rest */
-    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 'g', buf, 256);
+    len = fcs_stream_read_until_after(FCS_STREAM_UART_INT0, 'g', buf, 255);
     buf[3] = 0;
     EXPECT_EQ(3, len);
     EXPECT_EQ((int16_t)0, fcs_stream_peek(FCS_STREAM_UART_INT0));
@@ -252,4 +252,51 @@ TEST(StreamTX, BasicWrite) {
     len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 255);
     EXPECT_EQ(8, len);
     EXPECT_STREQ("testing", (char*)buf);
+}
+
+TEST(StreamTX, MultipleWrites) {
+    size_t len;
+    uint8_t s[] = "testing",
+            buf[256];
+
+    /* Reset stream state*/
+    fcs_stream_open(FCS_STREAM_UART_INT0);
+
+    /* Write the test string */
+    len = fcs_stream_write(FCS_STREAM_UART_INT0, s, sizeof(s));
+    EXPECT_EQ(8, len);
+
+    /* Write another test string */
+    len = fcs_stream_write(FCS_STREAM_UART_INT0, s, sizeof(s));
+    EXPECT_EQ(8, len);
+
+    /* Read back and confirm */
+    len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 255);
+    buf[7] = 'x';
+    EXPECT_EQ(16, len);
+    EXPECT_STREQ("testingxtesting", (char*)buf);
+}
+
+TEST(StreamTX, WriteBufferFull) {
+    size_t len;
+    uint8_t s[] = "0123456789abcdef0123456789abcdef"
+                  "0123456789abcdef0123456789abcdef"
+                  "0123456789abcdef0123456789abcdef"
+                  "0123456789abcdef0123456789abcdef",
+            buf[512];
+
+    /* Reset stream state*/
+    fcs_stream_open(FCS_STREAM_UART_INT0);
+
+    /* Write the test string */
+    len = fcs_stream_write(FCS_STREAM_UART_INT0, s, 128);
+    EXPECT_EQ(128, len);
+
+    /* Write a second which overflows */
+    len = fcs_stream_write(FCS_STREAM_UART_INT0, s, 129);
+    EXPECT_EQ(127, len);
+
+    /* Read back and confirm */
+    len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 256);
+    EXPECT_EQ(255, len);
 }

@@ -63,6 +63,8 @@ void _fcs_ahrs_ioboard_reset_geometry(
 struct fcs_ahrs_sensor_geometry_t *restrict geometry);
 void _fcs_ahrs_ioboard_reset_calibration(
 struct fcs_ahrs_sensor_calibration_t *restrict calibration);
+uint32_t _fcs_ahrs_format_control_packet(uint8_t *buf, uint8_t tick,
+const double *restrict control_values);
 }
 
 /* See ahrs/ahrs.c:40 */
@@ -978,4 +980,18 @@ TEST(AHRSOutput, UpdateGlobalStateAttitude1) {
     EXPECT_NEAR(90.0, global_state.attitude[0], 1e-3);
     EXPECT_NEAR(0.0, global_state.attitude[1], 1e-3);
     EXPECT_NEAR(0.0, global_state.attitude[2], 1e-3);
+}
+
+TEST(AHRSControl, SerializeControlPacket) {
+    uint32_t len;
+    uint8_t buf[16];
+    double values[4] = { 0.1, 0.2, 0.3, 0.4 };
+    uint8_t tick = 1;
+
+    len = _fcs_ahrs_format_control_packet(buf, tick, values);
+    EXPECT_EQ(14u, len);
+
+    EXPECT_EQ(0, buf[0]);
+    EXPECT_EQ(0, buf[14]);
+    EXPECT_STREQ("\x04\xff\x01\x01" "f\x99\x19" "33\xccLf", (char*)&buf[1]);
 }

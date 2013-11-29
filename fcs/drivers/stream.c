@@ -186,7 +186,7 @@ uint32_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
 uint32_t nbytes) {
     assert(FCS_STREAM_BUFFER_SIZE == 256u); /* & 0xFF is faster than % 256 */
     assert(dev < FCS_STREAM_NUM_DEVICES);
-    assert(nbytes);
+    assert(nbytes && nbytes < 256u);
     assert(buf);
 
     /* Reset the stream and abort if there's an overrun */
@@ -310,7 +310,7 @@ the device, the return value will always be equal to "nbytes".
 uint32_t fcs_stream_write(enum fcs_stream_device_t dev,
 const uint8_t *restrict buf, uint32_t nbytes) {
     assert(dev < FCS_STREAM_NUM_DEVICES);
-    assert(nbytes);
+    assert(nbytes && nbytes < 256u);
     assert(buf);
 
     /* Reset the stream and abort if there's an overrun */
@@ -319,7 +319,7 @@ const uint8_t *restrict buf, uint32_t nbytes) {
     }
 
     size_t i;
-    for (i = 0; i < nbytes && tx_write_idx[dev] - tx_read_idx[dev] < 256u;
+    for (i = 0; i < nbytes && tx_write_idx[dev] - tx_read_idx[dev] < 255u;
             tx_write_idx[dev]++, i++) {
         tx_buffers[dev][tx_write_idx[dev] & 0xFFu] = buf[i];
     }

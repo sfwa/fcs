@@ -197,6 +197,8 @@ void _fcs_ahrs_ioboard_reset_geometry(
 struct fcs_ahrs_sensor_geometry_t *restrict geometry);
 void _fcs_ahrs_ioboard_reset_calibration(
 struct fcs_ahrs_sensor_calibration_t *restrict calibration);
+uint32_t _fcs_ahrs_format_control_packet(uint8_t *buf, uint8_t tick,
+const double *restrict control_values);
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
@@ -358,9 +360,19 @@ void fcs_ahrs_tick(void) {
     }
 
     /*
-    TODO: Write current control values to I/O boards -- the CPLD replicates
-    the I/O board output stream so we only need to write to one.
+    Write current control values to I/O boards -- the CPLD replicates the I/O
+    board output stream so we only need to write to one.
     */
+    uint32_t control_len;
+    uint8_t control_buf[16];
+    control_len = _fcs_ahrs_format_control_packet(
+        control_buf,
+        (uint8_t)(global_state.solution_time & 0xFFu),
+        control_set
+    );
+    assert(control_len < 16);
+
+    fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
 
     /* Run the UKF */
     ukf_iterate(AHRS_DELTA, control_pos);
@@ -800,4 +812,40 @@ struct fcs_ahrs_sensor_calibration_t *restrict calibration) {
 
     calibration->barometer_bias = 0;
     calibration->barometer_scale = 0.02;
+}
+
+uint32_t _fcs_ahrs_format_control_packet(uint8_t *buf, uint8_t tick,
+const double *restrict control_values) {
+    assert(buf);
+    assert(control_values);
+
+    struct control_packet_t packet;
+
+    packet.tick = tick;
+    packet.msg_type = MSG_TYPE_CONTROL;
+    packet.gpout = 0x0;
+
+    double val;
+    uint8_t i;
+    #pragma MUST_ITERATE(4)
+    for (i = 0; i < 4; i++) {
+        val = min(max(0.0, control_values[i] * 65535.0), 65535.0);
+        packet.pwm[i] = (uint16_t)val;
+    }
+
+    /* Calculate the packet's CRC8 */
+    packet.crc = fcs_crc8(&(packet.tick), sizeof(packet) - 1, 0x0);
+
+    /* Set the packet start/end and COBS-R encode the result */
+    struct fcs_cobsr_encode_result result;
+    result = fcs_cobsr_encode(&buf[1], sizeof(packet) + 3, (uint8_t*)&packet,
+                              sizeof(packet));
+    assert(result.status == FCS_COBSR_ENCODE_OK);
+
+    /* Set the NUL packet delimiters */
+    buf[0] = 0;
+    buf[result.out_len + 1] = 0;
+
+    /* Return the total length */
+    return result.out_len + 2;
 }
