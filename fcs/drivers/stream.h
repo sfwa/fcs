@@ -102,7 +102,6 @@ not consume the character, so it will be returned by future peeks/reads.
 */
 int16_t fcs_stream_peek(enum fcs_stream_device_t dev);
 
-
 /*
 fcs_stream_write - writes up to "nbytes" from "buf" into the device's output
 buffer.

@@ -529,8 +529,11 @@ struct sensor_packet_t *dest) {
 
         if (result.status == FCS_COBSR_DECODE_OK &&
                 result.out_len == sizeof(struct sensor_packet_t)) {
-            /* TODO: validate the packet checksum */
-            return true;
+            /* Validate the packet checksum */
+            uint8_t checksum = fcs_crc8(
+                (uint8_t*)&dest->tick, result.out_len - 1, 0x0);
+
+            return checksum == dest->crc;
         }
     }
 

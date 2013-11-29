@@ -112,6 +112,10 @@ def read(stream_id, max_len):
 
 
 def init(dll_path):
+    """
+    Loads the FCS dynamic library at `dll_path` and sets up the ctypes
+    interface. Must be called before any other functions from this module.
+    """
     global _fcs
     # Load the library
     _fcs = cdll.LoadLibrary(dll_path)

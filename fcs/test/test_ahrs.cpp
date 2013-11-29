@@ -118,7 +118,7 @@ TEST(AHRSIO, ReadIOBoardPacket) {
     bool result;
     size_t len;
     struct sensor_packet_t packet;
-    uint8_t s[] = "\x00\x01\x02\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
+    uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
                   "\x02#\x01\x01\x02$\x01\x01\x02%\x02&\x02')(\x00";
@@ -134,7 +134,7 @@ TEST(AHRSIO, ReadIOBoardPacket) {
     result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x00, packet.crc);
+    EXPECT_EQ(0x61, packet.crc);
     EXPECT_EQ(0x0001, packet.tick);
     EXPECT_EQ(0x02, packet.sensor_update_flags);
     EXPECT_EQ(0x03, packet.cpu_load);
@@ -170,7 +170,7 @@ TEST(AHRSIO, ReadIOBoardPacketPartial) {
     bool result;
     size_t len;
     struct sensor_packet_t packet;
-    uint8_t s[] = "\x00\x01\x02\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
+    uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
                   "\x02#\x01\x01\x02$\x01\x01\x02%\x02&\x02')(\x00";
@@ -194,7 +194,7 @@ TEST(AHRSIO, ReadIOBoardPacketPartial) {
     result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x00, packet.crc);
+    EXPECT_EQ(0x61, packet.crc);
     EXPECT_EQ(0x0001, packet.tick);
     EXPECT_EQ(0x02, packet.sensor_update_flags);
     EXPECT_EQ(0x03, packet.cpu_load);
@@ -230,7 +230,7 @@ TEST(AHRSIO, ReadIOBoardPacketAfterGarbage) {
     bool result;
     size_t len;
     struct sensor_packet_t packet;
-    uint8_t s[] = "\x00\x01\x02\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
+    uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
                   "\x02#\x01\x01\x02$\x01\x01\x02%\x02&\x02')(\x00";
@@ -254,7 +254,7 @@ TEST(AHRSIO, ReadIOBoardPacketAfterGarbage) {
     result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x00, packet.crc);
+    EXPECT_EQ(0x61, packet.crc);
     EXPECT_EQ(0x0001, packet.tick);
     EXPECT_EQ(0x02, packet.sensor_update_flags);
     EXPECT_EQ(0x03, packet.cpu_load);
@@ -290,7 +290,7 @@ TEST(AHRSIO, ReadIOBoardPacketAfterPacket) {
     bool result;
     size_t len;
     struct sensor_packet_t packet;
-    uint8_t s[] = "\x00\x01\x02\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
+    uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
                   "\x02#\x01\x01\x02$\x01\x01\x02%\x02&\x02')(\x00";
@@ -313,7 +313,7 @@ TEST(AHRSIO, ReadIOBoardPacketAfterPacket) {
     result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x00, packet.crc);
+    EXPECT_EQ(0x61, packet.crc);
     EXPECT_EQ(0x0001, packet.tick);
     EXPECT_EQ(0x02, packet.sensor_update_flags);
     EXPECT_EQ(0x03, packet.cpu_load);
@@ -349,7 +349,7 @@ TEST(AHRSIO, ReadIOBoardPacketAfterPacket) {
     result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x00, packet.crc);
+    EXPECT_EQ(0x61, packet.crc);
     EXPECT_EQ(0x0001, packet.tick);
     EXPECT_EQ(0x02, packet.sensor_update_flags);
     EXPECT_EQ(0x03, packet.cpu_load);
