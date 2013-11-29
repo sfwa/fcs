@@ -29,7 +29,7 @@ void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud);
 void fcs_int_uart_start_rx_dma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size);
 void fcs_int_uart_start_tx_dma(uint8_t uart_idx, uint8_t *restrict buf,
-uint16_t buf_size);
+uint16_t transfer_bytes);
 
 uint16_t fcs_int_uart_get_rx_dma_count(uint8_t uart_idx);
 uint16_t fcs_int_uart_get_tx_dma_count(uint8_t uart_idx);

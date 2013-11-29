@@ -32,6 +32,33 @@ SOFTWARE.
 #include "int-uart.h"
 
 /*
+EDMA3 configuration
+
+RX buffer transfers are A-synchronised, i.e. one transfer request [TR] per
+event, which is triggered on every byte received. Two PaRAM entries are used
+per UART: a primary entry and a reload entry. The primary entry is linked to
+the reload entry, such that on each completion of the primary entry the reload
+entry's destination address and transfer count is copied across. The reload
+entry is linked-to-self to avoid the need for further updates.
+
+For the RX PaRAM entries, the base destination address is the address of byte
+0 in the RX buffer, and the transfer byte count (BCNT) is the size of the
+buffer.
+
+TX buffer transfers are also A-synchronised, but because the number of bytes
+to be transferred varies, and only one write request at a time is permitted,
+it's somewhat simpler -- just set up a single PaRAM entry per write and don't
+accept further writes until it's complete.
+*/
+
+CSL_Edma3ParamSetup *rx_edma_primary_param[2] = {},
+                    *rx_edma_reload_param[2] = {},
+                    *tx_edma_primary_param[2] = {};
+
+CSL_Edma3ChannelObj rx_edma_channel[2],
+                    tx_edma_channel[2];
+
+/*
 UART registers (table 3-1 in SPRUGP1):
 
 RBR: Receive Buffer Register (read-only)
@@ -246,10 +273,14 @@ uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
     /*
     For an internal UART, we configure it in the mode required for DMA,
-    set up a single DMA transfer per buffer with ACNT = 1, BCNT = 1, CCNT > 2,
-    and poll periodically to see if the buffer is full based on changes in
-    CCNT and/or the destination index. The transfer mode is set to
-    AB-synchronised, with no interrupts; when CCNT gets too low we increase it.
+    set up a single DMA transfer per buffer with ACNT=1, BCNT=256, CCNT=1.
+
+    A linked PaRAM set is configured to reload the transfer with the base
+    buffer index and BCNT=256.
+
+    The next destination byte index can be read directly to get the count of
+    bytes transferred; if it's lower than the read pointer, add 256. (And
+    subtract 256 once the read pointer reaches 256.)
     */
 }
 
@@ -258,7 +289,11 @@ uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
     /*
     For TX in internal UARTs, we QDMA-trigger an A-synchronised transfer with
-    ACNT = 1, BCNT = number of bytes to send, and CCNT = 1.
+    ACNT = 1, BCNT = number of bytes to send, and CCNT = 1. If there's a
+    transfer currently in progress, we fail.
+
+    The next source byte index can be read directly to get the count of bytes
+    transferred.
     */
 }
 
