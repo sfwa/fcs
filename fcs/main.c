@@ -104,9 +104,6 @@ int main(void) {
         if (core == FCS_CORE_NMPC) {
             fcs_nmpc_tick();
         }
-        if (core == FCS_CORE_UTIL) {
-            fcs_util_tick();
-        }
 
         /*
         Wait until next frame start time

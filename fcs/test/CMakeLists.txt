@@ -73,6 +73,7 @@ ADD_LIBRARY(fcs SHARED
     ../piksi/piksi.c
     ../nmpc/nmpc.c
     ../drivers/stream.c
+    ../comms/comms.c
     ../config/config.c
     ../ahrs/ahrs.c)
 

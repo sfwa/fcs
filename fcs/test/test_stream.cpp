@@ -235,3 +235,21 @@ TEST(StreamRX, ReadUntilAfter) {
     EXPECT_EQ((int16_t)0, fcs_stream_peek(FCS_STREAM_UART_INT0));
     EXPECT_STREQ("ing", (char*)buf);
 }
+
+TEST(StreamTX, BasicWrite) {
+    size_t len;
+    uint8_t s[] = "testing",
+            buf[256];
+
+    /* Reset stream state*/
+    fcs_stream_open(FCS_STREAM_UART_INT0);
+
+    /* Write the test string */
+    len = fcs_stream_write(FCS_STREAM_UART_INT0, s, sizeof(s));
+    EXPECT_EQ(8, len);
+
+    /* Read back and confirm */
+    len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 255);
+    EXPECT_EQ(8, len);
+    EXPECT_STREQ("testing", (char*)buf);
+}

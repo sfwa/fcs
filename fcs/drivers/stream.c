@@ -59,7 +59,7 @@ size_t len) {
         assert(!_fcs_stream_check_overrun(buffer_idx));
     }
 
-    return len;
+    return i;
 }
 
 size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx, uint8_t *val,
@@ -68,14 +68,14 @@ size_t len) {
     assert(len <= FCS_STREAM_BUFFER_SIZE);
 
     size_t i;
-    for (i = 0; i < len && tx_read_idx[buffer_idx] - tx_write_idx[buffer_idx];
+    for (i = 0; i < len && tx_write_idx[buffer_idx] - tx_read_idx[buffer_idx];
             tx_read_idx[buffer_idx]++, i++) {
         val[i] = tx_buffers[buffer_idx][
-            tx_write_idx[buffer_idx] % FCS_STREAM_BUFFER_SIZE];
+            tx_read_idx[buffer_idx] % FCS_STREAM_BUFFER_SIZE];
         assert(!_fcs_stream_check_overrun(buffer_idx));
     }
 
-    return len;
+    return i;
 }
 
 /* Stream maintenance -- update DMA pointers and check for overrun */
