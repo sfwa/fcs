@@ -43,6 +43,7 @@ ADD_EXECUTABLE(unittest
 
 # Create dependency of test on googletest
 ADD_DEPENDENCIES(unittest googletest)
+ADD_DEPENDENCIES(unittest ukf)
 
 # Specify test's link libraries
 ExternalProject_Get_Property(googletest binary_dir)
@@ -76,6 +77,8 @@ ADD_LIBRARY(fcs SHARED
     ../comms/comms.c
     ../config/config.c
     ../ahrs/ahrs.c)
+
+ADD_DEPENDENCIES(fcs ukf)
 
 TARGET_LINK_LIBRARIES(fcs
     ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsukf.a)
