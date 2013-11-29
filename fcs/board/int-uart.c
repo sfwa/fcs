@@ -18,37 +18,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Some code is copyright (c) 2011-2012 Texas Instruments Incorporated -
-http://www.ti.com
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-  Redistributions of source code must retain the above copyright
-  notice, this list of conditions and the following disclaimer.
-
-  Redistributions in binary form must reproduce the above copyright
-  notice, this list of conditions and the following disclaimer in the
-  documentation and/or other materials provided with the
-  distribution.
-
-  Neither the name of Texas Instruments Incorporated nor the names of
-  its contributors may be used to endorse or promote products derived
-  from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdint.h>
@@ -63,14 +32,33 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "int-uart.h"
 
 /*
-For an internal UART, we configure it in the mode required for DMA,
-set up a single DMA transfer per buffer with ACNT = 1, BCNT = 1, CCNT > 2,
-and poll periodically to see if the buffer is full based on changes in
-CCNT and/or the destination index. The transfer mode is set to
-AB-synchronised, with no interrupts; when CCNT gets too low we increase it.
+UART registers (table 3-1 in SPRUGP1):
 
-For TX in internal UARTs, we QDMA-trigger an A-synchronised transfer with
-ACNT = 1, BCNT = number of bytes to send, and CCNT = 1.
+RBR: Receive Buffer Register (read-only)
+THR: Transmitter Holding Register (write-only)
+IER: Interrupt Enable Register
+IIR: Interrupt Identification Register
+FCR: FIFO Control Register (write-only)
+LCR: Line Control Register
+MCR: Modem Control Register
+LSR: Line Status Register
+MSR: Modem Status Register
+SCR: Scratch Pad Register
+DLL: Divisor LSB Latch
+DLH: Divisor MSB Latch
+REVID1: Revision Identification Register 1
+REVID2: Revision Identification Register 2
+PWREMU_MGMT: Power and Emulation Management Register
+MDR: Mode Definition Register
+
+If using the shared addresses, RBR and THR can only be accessed when the DLAB
+bit in LCR is low; DLL can only be accessed when the DLAB bit in LCR is high.
+
+IER can only be accessed when DLAB is low. DLH can only be accessed when DLAB
+is high.
+
+HOWEVER, the C66 CSL uses *dedicated* addresses for DLH and DLL, so we don't
+need to mess around with that -- they can be written at any time.
 */
 
 static CSL_UartRegs *uart[2] = {
@@ -78,118 +66,200 @@ static CSL_UartRegs *uart[2] = {
     (CSL_UartRegs*)CSL_UART_B_REGS
 };
 
+static uint32_t uart_baud[2] = { 115200u, 115200u };
+
 void fcs_int_uart_reset(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    /*
-    Allows access to the divisor latches of the baud generator during a
-    read or write operation (DLL and DLH)
-    */
-    CSL_FINS(uart[uart_idx]->LCR, UART_LCR_DLAB, CSL_UART_LCR_DLAB_ENABLE);
-
-    /* Break condition is disabled. */
-    CSL_FINS(uart[uart_idx]->LCR, UART_LCR_BC, CSL_UART_LCR_BC_DISABLE);
-
-    /* Stick parity is disabled. */
-    CSL_FINS(uart[uart_idx]->LCR, UART_LCR_SP, CSL_UART_LCR_SP_DISABLE);
-
-    /* Odd parity is selected */
-    CSL_FINS(uart[uart_idx]->LCR, UART_LCR_EPS, CSL_UART_LCR_EPS_ODD);
-
-    /* No PARITY bit is transmitted or checked */
-    CSL_FINS(uart[uart_idx]->LCR, UART_LCR_PEN, CSL_UART_LCR_PEN_DISABLE);
-
-    /* Set the baudrate, for accessing LCR[7] should be enable */
-    uart[uart_idx]->DLL = DLL_VAL;
-    uart[uart_idx]->DLH = DLM_VAL;
+    /* Initialization process as described in part 2.7 of SPRUGP1 */
 
     /*
-    Allows access to the receiver buffer register (RBR), the transmitter
-    holding register (THR), and the interrupt enable register (IER) selected.
+    PWREMU_MGMT: Power and Emulation Management Register (section 3.13 in
+    SPRUGP1)
+
+    Bit   Field          Value         Description
+    14    UTRST                        UART transmitter reset.
+                                       0 = transmitter in reset state
+                                       1 = transmitter enabled
+    13    URRST                        UART receiver reset.
+                                       0 = receiver in reset state
+                                       1 = receiver enabled
+    0     FREE                         Free running enable for emulation.
+                                       0 = halt after current transmission if
+                                           emulation even received
+                                       1 = keep running regardless
+
+    Reset the UART RX/TX, and halt in emulation -- write 0, then 0x6000u after
+    the setup process is complete.
     */
-    CSL_FINS(uart[uart_idx]->LCR, UART_LCR_DLAB, CSL_UART_LCR_DLAB_DISABLE);
+    uart[uart_idx]->PWREMU_MGMT = 0;
 
     /*
-    Disable THR, RHR, Receiver line status interrupts
+    The UART baud rate generator is derived from SYSCLK7 via PLLOUT->PLLDIV7.
+    SYSCLK7 is always 1/6th the rate of SYSCLK1.
+
+    Set the baud rate divisor:
+        DLH:DLL = SYSCLK7_FREQ_HZ / (UART_BAUD * 13)
+
+    so with a 100MHz clock and e.g. a desired baud rate of 921600 we'd set
+        DLH:DLL = 166666667 / (921600 * 13) = 11
+
+    which would result in an actual baud rate of
+        ACTUAL_UART_BAUD = SYSCLK7_FREQ_HZ / (DLH:DLL * 13)
+        915750 = 166666667 / (11 * 13)
+
+    for an error of 0.63%.
     */
-    CSL_FINS(uart[uart_idx]->IER, UART_IER_ERBI,  CSL_UART_IER_ERBI_DISABLE);
-    CSL_FINS(uart[uart_idx]->IER, UART_IER_ETBEI, CSL_UART_IER_ETBEI_DISABLE);
-    CSL_FINS(uart[uart_idx]->IER, UART_IER_ELSI,  CSL_UART_IER_ELSI_DISABLE);
-    CSL_FINS(uart[uart_idx]->IER, UART_IER_EDSSI, CSL_UART_IER_EDSSI_DISABLE);
+    assert(2400 <= uart_baud[baud_idx] && uart_baud[baud_idx] <= 3000000);
+
+    float divisor = 166666666.67f / (float)(uart_baud[baud_idx] * 13);
+    uint16_t divisor_int = (uint16_t)(divisor + 0.5f);
+    uart[uart_idx]->DLL = divisor_int & 0xFFu;
+    uart[uart_idx]->DLH = (divisor_int >> 8) & 0xFFu;
 
     /*
-    If autoflow control is desired,
-    write appropriate values to the modem
-    control register (MCR). Note that all UARTs
-    do not support autoflow control, see
-    the device-specific data manual for supported features.
+    MDR: Mode Definition Register (section 3.14 in SPRUGP1)
 
-    MCR
-    ====================================================
-    Bit  Field   Value   Description
-    5    AFE     0       Autoflow control is disabled
-    4    LOOP    0       Loop back mode is disabled.
-    1    RTS     0       RTS control (UARTn_RTS is disabled,
-                         UARTn_CTS is only enabled.)
-    =====================================================
+    Bit   Field          Value         Description
+    0     OSM_SEL                      0 = 16x oversampling
+                                       1 = 13x oversampling
+
+    Set to 0 for 13x oversampling (better for 230400, 921600 etc).
     */
+    uart[uart_idx]->MDR = 0x01u;
 
+    /*
+    FCR: FIFO Control Register (section 3.5 in SPRUGP1)
+
+    Bit   Field          Value         Description
+    7:6   RXFIFTL        0-3           Receiver FIFO interrupt trigger level.
+                                       0 = 1 byte
+                                       1 = 4 bytes
+                                       2 = 8 bytes
+                                       3 = 14 bytes
+    3     DMAMODE1                     Must be 1 for EDMA to work.
+                                       0 = DMA mode disabled
+                                       1 = DMA mode enabled
+    2     TXCLR                        Clears transmitter FIFO.
+                                       0 = no change
+                                       1 = clear transmitter FIFO
+    1     RXCLR                        Clears receiver FIFO.
+                                       0 = no change
+                                       1 = clear receiver FIFO
+    0     FIFOEN                       Enables the RX/TX FIFOs. Must be set
+                                       *before* other bits are written, or
+                                       they will be ignored.
+                                       0 = FIFO disabled
+                                       1 = FIFO enabled
+
+    First, set FCR to 0x01 to enable.
+    Then, set 0x0F for 1-byte FIFO trigger level, RX/TX FIFO clear, and FIFO
+    enable.
+    */
+    uart[uart_idx]->FCR = 0x01u;
+    uart[uart_idx]->FCR = 0x0Fu;
+
+    /*
+    LCR: Line Control Register (section 3.6 in SPRUGP1)
+
+    Bit   Field          Value         Description
+    7     DLAB                         Divisor latch access bit.
+                                       0 = acccess to THR/RBR and IER,
+                                           *no* access to DLL and DLH on
+                                           shared address
+                                       1 = access to DLL and DLH, *no* access
+                                           to THR/RBR and IER on shared
+                                           address
+    6     BC                           Break control.
+                                       0 = break condition disabled
+                                       1 = break condition transmitted to
+                                           receiving UART
+    5     SP                           Stick parity. If PEN=1, EPS=0 and SP=1,
+                                       the parity bit is active high. If
+                                       PEN=1, EPS=1 and SP=1, the parity bit
+                                       is active low. No effect if PEN=0.
+                                       0 = stick parity disabled
+                                       1 = stick parity enabled
+    4     EPS                          Even parity select. Ignored if PEN=0.
+                                       0 = odd parity (odd number of 1s)
+                                       1 = even parity (even number of 1s)
+    3     PEN                          Parity enable.
+                                       0 = no parity transmitted or checked
+                                       1 = parity generated and checked
+    2     STB                          Number of stop bit generated.
+                                       0 = one stop bit generated
+                                       1 = 1.5 stop bits generated when WLS=0,
+                                           2 stop bits generated when WLS>0
+    1:0   WLS            0-3           Word length select.
+                                       0 = 5 bits
+                                       1 = 6 bits
+                                       2 = 7 bits
+                                       3 = 8 bits
+
+    Since we're using dedicated addresses for DLL/DLH, we don't need to set
+    DLAB.
+
+    Set LCR to 0x03 to run with no parity, one stop bit, and 8 data bits.
+    */
+    uart[uart_idx]->LCR = 0x03u;
+
+    /*
+    MCR: Modem Control Register (section 3.7 in SPRUGP1)
+
+    Not used -- set to 0.
+    */
     uart[uart_idx]->MCR = 0;
 
     /*
-    Choose the desired response to
-    emulation suspend events by configuring
-    the FREE bit and enable the UART by setting
-    the UTRST and URRST bits in the power and
-    emulation management register (PWREMU_MGMT).
+    IER: Interrupt Enable Register (section 3.3 in SPRUGP1)
 
+    Bit   Field          Value         Description
+    3     EDSSI          0             Enable modem status interrupt.
+    2     ELSI                         Reeiver line status interrupt enable.
+                                       0 = disabled
+                                       1 = enabled
+    1     ETBEI                        THR empty interrupt enable.
+                                       0 = disabled
+                                       1 = enabled
+    0     ERBI                         Receiver data available/character
+                                       timeout interrupt enable.
+                                       0 = disabled
+                                       1 = enabled
 
-    PWREMU_MGMT
-    =================================================
-    Bit  Field   Value   Description
-    14   UTRST   1       Transmitter is enabled
-    13   URRST   1       Receiver is enabled
-    0    FREE    1       Free-running mode is enabled
-    ===================================================
+    We don't want any interrupts, so set to 0.
     */
-    uart[uart_idx]->PWREMU_MGMT = 0x6001;
+    uart[uart_idx]->IER = 0;
 
-    /* Cleanup previous data (rx trigger is also set to 0)*/
-    /* Set FCR = 0x07; */
-    CSL_FINS(uart[uart_idx]->FCR, UART_FCR_FIFOEN,
-             CSL_UART_FCR_FIFOEN_ENABLE);
-    CSL_FINS(uart[uart_idx]->FCR, UART_FCR_TXCLR, CSL_UART_FCR_TXCLR_CLR);
-    CSL_FINS(uart[uart_idx]->FCR, UART_FCR_RXCLR, CSL_UART_FCR_RXCLR_CLR);
-    CSL_FINS(uart[uart_idx]->FCR, UART_FCR_DMAMODE1,
-             CSL_UART_FCR_DMAMODE1_DISABLE);
-    CSL_FINS(uart[uart_idx]->FCR, UART_FCR_RXFIFTL,
-             CSL_UART_FCR_RXFIFTL_CHAR1);
+    /* Enable the UART (see first step above) */
+    uart[uart_idx]->PWREMU_MGMT = 0x6000u;
 }
 
 void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
     assert(uart_idx == 0 || uart_idx == 1);
+    assert(2400 <= uart_baud[baud_idx] && uart_baud[baud_idx] <= 3000000);
 
-    uint8_t dll, dlh;
-
-    /* TODO: work out baud rate properly, based on PLL/clock speed */
-    dll = (uint8_t)(baud & 0xFFu);
-    dlh = (uint8_t)((baud >> 8) & 0xFFu);
-
-    /* Set the baud rate divisor -- LCR[7] should be enabled for access */
-    uart[uart_idx]->LCR = 0x80;
-    uart[uart_idx]->DLL = dll;
-    uart[uart_idx]->DLH = dlh;
-    uart[uart_idx]->LCR = 0x03;
+    uart_baud[uart_idx] = baud;
 }
 
 void fcs_int_uart_start_rx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
+    /*
+    For an internal UART, we configure it in the mode required for DMA,
+    set up a single DMA transfer per buffer with ACNT = 1, BCNT = 1, CCNT > 2,
+    and poll periodically to see if the buffer is full based on changes in
+    CCNT and/or the destination index. The transfer mode is set to
+    AB-synchronised, with no interrupts; when CCNT gets too low we increase it.
+    */
 }
 
 void fcs_int_uart_start_tx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
+    /*
+    For TX in internal UARTs, we QDMA-trigger an A-synchronised transfer with
+    ACNT = 1, BCNT = number of bytes to send, and CCNT = 1.
+    */
 }
 
 uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
