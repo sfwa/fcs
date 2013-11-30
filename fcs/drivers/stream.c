@@ -378,7 +378,11 @@ const uint8_t *restrict buf, uint32_t nbytes) {
 
     uint16_t tx_start_idx = tx_write_idx[dev] & 0xFFu;
     size_t i;
-    for (i = 0; i < nbytes && tx_write_idx[dev] - tx_read_idx[dev] < 255u;
+    /*
+    254 because there needs to be a 1-byte separation in the circular buffer
+    read/write pointers to detect overflow
+    */
+    for (i = 0; i < nbytes && tx_write_idx[dev] - tx_read_idx[dev] < 254u;
             tx_write_idx[dev]++, i++) {
         tx_buffers[dev][tx_write_idx[dev] & 0xFFu] = buf[i];
     }

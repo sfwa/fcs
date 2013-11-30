@@ -294,9 +294,9 @@ TEST(StreamTX, WriteBufferFull) {
 
     /* Write a second which overflows */
     len = fcs_stream_write(FCS_STREAM_UART_INT0, s, 129);
-    EXPECT_EQ(127, len);
+    EXPECT_EQ(126, len);
 
     /* Read back and confirm */
     len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 256);
-    EXPECT_EQ(255, len);
+    EXPECT_EQ(254, len);
 }
