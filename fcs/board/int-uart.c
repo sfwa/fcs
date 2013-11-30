@@ -26,8 +26,7 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/csl.h"
 #include "../c66x-csl/ti/csl/cslr.h"
 #include "../c66x-csl/ti/csl/cslr_uart.h"
-#include "../c66x-csl/ti/csl/csl_edma3.h"
-#include "../c66x-csl/ti/csl/csl_edma3Aux.h"
+#include "../c66x-csl/ti/csl/cslr_tpcc.h"
 
 #include "int-uart.h"
 
@@ -51,12 +50,32 @@ it's somewhat simpler -- just set up a single PaRAM entry per write and don't
 accept further writes until it's complete.
 */
 
-CSL_Edma3ParamSetup *rx_edma_primary_param[2] = {},
-                    *rx_edma_reload_param[2] = {},
-                    *tx_edma_primary_param[2] = {};
+CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
 
-CSL_Edma3ChannelObj rx_edma_channel[2],
-                    tx_edma_channel[2];
+uint16_t rx_edma_event[2] = { 4u, 14u },
+         tx_edma_event[2] = { 5u, 15u };
+
+CSL_TPCC_ParamsetRegs *rx_edma_param_primary[2] = {
+    edma3->PARAMSET[rx_edma_event[0]],
+    edma3->PARAMSET[rx_edma_event[1]]
+};
+
+CSL_TPCC_ParamsetRegs *rx_edma_param_reload[2] = {
+    edma3->PARAMSET[100u + rx_edma_event[0]],
+    edma3->PARAMSET[100u + rx_edma_event[1]]
+};
+
+CSL_TPCC_ParamsetRegs *tx_edma_param_primary[2] = {
+    edma3->PARAMSET[tx_edma_event[0]],
+    edma3->PARAMSET[tx_edma_event[1]]
+};
+
+/*
+Track the last set buffer size for RX and TX transfers, so we can work out
+how many bytes have been transferred by looking at BCNT.
+*/
+uint16_t rx_last_buf_size[2] = { 0, 0 },
+         tx_last_buf_size[2] = { 0, 0 };
 
 /*
 UART registers (table 3-1 in SPRUGP1):
@@ -97,6 +116,31 @@ static uint32_t uart_baud[2] = { 115200u, 115200u };
 
 void fcs_int_uart_reset(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    /*
+    First, deactivate any outstanding EDMA3 transfers and reset the channel
+    controllers etc. Since all transfers are A-synchronised, a maximum of one
+    byte can be in-flight at any time.
+
+    Disable the RX and TX DMA by setting the clear bit in the appropriate
+    register. For channels 0-31, this is EECR; for channels 32+, it's EECRH.
+
+    We also want to clear out secondary events and event missed registers, so
+    that errors in transfers don't block future transfers. These registers are
+    SECR/SECRH and EMCR/EMCRH respectively.
+    */
+    edma3->TPC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+    edma3->TPC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+    edma3->TPC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPC_EMCR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+    edma3->TPC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
 
     /* Initialization process as described in part 2.7 of SPRUGP1 */
 
@@ -268,39 +312,357 @@ void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
     uart_baud[uart_idx] = baud;
 }
 
+/*
+EDMA event/channel mapping: on the C6657, the mapping between events and
+channels is fixed. The ID numbers are therefore interchangeable.
+
+Events relevant to us (per SPRS814A) are, in general:
+
+Event/Channel Number    Event      Description
+2                       TINT2L     Timer2 interrupt low
+3                       TINT2H     Timer2 interrupt high
+4                       URXEVT     UART0 receive event
+5                       UTXEVT     UART0 transmit event
+6                       GPINT0     GPIO interrupt
+7                       GPINT1     GPIO interrupt
+8                       GPINT2     GPIO interrupt
+9                       GPINT3     GPIO interrupt
+14                      URXEVT_B   UART1 receive event
+15                      UTXEVT_B   UART1 transmit event
+16                      SPIINT0    SPI interrupt
+17                      SPIINT1    SPI interrupt
+22                      TINT4L     Timer4 interrupt low
+23                      TINT4H     Timer4 interrupt high
+24                      TINT5L     Timer5 interrupt low
+25                      TINT5H     Timer5 interrupt high
+26                      TINT6L     Timer6 interrupt low
+27                      TINT6H     Timer6 interrupt high
+28                      TINT7L     Timer7 interrupt low
+29                      TINT7H     Timer7 interrupt high
+30                      SPIXEVT    SPI transmit event
+31                      SPIREVT    SPI receive event
+
+In this particular driver (for internal UARTs), we only use URXEVT, UTXEVT,
+URXEVT_B, and UTXEVT_B.
+
+The UART peripheral is connected to EDMA3 transfer controllers TC0 and TC2 via
+TeraNet bridges 1 (controller side) and 4 (perhiperhal side).
+
+The EMIF16 peripheral is connected to EDMA3 transfer controllers TC0, TC1, TC2
+and TC3 (i.e. all of them).
+
+The C6657 has 512 PaRAM set entries, 64 channels, and 4 event queues. There is
+a 1:1 mapping between queues and transfer controllers, i.e. Q0 -> TC0,
+Q1 -> TC1 etc.
+
+Because the 64 DMA channels map to 64 pre-assigned events (see above), and
+section 2.3 of SPRUGS5A states that the first N PaRAM sets are mapped to the
+DMA channels (where N is the number of DAM channels), we should ensure that
+the primary PaRAM sets for each transfer type are stored in the index
+corresponding to the event/channel number.
+
+According to the same section of SPRUGS5A, "by default, all channels map to
+PaRAM set 0" -- this seems to contradict the preceding but it can't hurt to
+attempt to map the channels we need to the values they should already be,
+right?
+
+Addressing the PaRAM sets may be tricky since the datasheet talks about global
+addresses rather than core-local addresses. We may need to convert input
+addresses into whatever the "global" format is.
+*/
+
 void fcs_int_uart_start_rx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    /* Track this so we can return how many bytes have been read in future */
+    rx_last_buf_size[uart_idx] = buf_size;
+
     /*
     For an internal UART, we configure it in the mode required for DMA,
-    set up a single DMA transfer per buffer with ACNT=1, BCNT=256, CCNT=1.
+    set up a single DMA transfer per buffer with ACNT=1, BCNT=256,
+    CCNT=0xFFFF (because docs).
 
-    A linked PaRAM set is configured to reload the transfer with the base
-    buffer index and BCNT=256.
+    A linked PaRAM set is configured to reload the transfer with exactly the
+    same settings.
 
-    The next destination byte index can be read directly to get the count of
-    bytes transferred; if it's lower than the read pointer, add 256. (And
-    subtract 256 once the read pointer reaches 256.)
+    The next destination byte index from the primary PaRAM set can be read
+    directly to get the count of bytes transferred; if it's lower than the
+    read pointer, add 256. (And subtract 256 once the read pointer reaches
+    256.)
+
+    First, we need to make sure the queue, event, channel and primary PaRAM
+    numbers are mapped. The primary PaRAM number has to be the same as the
+    DMA channel number, which in turn has to be the same as the event number,
+    but apparently (per SPRUGS5A) they're unmapped by default, so do that now.
+
+    The queue setting determines which transfer controller (TC) we use. For
+    the UART, either TC0 or TC2 must be used, therefore the queue must be 0 or
+    2.
+
+    Start by disabling the channel.
     */
+
+    /*
+    Disable the channel by setting the clear bit in the appropriate register.
+    For channels 0-31, this is EECR; for channels 32+, it's EECRH.
+    */
+    edma3->TPC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+
+    /*
+    8 channels per register; determine the DMAQNUM register index based
+    on the channel number = event number.
+    */
+    uint8_t dma_register_idx = rx_edma_event[uart_idx] >> 3;
+
+    /*
+    Determine the bits of the register to set -- 4 bits per channel with the
+    3 LSBs being the queue number, and the MSB being reserved.
+
+    We don't actually need to change the setting for this particular driver as
+    we're using Q0, but it's included for the sake of completeness.
+    */
+    uint8_t dma_register_bit = (rx_edma_event[uart_idx] -
+                                (dma_register_idx << 3)) << 2;
+
+    /* Update the DMAQNUMn register register */
+    CSL_FINSR(edma3->TPCC_DMAQNUM[dma_register_idx], dma_register_bit + 2,
+              dma_register_bit, 0);
+
+    /*
+    Now we need to map the PaRAM set to the channel. The DCHMAPn registers
+    have bits 31:14 reserved, 13:5 as PAENTRY, and 4:0 reserved. PAENTRY is
+    the index of the PaRAM set to map, from 0-1FFh.
+    */
+    CSL_FINS(edma3->TPCC_DCHMAP[rx_edma_event[uart_idx]],
+             TPCC_TPCC_DCHMAP0_PAENTRY, rx_edma_event[uart_idx]);
+
+    /*
+    Configure the PaRAM sets (SPRUGS5A table 2-2)
+
+    Byte Offset     Field           Description
+    0h              OPT             Tranfer configuration options.
+    4h              SRC             Source address (byte address from which
+                                    data is transferred).
+    8h              ACNT(31:16)     Count for 1st (A) dimension; 1-65535.
+                    BCNT(15:0)      Count for 2nd (B) dimension; 1-65535.
+    Ch              DST             Destination address (byte address to which
+                                    data is transferred).
+    10h             SRCBIDX(31:16)  Source BCNT index: signed offset between
+                                    source arrays (B dimension), -32768 to
+                                    32767 bytes.
+                    DSTBIDX(15:0)   Destination BCNT index: signed offset
+                                    between destination arrays (B dimension),
+                                    -32768 to 32767 bytes.
+    14h             LINK(31:16)     The index of the PaRAM set to be linked
+                                    when this one is complete (values in this
+                                    PaRAM set are reloaded from the linked
+                                    PaRAM set). 0xFFFFu is a null link (no
+                                    reload).
+                    BCNTRLD(15:0)   The value BCNT should be set to when BCNT
+                                    is 0 and CCNT is decremented. Only used
+                                    for A-synchronised transfers.
+    18h             SRCCIDX(31:16)  Source CCNT index: signed offset between
+                                    frames (B dimension) within a block (C
+                                    dimension). For A-synchronised transfers,
+                                    this is the offset from the beginning of
+                                    the LAST source array (A dimension) in a
+                                    frame (B dimension) to the beginning of
+                                    the FIRST source array (A dimension) in
+                                    the next frame (B dimension). For
+                                    AB-synchronised transfers, it's the
+                                    offset between the beginning of the FIRST
+                                    source array (A dimension) in a frame
+                                    (B dimension) to the beginning of the
+                                    FIRST source array (A dimension) in the
+                                    next frame (B dimension). -32768 to 32767
+                                    bytes.
+                    DSTCIDX(15:0)   Same as above, but for destination arrays
+                                    and frames.
+    1Ch             CCNT(31:16)     Number of frames (B dimension) in a block
+                                    (C dimension). 1-65535.
+                    RSVD(15:0)      Reserved
+
+    Then, the OPT field (offset 0h):
+
+    Bit   Field          Value         Description
+    31    PRIV (R)                     Privilege level for the PaRAM set.
+                                       Automatically set based on EDMA3 master
+                                       privilege value.
+                                       0 = user level
+                                       1 = supervisor level
+    30:28 Reserved                     Must always write 0 to these bits.
+    27:24 PRIVID (R)     0-Fh          Privilege identification. Set with the
+                                       EDMA3 master's privilege level when
+                                       PaRAM set written.
+    23    ITCCHEN                      Intermediate transfer completion
+                                       chaining enable. When enabled, CER/CERH
+                                       is set on completion of every
+                                       intermediate transfer reqeust (TR) --
+                                       but not the final TR. The bit set in
+                                       CER/CERH is the TCC value specified.
+                                       0 = disabled
+                                       1 = enabled
+    22    TCCHEN                       Same as the above, but for the final
+                                       TR.
+    21    ITCINTEN                     Intermediate transfer completion
+                                       interrupt enable. When enabled, the
+                                       IPR/IPRH bit identified by TCC is set
+                                       on completion of every intermediate TR
+                                       (not the final). If the corresponding
+                                       IER/IERH bit is set, an interrupt is
+                                       generated.
+                                       0 = disabled
+                                       1 = enabled
+    20    TCINTEN                      Same as above, but for the final TC.
+    19:18 Reserved
+    17:12 TCC            0-3Fh         Transfer complete code. Identifies the
+                                       bit set in CER/CERH and IPR/IPRH when
+                                       the intermediate or final TRs are
+                                       complete (see above).
+    11    TCCMODE                      Transfer complete mode:
+                                       0 = transfer is complete when the data
+                                           is transferred
+                                       1 = transfer is complete after the CC
+                                           sends the TR to the TC.
+    10:8  FWID           0-5h          FIFO width:
+                                       0 = 8-bit
+                                       1 = 16-bit
+                                       2 = 32-bit
+                                       3 = 64-bit
+                                       4 = 128-bit
+                                       5 = 256-bit
+    7:4   Reserved                     Must always write 0 to these bits.
+    3     STATIC                       If enabled, the PaRAM set is not
+                                       updated on TR submission or completion.
+                                       0 = disabled
+                                       1 = enabled
+    2     SYNCDIM                      Transfer synchronisation dimension.
+                                       0 = A-synchronised (one TR of ACNT
+                                           bytes per event)
+                                       1 = AB-synchronised (BCNT TRs of ACNT
+                                           bytes per event)
+    1     DAM                          Destination address mode.
+                                       0 = INCR (increment) mode. Within an
+                                           array (A dimension), the
+                                           destination address is incremented.
+                                       1 = CONST (constant) destination
+                                           address. Wraps around when FIFO
+                                           width is reached.
+    0     SAM                          Same as above, but for source address.
+
+    For UART RX, we're not using completion codes or interrupts, so those
+    fields can be zeroed out. The FIFO width is 8 bits, so that can be 0 as
+    well. We don't want STATIC mode, because the fields need to be reloaded
+    from the secondary PaRAM set. Per the UART and EDMA3 device docs (SPRUGP1
+    and SPRUGS5A), we need SYNCDIM to be 0 for A-synchronised, and DAM/SAM
+    should both be 0 for INCR mode. Thus, the option word is 0.
+
+    The source address should be the RBR of the relevant UART; ACNT should be
+    1 (since we're transferring one byte per event) and BCNT should be the
+    buffer size. The destination address should be that of the first byte of
+    the read buffer.
+
+    The source BIDX should be 0, since we want to read bytes from the same
+    address (the UART's RBR) with each transfer. The destination BIDX should
+    be 1, since we want to write the bytes to the read buffer sequentially.
+
+    The LINK field should be the PaRAM set index for the secondary (linked)
+    PaRAM set. The BCNTRLD field is 0, because we don't reload BCNT.
+
+    The source and dest CIDXs are 0, because we don't use CCNT; CCNT itself
+    is 0xFFFFu because that's what Figure 3-12 in SPRUGS5A says.
+
+    For the reload PaRAM, we want everything to be the same, including the
+    lined PaRAM index, since we're doing a self-reload.
+    */
+    CSL_TPCC_ParamsetRegs *primary = rx_edma_param_primary[uart_idx];
+    primary->option = 0;
+    primary->srcAddr = (uint32_t)&(uart[uart_idx]->RBR);
+    primary->aCntbCnt = 0x00010000u | buf_size;
+    primary->dstAddr = global_address((uint32_t)buf);
+    primary->srcDstBidx = 1u;
+    primary->linkBcntrld = (100u + rx_edma_event[uart_idx]) << 16;
+    primary->srcDstCidx = 0;
+    primary->cCnt = 0xFFFFu;
+
+    CSL_TPCC_ParamsetRegs *reload = rx_edma_param_reload[uart_idx];
+    reload->option = 0;
+    reload->srcAddr = (uint32_t)&(uart[uart_idx]->RBR);
+    reload->aCntbCnt = 0x00010000u | buf_size;
+    reload->dstAddr = global_address((uint32_t)buf);
+    reload->srcDstBidx = 1u;
+    reload->linkBcntrld = (100u + rx_edma_event[uart_idx]) << 16;
+    reload->srcDstCidx = 0;
+    reload->cCnt = 0xFFFFu;
+
+    /*
+    Enable the channel by setting the enable bit in the appropriate register.
+    For channels 0-31, this is EESR; for channels 32+, it's EESRH.
+    */
+    edma3->TPC_EESR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
 }
 
 void fcs_int_uart_start_tx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
-    assert(uart_idx == 0 || uart_idx == 1);
     /*
-    For TX in internal UARTs, we QDMA-trigger an A-synchronised transfer with
-    ACNT = 1, BCNT = number of bytes to send, and CCNT = 1. If there's a
-    transfer currently in progress, we fail.
+    For TX in internal UARTs, we DMA-trigger an A-synchronised transfer with
+    ACNT = 1, BCNT = number of bytes to send, and CCNT = 0xFFFF (don't ask).
+    If there's a transfer currently in progress, we fail (see assert below).
 
-    The next source byte index can be read directly to get the count of bytes
-    transferred.
+    See comments in fcs_int_uart_start_rx_edma for register details; only the
+    differences in configuration are mentioned below.
     */
+
+    assert(uart_idx == 0 || uart_idx == 1);
+    assert((rx_edma_param_primary[uart_idx]->aCntbCnt & 0xFFFFu) == 0);
+
+    /*
+    Track buffer size so we can return number of bytes read based on the
+    current BCNT value
+    */
+    tx_last_buf_size[uart_idx] = buf_size;
+
+    /*
+    A couple more things to clear than the RX case above because we want to
+    ignore any events missed because the TX buffer was empty
+    */
+    edma3->TPC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+
+    CSL_TPCC_ParamsetRegs *primary = tx_edma_param_primary[uart_idx];
+    primary->option = 0;
+    primary->srcAddr = global_address((uint32_t)buf); /* Read from buf */
+    primary->aCntbCnt = 0x00010000u | buf_size;
+    primary->dstAddr = (uint32_t)&(uart[uart_idx]->THR); /* Write to THR */
+    primary->srcDstBidx = 0x00010000u; /* Increment src address, not dest */
+    primary->linkBcntrld = 0xFFFF0000u; /* NULL PaRAM set for link */
+    primary->srcDstCidx = 0;
+    primary->cCnt = 0xFFFFu;
+
+    /* And start the transfer... */
+    edma3->TPC_EESR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
 }
 
 uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    /* Subtract BCNT from last buffer size to get the number of bytes read */
+    return rx_last_buf_size[uart_idx] -
+           (rx_edma_param_primary[uart_idx]->aCntbCnt & 0xFFFFu);
 }
 
 uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    /* Subtract BCNT from last buffer size to get the number of bytes read */
+    return tx_last_buf_size[uart_idx] -
+           (tx_edma_param_primary[uart_idx]->aCntbCnt & 0xFFFFu);
 }
