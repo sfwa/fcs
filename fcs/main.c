@@ -65,9 +65,9 @@ int main(void) {
     uint32_t cycles_per_tick = 0;
 
     if (core == 0u) {
-        fcs_main_init_core0();
+    	cycles_per_tick = fcs_main_init_core0();
     } else if (core == 1u) {
-        fcs_main_init_core1();
+    	cycles_per_tick = fcs_main_init_core1();
     }
 
     if (core == FCS_CORE_CONFIG) {

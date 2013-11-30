@@ -96,7 +96,7 @@ int32_t _fcs_stream_check_overrun(enum fcs_stream_device_t dev) {
 
         /*
         Wrap the read index to ensure it's in the same range as the write
-        index
+        index. This may mean that we don't actually get
         */
         rx_write_idx[dev] = fcs_int_uart_get_rx_edma_count(dev_idx);
         rx_read_idx[dev] = rx_read_idx[dev] & 0xFFu;
@@ -118,10 +118,10 @@ int32_t _fcs_stream_check_overrun(enum fcs_stream_device_t dev) {
 
     /*
     If the write index gets more than 255 values ahead of the read index,
-    there's been an overrun -- disable DMA and reset the buffers
+    there's been an overrun -- disable DMA and reset the buffers.
     */
-    if (rx_write_idx[dev] - rx_read_idx[dev] >= FCS_STREAM_BUFFER_SIZE ||
-            tx_write_idx[dev] - tx_read_idx[dev] >= FCS_STREAM_BUFFER_SIZE) {
+    if (rx_write_idx[dev] - rx_read_idx[dev] >= FCS_STREAM_BUFFER_SIZE - 1 ||
+        tx_write_idx[dev] - tx_read_idx[dev] >= FCS_STREAM_BUFFER_SIZE - 1) {
         fcs_stream_open(dev);
         return 1;
     } else {

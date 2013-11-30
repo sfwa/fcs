@@ -53,7 +53,7 @@ it's somewhat simpler -- just set up a single PaRAM entry per write and don't
 accept further writes until it's complete.
 */
 
-CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
+static volatile CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
 
 uint16_t rx_edma_event[2] = { 4u, 14u },
          tx_edma_event[2] = { 5u, 15u };
@@ -95,7 +95,7 @@ HOWEVER, the C66 CSL uses *dedicated* addresses for DLH and DLL, so we don't
 need to mess around with that -- they can be written at any time.
 */
 
-static CSL_UartRegs *uart[2] = {
+static volatile CSL_UartRegs *uart[2] = {
     (CSL_UartRegs*)CSL_UART_REGS,
     (CSL_UartRegs*)CSL_UART_B_REGS
 };
@@ -104,31 +104,6 @@ static uint32_t uart_baud[2] = { 115200u, 115200u };
 
 void fcs_int_uart_reset(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
-
-    /*
-    First, deactivate any outstanding EDMA3 transfers and reset the channel
-    controllers etc. Since all transfers are A-synchronised, a maximum of one
-    byte can be in-flight at any time.
-
-    Disable the RX and TX DMA by setting the clear bit in the appropriate
-    register. For channels 0-31, this is EECR; for channels 32+, it's EECRH.
-
-    We also want to clear out secondary events and event missed registers, so
-    that errors in transfers don't block future transfers. These registers are
-    SECR/SECRH and EMCR/EMCRH respectively.
-    */
-    edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
 
     /* Initialization process as described in part 2.7 of SPRUGP1 */
 
@@ -148,10 +123,39 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
                                            emulation even received
                                        1 = keep running regardless
 
-    Reset the UART RX/TX, and halt in emulation -- write 0, then 0x6000u after
-    the setup process is complete.
+    Reset the UART RX/TX, and ignore emulation -- write 1u.
     */
-    uart[uart_idx]->PWREMU_MGMT = 0;
+    uart[uart_idx]->PWREMU_MGMT = 1u;
+
+    /*
+    Deactivate any outstanding EDMA3 transfers and reset the channel
+    controllers etc. Since all transfers are A-synchronised, a maximum of one
+    byte can be in-flight at any time.
+
+    Disable the RX and TX DMA by setting the clear bit in the appropriate
+    register. For channels 0-31, this is EECR; for channels 32+, it's EECRH.
+
+    We also want to clear out secondary events and event missed registers, so
+    that errors in transfers don't block future transfers. These registers are
+    SECR/SECRH and EMCR/EMCRH respectively.
+
+    Finally, clear out any pending events by setting the clear bits in
+    ECR/ECRH.
+    */
+    edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = 0xFFFFFFFFu;
+    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
 
     /*
     The UART baud rate generator is derived from SYSCLK7 via PLLOUT->PLLDIV7.
@@ -214,9 +218,11 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     First, set FCR to 0x01 to enable.
     Then, set 0x0F for 1-byte FIFO trigger level, RX/TX FIFO clear, and FIFO
     enable.
+    Then, set 0x09 for 1-byte FIFO trigger level and FIFO enable.
     */
     uart[uart_idx]->FCR = 0x01u;
     uart[uart_idx]->FCR = 0x0Fu;
+    uart[uart_idx]->FCR = 0x09u;
 
     /*
     LCR: Line Control Register (section 3.6 in SPRUGP1)
@@ -265,7 +271,26 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     /*
     MCR: Modem Control Register (section 3.7 in SPRUGP1)
 
-    Not used -- set to 0.
+    Bit   Field          Value         Description
+    31:6  Reserved
+    5     AFE                          Auto flow control enable.
+                                       0 = disabled
+                                       1 = enabled
+    4     LOOP                         Loopback mode. Connects RX to TX
+                                       internally. UARTn_TXD pin is high,
+                                       UARTn_RXD is disconnected.
+                                       0 = disabled
+                                       1 = enabled (looped)
+    3     OUT2                         OUT2 control bit.
+    2     OUT1                         OUT1 control bit.
+    1     RTS                          RTS control. When AFE = 1, RTS
+                                       determines whether UARTn_RTS is
+                                       enabled.
+                                       0 = disabled
+                                       1 = enabled
+    0     Reserved
+
+    Not used -- set to 0, or 0x10u for loop mode if debugging.
     */
     uart[uart_idx]->MCR = 0;
 
@@ -288,9 +313,6 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     We don't want any interrupts, so set to 0.
     */
     uart[uart_idx]->IER = 0;
-
-    /* Enable the UART (see first step above) */
-    uart[uart_idx]->PWREMU_MGMT = 0x6000u;
 }
 
 void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
@@ -369,7 +391,7 @@ uint16_t buf_size) {
     /*
     For an internal UART, we configure it in the mode required for DMA,
     set up a single DMA transfer per buffer with ACNT=1, BCNT=256,
-    CCNT=0xFFFF (because docs).
+    CCNT=1.
 
     A linked PaRAM set is configured to reload the transfer with exactly the
     same settings.
@@ -391,12 +413,23 @@ uint16_t buf_size) {
     Start by disabling the channel.
     */
 
+    /* Disable the UART RX */
+    uart[uart_idx]->PWREMU_MGMT &= 0xFFFFDFFFu;
+
     /*
     Disable the channel by setting the clear bit in the appropriate register.
     For channels 0-31, this is EECR; for channels 32+, it's EECRH.
+
+    Also clear out the other event status registers.
     */
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = 0xFFFFFFFFu;
+    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
 
     /*
     8 channels per register; determine the DMAQNUM register index based
@@ -433,25 +466,26 @@ uint16_t buf_size) {
     0h              OPT             Tranfer configuration options.
     4h              SRC             Source address (byte address from which
                                     data is transferred).
-    8h              ACNT(31:16)     Count for 1st (A) dimension; 1-65535.
-                    BCNT(15:0)      Count for 2nd (B) dimension; 1-65535.
+    8h              ACNT(15:0)      Count for 1st (A) dimension; 1-65535.
+                    BCNT(31:16)     Count for 2nd (B) dimension; 1-65535.
     Ch              DST             Destination address (byte address to which
                                     data is transferred).
-    10h             SRCBIDX(31:16)  Source BCNT index: signed offset between
+    10h             SRCBIDX(15:0)   Source BCNT index: signed offset between
                                     source arrays (B dimension), -32768 to
                                     32767 bytes.
-                    DSTBIDX(15:0)   Destination BCNT index: signed offset
+                    DSTBIDX(31:16)  Destination BCNT index: signed offset
                                     between destination arrays (B dimension),
                                     -32768 to 32767 bytes.
-    14h             LINK(31:16)     The index of the PaRAM set to be linked
+    14h             LINK(15:0)      The address of the PaRAM set to be linked
                                     when this one is complete (values in this
                                     PaRAM set are reloaded from the linked
                                     PaRAM set). 0xFFFFu is a null link (no
-                                    reload).
-                    BCNTRLD(15:0)   The value BCNT should be set to when BCNT
+                                    reload). For normal PaRAM sets, the 5 LSBs
+                                    should be 0 since they're 32-byte aligned.
+                    BCNTRLD(31:16)  The value BCNT should be set to when BCNT
                                     is 0 and CCNT is decremented. Only used
                                     for A-synchronised transfers.
-    18h             SRCCIDX(31:16)  Source CCNT index: signed offset between
+    18h             SRCCIDX(15:0)   Source CCNT index: signed offset between
                                     frames (B dimension) within a block (C
                                     dimension). For A-synchronised transfers,
                                     this is the offset from the beginning of
@@ -466,11 +500,11 @@ uint16_t buf_size) {
                                     FIRST source array (A dimension) in the
                                     next frame (B dimension). -32768 to 32767
                                     bytes.
-                    DSTCIDX(15:0)   Same as above, but for destination arrays
+                    DSTCIDX(31:16)  Same as above, but for destination arrays
                                     and frames.
-    1Ch             CCNT(31:16)     Number of frames (B dimension) in a block
+    1Ch             CCNT(15:0)      Number of frames (B dimension) in a block
                                     (C dimension). 1-65535.
-                    RSVD(15:0)      Reserved
+                    RSVD(31:16)     Reserved
 
     Then, the OPT field (offset 0h):
 
@@ -556,11 +590,12 @@ uint16_t buf_size) {
     address (the UART's RBR) with each transfer. The destination BIDX should
     be 1, since we want to write the bytes to the read buffer sequentially.
 
-    The LINK field should be the PaRAM set index for the secondary (linked)
-    PaRAM set. The BCNTRLD field is 0, because we don't reload BCNT.
+    The LINK field should be the PaRAM set address offset for the secondary
+    (linked) PaRAM set, i.e. index * 32. The BCNTRLD field is 0, because we
+    don't reload BCNT.
 
     The source and dest CIDXs are 0, because we don't use CCNT; CCNT itself
-    is 0xFFFFu because that's what Figure 3-12 in SPRUGS5A says.
+    is 1.
 
     For the reload PaRAM, we want everything to be the same, including the
     lined PaRAM index, since we're doing a self-reload.
@@ -568,23 +603,25 @@ uint16_t buf_size) {
     #define primary (edma3->PARAMSET[rx_edma_event[uart_idx]])
     primary.OPT = 0;
     primary.SRC = (uint32_t)&(uart[uart_idx]->RBR);
-    primary.A_B_CNT = 0x00010000u | buf_size;
+    primary.A_B_CNT = (buf_size << 16) | 1u;
+    /* FIXME: make sure buf is actually a L2 local address */
     primary.DST = GLOBAL_FROM_L2_ADDRESS(buf);
-    primary.SRC_DST_BIDX = 1u;
-    primary.LINK_BCNTRLD = (100u + rx_edma_event[uart_idx]) << 16;
+    primary.SRC_DST_BIDX = 1u << 16;
+    primary.LINK_BCNTRLD = (100u + rx_edma_event[uart_idx]) << 5;
     primary.SRC_DST_CIDX = 0;
-    primary.CCNT = 0xFFFFu;
+    primary.CCNT = 1u;
     #undef primary
 
     #define reload (edma3->PARAMSET[100u + rx_edma_event[uart_idx]])
     reload.OPT = 0;
     reload.SRC = (uint32_t)&(uart[uart_idx]->RBR);
-    reload.A_B_CNT = 0x00010000u | buf_size;
+    reload.A_B_CNT = (buf_size << 16) | 1u;
+    /* FIXME: make sure buf is actually a L2 local address */
     reload.DST = GLOBAL_FROM_L2_ADDRESS(buf);
-    reload.SRC_DST_BIDX = 1u;
-    reload.LINK_BCNTRLD = (100u + rx_edma_event[uart_idx]) << 16;
+    reload.SRC_DST_BIDX = 1u << 16;
+    reload.LINK_BCNTRLD = (100u + rx_edma_event[uart_idx]) << 5;
     reload.SRC_DST_CIDX = 0;
-    reload.CCNT = 0xFFFFu;
+    reload.CCNT = 1u;
     #undef reload
 
     /*
@@ -593,6 +630,9 @@ uint16_t buf_size) {
     */
     edma3->TPCC_EESR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
+
+    /* Enable the UART RX */
+    uart[uart_idx]->PWREMU_MGMT |= 0x2000u;
 }
 
 void fcs_int_uart_start_tx_edma(uint8_t uart_idx, uint8_t *restrict buf,
@@ -607,14 +647,15 @@ uint16_t buf_size) {
     */
 
     assert(uart_idx == 0 || uart_idx == 1);
-    assert(
-        (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT & 0xFFFFu) == 0);
 
     /*
     Track buffer size so we can return number of bytes read based on the
     current BCNT value
     */
     tx_last_buf_size[uart_idx] = buf_size;
+
+    /* Put the UART TX into reset -- clear UTRST in PWREMU_MGMT (bit 14) */
+    uart[uart_idx]->PWREMU_MGMT &= 0xFFFFBFFF;
 
     /*
     A couple more things to clear than the RX case above because we want to
@@ -624,37 +665,68 @@ uint16_t buf_size) {
                                 tx_edma_event[uart_idx], 1u);
     edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = 0xFFFFFFFFu;
+    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
+
+    /* Set up DMA channel -> queue mapping */
+    uint8_t dma_register_idx = tx_edma_event[uart_idx] >> 3;
+    uint8_t dma_register_bit = (tx_edma_event[uart_idx] -
+                                (dma_register_idx << 3)) << 2;
+    CSL_FINSR(edma3->TPCC_DMAQNUM[dma_register_idx], dma_register_bit + 2,
+              dma_register_bit, 0);
+
+    /* Map PaRAM set to channel */
+    CSL_FINS(edma3->TPCC_DCHMAP[tx_edma_event[uart_idx]],
+             TPCC_TPCC_DCHMAP0_PAENTRY, tx_edma_event[uart_idx]);
 
     #define primary (edma3->PARAMSET[tx_edma_event[uart_idx]])
     primary.OPT = 0;
+    /* FIXME: make sure buf is actually a L2 local address */
     primary.SRC = GLOBAL_FROM_L2_ADDRESS(buf); /* Read from buf */
-    primary.A_B_CNT = 0x00010000u | buf_size;
+    primary.A_B_CNT = (buf_size << 16) | 1u;
     primary.DST = (uint32_t)&(uart[uart_idx]->THR); /* Write to THR */
-    primary.SRC_DST_BIDX = 0x00010000u; /* Increment src address, not dest */
-    primary.LINK_BCNTRLD = 0xFFFF0000u; /* NULL PaRAM set for link */
+    primary.SRC_DST_BIDX = 1u; /* Increment src address, not dest */
+    primary.LINK_BCNTRLD = 0xFFFFu; /* NULL PaRAM set for link */
     primary.SRC_DST_CIDX = 0;
-    primary.CCNT = 0xFFFFu;
+    primary.CCNT = 1u;
     #undef primary
 
-    /* And start the transfer... */
+    /* Enable the transfer... */
     edma3->TPCC_EESR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
+
+    /* Take the UART TX out of reset to send the first event */
+    uart[uart_idx]->PWREMU_MGMT |= 0x4000u;
 }
 
 uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    /* Subtract BCNT from last buffer size to get the number of bytes read */
-    return rx_last_buf_size[uart_idx] -
-           (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT & 0xFFFFu);
+    if (rx_last_buf_size[uart_idx] == 0) {
+    	return 0;
+    } else {
+    	/*
+        Subtract BCNT from last buffer size to get the number of bytes written
+        to RX buffer
+        */
+    	return rx_last_buf_size[uart_idx] -
+    	       (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16);
+    }
 }
 
 uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    /* Subtract BCNT from last buffer size to get the number of bytes read */
-    return tx_last_buf_size[uart_idx] -
-           (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT & 0xFFFFu);
+    if (tx_last_buf_size[uart_idx] == 0) {
+    	return 0;
+    } else {
+    	/*
+        Subtract BCNT from last buffer size to get the number of bytes read
+        from TX buffer
+        */
+    	return tx_last_buf_size[uart_idx] -
+    	       (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT >> 16);
+    }
 }

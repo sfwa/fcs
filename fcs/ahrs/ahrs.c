@@ -492,7 +492,7 @@ struct sensor_packet_t *dest) {
     Give up after 4 tries.
     */
     while (i < 4 && fcs_stream_peek(dev) > 0 &&
-           nbytes > sizeof(struct sensor_packet_t) + 1) {
+           nbytes > sizeof(struct control_packet_t) + 1) {
         fcs_stream_skip_until_after(dev, (uint8_t)0);
         nbytes = fcs_stream_bytes_available(dev);
         i++;
