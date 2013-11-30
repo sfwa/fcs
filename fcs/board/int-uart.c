@@ -24,10 +24,13 @@ SOFTWARE.
 #include <assert.h>
 
 #include "../c66x-csl/ti/csl/csl.h"
+#include "../c66x-csl/ti/csl/csl_chip.h"
 #include "../c66x-csl/ti/csl/cslr.h"
+#include "../c66x-csl/ti/csl/cslr_device.h"
 #include "../c66x-csl/ti/csl/cslr_uart.h"
 #include "../c66x-csl/ti/csl/cslr_tpcc.h"
 
+#include "board.h"
 #include "int-uart.h"
 
 /*
@@ -54,21 +57,6 @@ CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
 
 uint16_t rx_edma_event[2] = { 4u, 14u },
          tx_edma_event[2] = { 5u, 15u };
-
-CSL_TPCC_ParamsetRegs *rx_edma_param_primary[2] = {
-    edma3->PARAMSET[rx_edma_event[0]],
-    edma3->PARAMSET[rx_edma_event[1]]
-};
-
-CSL_TPCC_ParamsetRegs *rx_edma_param_reload[2] = {
-    edma3->PARAMSET[100u + rx_edma_event[0]],
-    edma3->PARAMSET[100u + rx_edma_event[1]]
-};
-
-CSL_TPCC_ParamsetRegs *tx_edma_param_primary[2] = {
-    edma3->PARAMSET[tx_edma_event[0]],
-    edma3->PARAMSET[tx_edma_event[1]]
-};
 
 /*
 Track the last set buffer size for RX and TX transfers, so we can work out
@@ -129,18 +117,18 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     that errors in transfers don't block future transfers. These registers are
     SECR/SECRH and EMCR/EMCRH respectively.
     */
-    edma3->TPC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
-    edma3->TPC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
-    edma3->TPC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPC_EMCR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
-    edma3->TPC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
 
     /* Initialization process as described in part 2.7 of SPRUGP1 */
 
@@ -181,9 +169,9 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 
     for an error of 0.63%.
     */
-    assert(2400 <= uart_baud[baud_idx] && uart_baud[baud_idx] <= 3000000);
+    assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
-    float divisor = 166666666.67f / (float)(uart_baud[baud_idx] * 13);
+    float divisor = 166666666.67f / (float)(uart_baud[uart_idx] * 13);
     uint16_t divisor_int = (uint16_t)(divisor + 0.5f);
     uart[uart_idx]->DLL = divisor_int & 0xFFu;
     uart[uart_idx]->DLH = (divisor_int >> 8) & 0xFFu;
@@ -307,7 +295,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 
 void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
     assert(uart_idx == 0 || uart_idx == 1);
-    assert(2400 <= uart_baud[baud_idx] && uart_baud[baud_idx] <= 3000000);
+    assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
     uart_baud[uart_idx] = baud;
 }
@@ -407,8 +395,8 @@ uint16_t buf_size) {
     Disable the channel by setting the clear bit in the appropriate register.
     For channels 0-31, this is EECR; for channels 32+, it's EECRH.
     */
-    edma3->TPC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
 
     /*
     8 channels per register; determine the DMAQNUM register index based
@@ -577,32 +565,34 @@ uint16_t buf_size) {
     For the reload PaRAM, we want everything to be the same, including the
     lined PaRAM index, since we're doing a self-reload.
     */
-    CSL_TPCC_ParamsetRegs *primary = rx_edma_param_primary[uart_idx];
-    primary->option = 0;
-    primary->srcAddr = (uint32_t)&(uart[uart_idx]->RBR);
-    primary->aCntbCnt = 0x00010000u | buf_size;
-    primary->dstAddr = global_address((uint32_t)buf);
-    primary->srcDstBidx = 1u;
-    primary->linkBcntrld = (100u + rx_edma_event[uart_idx]) << 16;
-    primary->srcDstCidx = 0;
-    primary->cCnt = 0xFFFFu;
+    #define primary (edma3->PARAMSET[rx_edma_event[uart_idx]])
+    primary.OPT = 0;
+    primary.SRC = (uint32_t)&(uart[uart_idx]->RBR);
+    primary.A_B_CNT = 0x00010000u | buf_size;
+    primary.DST = GLOBAL_FROM_L2_ADDRESS(buf);
+    primary.SRC_DST_BIDX = 1u;
+    primary.LINK_BCNTRLD = (100u + rx_edma_event[uart_idx]) << 16;
+    primary.SRC_DST_CIDX = 0;
+    primary.CCNT = 0xFFFFu;
+    #undef primary
 
-    CSL_TPCC_ParamsetRegs *reload = rx_edma_param_reload[uart_idx];
-    reload->option = 0;
-    reload->srcAddr = (uint32_t)&(uart[uart_idx]->RBR);
-    reload->aCntbCnt = 0x00010000u | buf_size;
-    reload->dstAddr = global_address((uint32_t)buf);
-    reload->srcDstBidx = 1u;
-    reload->linkBcntrld = (100u + rx_edma_event[uart_idx]) << 16;
-    reload->srcDstCidx = 0;
-    reload->cCnt = 0xFFFFu;
+    #define reload (edma3->PARAMSET[100u + rx_edma_event[uart_idx]])
+    reload.OPT = 0;
+    reload.SRC = (uint32_t)&(uart[uart_idx]->RBR);
+    reload.A_B_CNT = 0x00010000u | buf_size;
+    reload.DST = GLOBAL_FROM_L2_ADDRESS(buf);
+    reload.SRC_DST_BIDX = 1u;
+    reload.LINK_BCNTRLD = (100u + rx_edma_event[uart_idx]) << 16;
+    reload.SRC_DST_CIDX = 0;
+    reload.CCNT = 0xFFFFu;
+    #undef reload
 
     /*
     Enable the channel by setting the enable bit in the appropriate register.
     For channels 0-31, this is EESR; for channels 32+, it's EESRH.
     */
-    edma3->TPC_EESR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EESR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
 }
 
 void fcs_int_uart_start_tx_edma(uint8_t uart_idx, uint8_t *restrict buf,
@@ -617,7 +607,8 @@ uint16_t buf_size) {
     */
 
     assert(uart_idx == 0 || uart_idx == 1);
-    assert((rx_edma_param_primary[uart_idx]->aCntbCnt & 0xFFFFu) == 0);
+    assert(
+        (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT & 0xFFFFu) == 0);
 
     /*
     Track buffer size so we can return number of bytes read based on the
@@ -629,26 +620,27 @@ uint16_t buf_size) {
     A couple more things to clear than the RX case above because we want to
     ignore any events missed because the TX buffer was empty
     */
-    edma3->TPC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
 
-    CSL_TPCC_ParamsetRegs *primary = tx_edma_param_primary[uart_idx];
-    primary->option = 0;
-    primary->srcAddr = global_address((uint32_t)buf); /* Read from buf */
-    primary->aCntbCnt = 0x00010000u | buf_size;
-    primary->dstAddr = (uint32_t)&(uart[uart_idx]->THR); /* Write to THR */
-    primary->srcDstBidx = 0x00010000u; /* Increment src address, not dest */
-    primary->linkBcntrld = 0xFFFF0000u; /* NULL PaRAM set for link */
-    primary->srcDstCidx = 0;
-    primary->cCnt = 0xFFFFu;
+    #define primary (edma3->PARAMSET[tx_edma_event[uart_idx]])
+    primary.OPT = 0;
+    primary.SRC = GLOBAL_FROM_L2_ADDRESS(buf); /* Read from buf */
+    primary.A_B_CNT = 0x00010000u | buf_size;
+    primary.DST = (uint32_t)&(uart[uart_idx]->THR); /* Write to THR */
+    primary.SRC_DST_BIDX = 0x00010000u; /* Increment src address, not dest */
+    primary.LINK_BCNTRLD = 0xFFFF0000u; /* NULL PaRAM set for link */
+    primary.SRC_DST_CIDX = 0;
+    primary.CCNT = 0xFFFFu;
+    #undef primary
 
     /* And start the transfer... */
-    edma3->TPC_EESR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EESR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
 }
 
 uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
@@ -656,7 +648,7 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
 
     /* Subtract BCNT from last buffer size to get the number of bytes read */
     return rx_last_buf_size[uart_idx] -
-           (rx_edma_param_primary[uart_idx]->aCntbCnt & 0xFFFFu);
+           (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT & 0xFFFFu);
 }
 
 uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
@@ -664,5 +656,5 @@ uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
 
     /* Subtract BCNT from last buffer size to get the number of bytes read */
     return tx_last_buf_size[uart_idx] -
-           (tx_edma_param_primary[uart_idx]->aCntbCnt & 0xFFFFu);
+           (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT & 0xFFFFu);
 }

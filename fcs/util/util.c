@@ -30,12 +30,12 @@ SOFTWARE.
 #include "util.h"
 
 /* Positive and negative powers of 10 for clamping/rounding */
-static double exp10[14] = {
+static double _fcs_exp10[14] = {
     1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
     1e10, 1e11, 1e12, 1e13
 };
 
-static double exp10neg[7] = {
+static double _fcs_exp10neg[7] = {
     1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7
 };
 
@@ -43,7 +43,7 @@ static double exp10neg[7] = {
 Same deal, but integers. These are all negative because we do the base
 conversion on negative numbers to avoid the -INT_MIN undefinedness.
 */
-static int32_t exp10i[11] = {
+static int32_t _fcs_exp10i[11] = {
     -1, -10, -100, -1000, -10000, -100000, -1000000, -10000000, -100000000,
     -1000000000
 };
@@ -62,7 +62,7 @@ uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes) {
     assert(nbytes <= 256);
 
     uint8_t result = 0x00, i;
-    #pragma must_iterate(1, 1, 256)
+    #pragma MUST_ITERATE(1, 1, 256)
     for (i = 0; i < nbytes; i++) {
         result ^= pdata[i];
     }
@@ -96,7 +96,7 @@ uint8_t max_digits) {
     }
 
     /* Check for overflow -- output "OF" or "-OF" */
-    if (max_digits < 10u && value <= exp10i[max_digits]) {
+    if (max_digits < 10u && value <= _fcs_exp10i[max_digits]) {
         result[out_len++] = 'O';
         result[out_len++] = 'F';
     } else if (value == 0) {
@@ -104,7 +104,7 @@ uint8_t max_digits) {
     } else {
         int8_t place = max_digits - 1u;
         /* Skip ahead to the first non-zero place */
-        while (place > 0 && exp10i[place] < value) {
+        while (place > 0 && _fcs_exp10i[place] < value) {
             place--;
         }
 
@@ -120,7 +120,7 @@ uint8_t max_digits) {
         uint8_t digit;
         for (; place >= 0; place--) {
             digit = '0';
-            place_value = exp10i[place];
+            place_value = _fcs_exp10i[place];
             while (value <= place_value) {
                 digit++;
                 value -= place_value;
@@ -174,16 +174,16 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
     the maximum number we can represent in 7 + 6 digits is < 2^44, we don't
     need to worry.
     */
-    value = round(value * exp10[max_fractional_digits]);
+    value = round(value * _fcs_exp10[max_fractional_digits]);
 
     /* Check for overflow -- output "OF" or "-OF" */
-    if (value >= exp10[max_integer_digits + max_fractional_digits]) {
+    if (value >= _fcs_exp10[max_integer_digits + max_fractional_digits]) {
         result[out_len++] = 'O';
         result[out_len++] = 'F';
     } else {
         /* Find the highest place used by the number */
         int8_t place = max_integer_digits + max_fractional_digits - 1u;
-        while (place >= max_fractional_digits && exp10[place] > value) {
+        while (place >= max_fractional_digits && _fcs_exp10[place] > value) {
             place--;
         }
 
@@ -203,7 +203,7 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
             }
 
             digit = '0';
-            place_value = exp10[place];
+            place_value = _fcs_exp10[place];
             while (value >= place_value) {
                 digit++;
                 value -= place_value;
@@ -238,6 +238,7 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
 
     uint8_t integral_length, fractional_length;
     int32_t integral, fractional;
+    double output = 0.0;
 
     for (integral_length = 0; integral_length < len; integral_length++) {
         if (value[integral_length] == '.') {
@@ -253,8 +254,6 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
     } else if (value[0] != '-' && integral_length > 6u) {
         goto invalid;
     }
-
-    double output = 0.0;
 
     /* Convert the integral part of the number */
     if (integral_length != 0) {
@@ -284,7 +283,7 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
         Since the fractional part was converted to an integer, we need to
         determine the place value of the integer component.
         */
-        output += (double)fractional * exp10neg[fractional_length - 2];
+        output += (double)fractional * _fcs_exp10neg[fractional_length - 2];
     }
 
     *result = output;
@@ -306,6 +305,7 @@ const uint8_t *restrict value, size_t len) {
     assert(result);
 
     bool negative = false;
+    uint32_t output = 0;
 
     /*
     If the number is negative, keep track of that and deal with the sign at
@@ -326,7 +326,6 @@ const uint8_t *restrict value, size_t len) {
         goto invalid;
     }
 
-    uint32_t output = 0;
     uint8_t i;
     for (i = len; i >= 1; i--) {
         if (value[i - 1] < '0' || value[i - 1] > '9') {
@@ -334,7 +333,7 @@ const uint8_t *restrict value, size_t len) {
             goto invalid;
         }
         output += (uint32_t)(value[i - 1] - '0') *
-                  (uint32_t)(-exp10i[len - i]);
+                  (uint32_t)(-_fcs_exp10i[len - i]);
     }
 
     if (!negative && output <= INT32_MAX) {

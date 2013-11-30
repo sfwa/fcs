@@ -168,7 +168,6 @@ static double control_pos[4];
 /* Latest I/O board state packets */
 static struct sensor_packet_t ioboard[2];
 static uint16_t ioboard_last_tick[2];
-static bool ioboard_got_packet[2];
 
 /* Global FCS state structure */
 struct fcs_packet_state_t global_state;
@@ -248,6 +247,10 @@ void fcs_ahrs_init(void) {
     struct fcs_ahrs_sensor_covariance_t covariance;
     struct fcs_ahrs_wmm_field_t field;
 
+    /* TODO: read these from config or something */
+    memset(&covariance, 0, sizeof(covariance));
+    memset(&field, 0, sizeof(field));
+
     struct ukf_ioboard_params_t params = {
         /*
         Orientations should represent the enclosure-to-fuselage rotation of
@@ -293,18 +296,14 @@ void fcs_ahrs_init(void) {
 
 void fcs_ahrs_tick(void) {
     if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &ioboard[0])) {
-        ioboard_got_packet[0] = true;
         ioboard_last_tick[0] = ioboard[0].tick;
     } else {
-        ioboard_got_packet[0] = false;
         ioboard[0].sensor_update_flags = 0;
     }
 
     if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT1, &ioboard[1])) {
-        ioboard_got_packet[1] = true;
         ioboard_last_tick[1] = ioboard[1].tick;
     } else {
-        ioboard_got_packet[1] = false;
         ioboard[1].sensor_update_flags = 0;
     }
 
@@ -444,7 +443,7 @@ double *restrict covariance) {
 
     /* Ignore changes in lon with varying lat -- small angles and all that */
     global_state.lat_lon_uncertainty = 1.96 *
-        sqrt(fmax(covariance[0], covariance[1])) * (40008000.0 / 360.0);
+        sqrt(max(covariance[0], covariance[1])) * (40008000.0 / 360.0);
     global_state.alt_uncertainty = 1.96 * sqrt(covariance[2]);
 
     global_state.velocity_uncertainty[0] = 1.96 * sqrt(covariance[3]);

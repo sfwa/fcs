@@ -295,14 +295,14 @@ size_t len) {
     assert(buf);
     assert(len > 10 && len < 256);
 
-    if (memcmp(buf, "$PSFWAS,", 8) != 0) {
-        goto invalid;
-    }
-
     uint8_t field = 0,
             checksum = 'P' ^ 'S' ^ 'F' ^ 'W' ^ 'A' ^ 'S' ^ ',';
     size_t idx = 8u;
     enum fcs_conversion_result_t result;
+
+    if (memcmp(buf, "$PSFWAS,", 8) != 0) {
+        goto invalid;
+    }
 
     /* Loop over the buffer and update the checksum. Every time a comma is
     encountered, process the field corresponding to the preceding values */

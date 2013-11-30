@@ -198,8 +198,8 @@ const float *restrict v) {
 static inline void quaternion_normalize_d(double result[4], const double q[4],
 bool force_positive) {
     assert(result && q);
-    _nassert((double)result % 8 == 0);
-    _nassert((double)q % 8 == 0);
+    _nassert((size_t)result % 8 == 0);
+    _nassert((size_t)q % 8 == 0);
 
     double norm = 1.0 / sqrt(q[X]*q[X] + q[Y]*q[Y] + q[Z]*q[Z] + q[W]*q[W]);
     if (force_positive && q[W] < 0.0) {
@@ -215,8 +215,8 @@ bool force_positive) {
 static inline void quaternion_normalize_f(float result[4], const float q[4],
 bool force_positive) {
     assert(result && q);
-    _nassert((float)result % 4 == 0);
-    _nassert((float)q % 4 == 0);
+    _nassert((size_t)result % 4 == 0);
+    _nassert((size_t)q % 4 == 0);
 
     float norm = 1.0 / sqrt(q[X]*q[X] + q[Y]*q[Y] + q[Z]*q[Z] + q[W]*q[W]);
     if (force_positive && q[W] < 0.0) {

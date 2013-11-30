@@ -80,20 +80,20 @@ void fcs_emif_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
 
 }
 
-void fcs_emif_uart_start_rx_dma(uint8_t uart_idx, uint8_t *restrict buf,
+void fcs_emif_uart_start_rx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
 
 }
 
-void fcs_emif_uart_start_tx_dma(uint8_t uart_idx, uint8_t *restrict buf,
+void fcs_emif_uart_start_tx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
 
 }
 
 uint16_t fcs_emif_uart_get_rx_edma_count(uint8_t uart_idx) {
-
+	return 0;
 }
 
 uint16_t fcs_emif_uart_get_tx_edma_count(uint8_t uart_idx) {
-
+	return 0;
 }

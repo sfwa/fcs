@@ -22,6 +22,8 @@ SOFTWARE.
 
 #include <stdint.h>
 #include <assert.h>
+#include <stdlib.h>
+
 #include <c6x.h>
 #include <ti/csl/csl.h>
 #include <ti/csl/csl_chip.h>
