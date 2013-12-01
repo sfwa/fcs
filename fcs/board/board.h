@@ -24,7 +24,7 @@ SOFTWARE.
 #define _FCS_BOARD_H
 
 /* Convert an address in an individual core's L2 SRAM to global */
-#define GLOBAL_FROM_L2_ADDRESS(n) ((uint32_t)(n) + 0x10000000u + 0x01000000u \
-                                   * CSL_chipReadReg(CSL_CHIP_DNUM))
+#define GLOBAL_FROM_L2_ADDRESS(n) ((1u << 28) | \
+    (CSL_chipReadReg(CSL_CHIP_DNUM) << 24) | ((uint32_t)(n) & 0x00FFFFFFu))
 
 #endif

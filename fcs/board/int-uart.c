@@ -55,15 +55,15 @@ accept further writes until it's complete.
 
 static volatile CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
 
-uint16_t rx_edma_event[2] = { 4u, 14u },
-         tx_edma_event[2] = { 5u, 15u };
+static uint16_t rx_edma_event[2] = { 4u, 14u },
+                tx_edma_event[2] = { 5u, 15u };
 
 /*
 Track the last set buffer size for RX and TX transfers, so we can work out
 how many bytes have been transferred by looking at BCNT.
 */
-uint16_t rx_last_buf_size[2] = { 0, 0 },
-         tx_last_buf_size[2] = { 0, 0 };
+static uint16_t rx_last_buf_size[2] = { 0, 0 },
+                tx_last_buf_size[2] = { 0, 0 };
 
 /*
 UART registers (table 3-1 in SPRUGP1):
@@ -165,11 +165,11 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
         DLH:DLL = SYSCLK7_FREQ_HZ / (UART_BAUD * 13)
 
     so with a 100MHz clock and e.g. a desired baud rate of 921600 we'd set
-        DLH:DLL = 166666667 / (921600 * 13) = 11
+        DLH:DLL = 166666667 / (921600 * 13) = 13.9
 
     which would result in an actual baud rate of
-        ACTUAL_UART_BAUD = SYSCLK7_FREQ_HZ / (DLH:DLL * 13)
-        915750 = 166666667 / (11 * 13)
+        ACTUAL_UART_BAUD = SYSCLK7_FREQ_HZ / (DLH:DLL * 14)
+        915750 = 166666667 / (14 * 13)
 
     for an error of 0.63%.
     */
@@ -385,7 +385,10 @@ void fcs_int_uart_start_rx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    /* Track this so we can return how many bytes have been read in future */
+    /*
+    Track this so we can return how many bytes have been written to the RX
+    buffer by the EDMA engine
+    */
     rx_last_buf_size[uart_idx] = buf_size;
 
     /*
@@ -649,8 +652,8 @@ uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
 
     /*
-    Track buffer size so we can return number of bytes read based on the
-    current BCNT value
+    Track buffer size so we can return number of bytes read from TX buffer
+    based on the current BCNT value
     */
     tx_last_buf_size[uart_idx] = buf_size;
 
@@ -705,14 +708,14 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
     if (rx_last_buf_size[uart_idx] == 0) {
-    	return 0;
+        return 0;
     } else {
-    	/*
+        /*
         Subtract BCNT from last buffer size to get the number of bytes written
         to RX buffer
         */
-    	return rx_last_buf_size[uart_idx] -
-    	       (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16);
+        return rx_last_buf_size[uart_idx] -
+               (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16);
     }
 }
 
@@ -720,13 +723,13 @@ uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
     if (tx_last_buf_size[uart_idx] == 0) {
-    	return 0;
+        return 0;
     } else {
-    	/*
+        /*
         Subtract BCNT from last buffer size to get the number of bytes read
         from TX buffer
         */
-    	return tx_last_buf_size[uart_idx] -
-    	       (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT >> 16);
+        return tx_last_buf_size[uart_idx] -
+               (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT >> 16);
     }
 }
