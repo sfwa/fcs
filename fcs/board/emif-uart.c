@@ -23,6 +23,15 @@ SOFTWARE.
 #include <stdint.h>
 #include <assert.h>
 
+#include "../c66x-csl/ti/csl/csl.h"
+#include "../c66x-csl/ti/csl/csl_chip.h"
+#include "../c66x-csl/ti/csl/cslr.h"
+#include "../c66x-csl/ti/csl/cslr_device.h"
+#include "../c66x-csl/ti/csl/cslr_emif16.h"
+#include "../c66x-csl/ti/csl/cslr_tpcc.h"
+#include "../c66x-csl/ti/csl/cslr_tmr.h"
+#include "../c66x-csl/ti/csl/cslr_gpio.h"
+
 #include "emif-uart.h"
 
 /*
@@ -63,13 +72,16 @@ in section 2.5 of SPRUGZ3A.
 Timing is as follows:
 
 EMIF parameter      UART parameter     EMIF setting         UART spec value
-SETUP               tAS                N+1 cycles           5ns
-STROBE              tCS/tRD            N+1 cycles           60ns
-HOLD                tDY                N+1 cycles           60ns
+SETUP               tAS                0+1 cycles           5ns
+STROBE              tCS/tRD            11+1 cycles          60ns
+HOLD                tDY                7+1 cycles           60ns
 TURNAROUND          -                  -                    -
 
 Since each cycle is 6ns, EMIF SETUP is set to 0 (+1 internally), EMIF STROBE
-is set to 9 (+ 1 internally) and EMIF HOLD is set to 9 (+1 internally).
+is set to 11 (+ 1 internally) and EMIF HOLD is set to 7 (+1 internally).
+
+The mapping isn't exactly 1:1, but basically tRD + tDY must be > 120ns, SETUP
+must be > 5ns, and STROBE must be > 60ns.
 
 Write timings are the same.
 */
@@ -81,16 +93,46 @@ the internal and external UARTs.
 */
 static volatile CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
 
+/* Pointer to global EMIF16 object */
+static volatile CSL_Emif16Regs* emif16 = (CSL_Emif16Regs*)CSL_EMIF16_REGS;
+
+/*
+Pointer to global GPIO peripheral. The GPIO peripheral has a few global config
+options, and registers for four GPIO banks. The GPIO bank number is the GPIO
+index divided by 32 and rounded down, while the position of the control bit is
+the GPIO index mod 32.
+
+SPRUGV1 appears to be incorrect in relation to the C6657, in that the upper
+16 bits of the GPIO control registers are marked as reserved. The C6657 CSL
+writes to them though, and TI support say (seemingly with some trepidation)
+that the CSL is more likely to be correct than the documentation.
+
+This is of course largely irrelevant to us as we only need GPIO0 and GPIO1.
+*/
+static volatile CSL_GpioRegs* gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+
+/*
+Pointer to TIMER4 and TIMER5 peripherals. These are configured in 64-bit mode
+(the default), with continuous mode enabled. The configured period is equal to
+the (input clock frequency / baud rate) * 16.
+
+This means that the maximum TX throughput for a 230400 baud link is 14.4KB/s.
+*/
+static volatile CSL_TmrRegs* timer[2] = {
+    (CSL_TmrRegs*)CSL_TIMER_4_REGS,
+    (CSL_TmrRegs*)CSL_TIMER_5_REGS
+};
+
 /*
 GPINT0 and GPINT1 are used as RX events -- we configure the external UART to
 send an interrupt for each byte received.
 
 For TX events, we set a timer that transfers each byte at an appropriate rate
-(depending on the configured baud rate of the UART). The HIGH signals of
+(depending on the configured baud rate of the UART). The LO signals of
 TIMER4 and TIMER5 are used.
 */
 static uint16_t rx_edma_event[2] = { 6u, 7u },
-                tx_edma_event[2] = { 23u, 25u };
+                tx_edma_event[2] = { 22u, 24u };
 
 static uint16_t rx_last_buf_size[2] = { 0, 0 },
                 tx_last_buf_size[2] = { 0, 0 };
@@ -170,6 +212,32 @@ struct emif16_xr16m752_uart_config_t {
     LCR: Line Control Register
 
     Bit   Field          Value         Description
+    7     DIVISOR_EN                   Enable access to DLL, DLM and DLH
+                                       instead of RHR, IER and FCR.
+                                       0 = disabled (no access to latch)
+                                       1 = enabled (access to latch)
+    6     SET_TX_BREAK                 Set TX break.
+                                       0 = no break condition
+                                       1 = break condition
+    5     SET_PARITY                   Set parity.
+                                       0 = parity not forced
+                                       1 = parity forced to 1 if even, 0 if
+                                           odd
+    4     EVEN_PARITY                  Even parity.
+                                       0 = odd parity
+                                       1 = even parity
+    3     PARITY_EN                    Parity enable.
+                                       0 = no parity
+                                       1 = parity
+    2     STOP_BITS                    Stop bits.
+                                       0 = 1 stop bit
+                                       1 = 1.5 stop bits for WORD_LEN=0, 2
+                                           otherwise
+    1:0   WORD_LEN                     Word length.
+                                       0 = 5 bits
+                                       1 = 6 bits
+                                       2 = 7 bits
+                                       3 = 8 bits
     */
     uint8_t LCR;
 
@@ -177,18 +245,136 @@ struct emif16_xr16m752_uart_config_t {
     MCR: Modem Control Register
 
     Bit   Field          Value         Description
+    7     PRESCALER_SEL  0             Clock prescaler select. Only valid when
+                                       EFR[4] = 1. Unused.
+    6     TCL_TLR_EN     0             TCL and TLR enable. Only valid when
+                                       EFR[4] = 1. Unused.
+    5     XON_ANY        0             XON any. Only valid when EFR[4] = 1.
+                                       Unused.
+    4     LOOPBACK_EN                  Loop TX back to RX when enabled.
+                                       0 = loopback disabled (normal)
+                                       1 = loopback enabled
+    3     INT_OE                       OP2#/Interrupt output enable.
+    2     FIFO_RDY                     OP1#/FIFO ready.
+    1     RTS_OC                       RTS# output control.
+    0     DTR_OC                       DTR# output control.
     */
     uint8_t MCR;
 
     /* There are a bunch of other registers but we don't use them */
 };
 
+#define XR16M752_RHR_OFFSET 0x0u
+#define XR16M752_THR_OFFSET 0x0u
+#define XR16M752_DLL_OFFSET 0x0u
+#define XR16M752_DLM_OFFSET 0x1u
+#define XR16M752_DLD_OFFSET 0x2u
+#define XR16M752_IER_OFFSET 0x1u
+#define XR16M752_ISR_OFFSET 0x2u
+#define XR16M752_FCR_OFFSET 0x2u
+#define XR16M752_LCR_OFFSET 0x3u
+#define XR16M752_MCR_OFFSET 0x4u
+#define XR16M752_LSR_OFFSET 0x5u
+#define XR16M752_MSR_OFFSET 0x6u
+#define XR16M752_SPR_OFFSET 0x7u
+#define XR16M752_TCR_OFFSET 0x6u
+#define XR16M752_TLR_OFFSET 0x7u
+#define XR16M752_FIFO_RDY_OFFSET 0x7u
+#define XR16M752_EFR_OFFSET 0x2u
+
 static struct emif16_xr16m752_uart_t uart[2];
+
+static void _fcs_emif_uart_write_config(uint8_t uart_idx);
+
+static void _fcs_emif_uart_write_config(uint8_t uart_idx) {
+    assert(uart_idx == 0 || uart_idx == 1);
+
+    /*
+    Configuring the UART involves the following steps:
+    - Set LCR[7]
+    - Write DLL, DLM and DLD
+    - Clear LCR[7] / write configured LCR
+    - Write IER, FCR, [LCR,] MCR
+
+    We could do this via DMA (4 PaRAM sets in a chained transfer) but since
+    each write takes < 150ns, we're looking at ~1350 cycles maximum to
+    configure by just writing each value to the appropriate EMIF location.
+
+    Obviously we couldn't re-configure the UART hundreds of times in a single
+    tick, but once or twice is probably fine.
+    */
+
+    static volatile uint8_t *uart_regs[2] = { 0x0, 0x0 };
+
+    uart_regs[uart_idx][XR16M752_LCR_OFFSET] = 0x80u;
+    uart_regs[uart_idx][XR16M752_DLL_OFFSET] = uart[uart_idx].DLL;
+    uart_regs[uart_idx][XR16M752_DLM_OFFSET] = uart[uart_idx].DLM;
+    uart_regs[uart_idx][XR16M752_DLD_OFFSET] = uart[uart_idx].DLD;
+    uart_regs[uart_idx][XR16M752_LCR_OFFSET] = uart[uart_idx].LCR & 0x7Fu;
+    uart_regs[uart_idx][XR16M752_IER_OFFSET] = uart[uart_idx].IER;
+    uart_regs[uart_idx][XR16M752_FCR_OFFSET] = uart[uart_idx].FCR;
+    uart_regs[uart_idx][XR16M752_MCR_OFFSET] = uart[uart_idx].MCR;
+}
 
 void fcs_emif_uart_reset(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    /* TODO: reset external UART */
+    /*
+    Configure the EMIF CE1 (for UART 0) or CE2 (for UART 1), via A1CR and A2CR
+    respectively.
+
+    A0CR/A1CR/A2CR/A3CR: Async n Config Register
+
+    Bit   Field          Value         Description
+    31    SS             0             Select strobe (SS) mode.
+                                       0 = select strobe mode disabled
+                                       1 = select strobe mode enabled
+    30    EW             0             Extended wait (EW) mode.
+                                       0 = extended wait disabled
+                                       1 = extended wait enabled (via WAIT)
+    29:26 W_SETUP        Fh            Write strobe setup cycles. The write
+                                       strobe setup time will be 1 + this
+                                       number (from /CE assert to /WE assert).
+    25:20 W_STROBE       3Fh           Write strobe duration cycles. /WE will
+                                       be active for 1 + this number of cycles
+                                       (must not be zero when EW = 1).
+    19:17 W_HOLD         7             Write strobe hold cycles. /CE etc will
+                                       be held for 1 + this number of cycles
+                                       after /WE has been deasserted.
+    16:13 R_SETUP        Fh            Read strobe setup cycles. The read
+                                       strobe setup time will be 1 + this
+                                       number (from /CE asert to /OE assert).
+    12:7  R_STROBE       3Fh           Read strobe duration cycles. /OE will
+                                       be active for 1 + this number of cycles
+                                       (must not be 0 when EW = 1).
+    6:4   R_HOLD         7             Read strobe hold cycles. /CE etc will
+                                       be held for 1 + this number of cycles
+                                       after /OE has been deasserted.
+    3:2   TA             3             Turnaround cycles. The number of cycles
+                                       between the end of one access and the
+                                       start of the next will be 1 + this
+                                       value, provided the two accesses are
+                                       of different types (e.g. write -> read,
+                                       or read -> write).
+    1:0   ASIZE                        Width of data bus.
+                                       0 = 8-bit
+                                       1 = 16-bit
+
+    (Note that all cycle counts above are based on the EMIF16 clock rate,
+    which is 1/6th the CPU clock rate.)
+
+    We're using ASIZE=0 (8-bit), TA=0, R_HOLD=11, R_STROBE=7, R_SETUP=0,
+    write setup/strobe/hold the same.
+    */
+    emif16->A1CR = (0x7u << 4) + (0xAu << 7) + (0x7u << 17) + (0xAu << 20);
+
+    /*
+    PMCR is the Page Mode Control Register. We're not using NOR flash, so set
+    it all to 0
+    */
+    emif16->PMCR = 0;
+
+    /* TODO: reset RX/TX DMA channels for external UART? */
 
     /* EDMA3 reset */
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
@@ -228,25 +414,206 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
 
     where prescaler = 1 or 4, and oversampling_rate = 4, 8 or 16.
 
-    In this application we need fairly low rates of 57600 for the Piksi and
-    230400 for the CPU, so we'll use prescaler = 4 and oversampling_rate = 16.
+    In this application we only need fairly low rates of 57600 for the Piksi
+    and 230400 for the CPU, so we'll use oversampling_rate = 16.
     */
     assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
-    float divisor = (14745600.0f / 4.0f) / (float)(uart_baud[uart_idx] * 16);
+    float divisor = 14745600.0f / (float)(uart_baud[uart_idx] * 16);
     uint16_t divisor_floor = (uint16_t)divisor, dld;
     dld = (uint16_t)((divisor - (float)divisor_floor) * 16.0 + 0.5);
     assert(dld < 0x10u);
 
-    /*
-    Set the divisor latch values, as well as bit 7 of LCR to enable them.
-    */
-    uart[uart_idx].LCR != 0x80u;
-    uart[uart_idx].DLM_IER = (divisor_floor >> 8) & 0xFFu;
+    /* Configure the divisor latch values */
+    uart[uart_idx].DLM = (divisor_floor >> 8) & 0xFFu;
     uart[uart_idx].DLL = divisor_floor & 0xFFu;
-    uart[uart_idx].DLD_FCR = dld & 0x0Fu;
+    uart[uart_idx].DLD = dld & 0x0Fu;
 
-    /* TODO: trigger a DMA of these three bytes to c
+    /*
+    See comments for `struct emif16_xr16m752_uart_config_t` above for register
+    details. Here, we want to configure the following:
+    - RX interrupt on data
+    - Loopback if debugging
+    - 8 bits, no parity, 1 stop bit
+    */
+    uart[uart_idx].IER = 0x01u; /* RX interrupt only */
+    uart[uart_idx].MCR = 0x18u; /* 0x18 for loopback + INT_OE */
+    uart[uart_idx].LCR = 0x03u; /* 8 bit, 1 stop bit, no parity */
+
+    /* Send configuration to the UART */
+    _fcs_emif_uart_write_config(uart_idx);
+
+    /*
+    Enable interrupts on the GPIO bank -- set lowest bit (only one in that
+    register)
+    */
+    gpio->BINTEN = 1u;
+
+    /*
+    Each GPIO bank has DIR, OUT_DATA, SET_DATA, CLR_DATA, IN_DATA,
+    SET_RIS_TRIG, CLR_RIS_TRIG, SET_FAL_TRIG and CLR_FAL_TRIG. Those registers
+    are 32 bits wide, one bit per pin (31-0 maps to GPIO31-GPIO0). DATA is 0
+    low, 1 high; DIR is 0 for output, and 1 for input. The RIS_TRIG and
+    FAL_TRIG register pairs determine whether the GPIO interrupts are
+    triggered on the rising edge or falling edge, or both (write 1 to
+    SET_*_TRIG to enable triggering, write 1 to CLR_*_TRIG to disable it).
+
+    Don't bother working out exactly which bit to set based on uart_idx, it's
+    as quick to set both.
+
+    We want to trigger on the negative-going edge, since the UART interrupts
+    are active low.
+    */
+    gpio->BANK_REGISTERS[0]->DIR |= 0x3u;
+    gpio->BANK_REGISTERS[0]->SET_FAL_TRIG |= 0x3u;
+
+    /*
+    For 64-bit timers in continuous mode, we need TCR ENAMODE = 0x2u and
+    TGCR TIMHIRS = TGCR TIMLORS = 1 (see SPRUGV5A table 3-2).
+
+    Since we're using the internal clock without gating, we need TCR CLKSRC =
+    TCR TIEN_LO = 0.
+
+    We want to ignore emulation events, so set FREE = 1 in EMUMGT_CLKSPD
+    (SOFT is a don't-care).
+
+    The timer needs to be stopped before writing to PRDLO, PRDHI, TGCR (except
+    TIMLORS and TIMHIRS) and TCR (except ENAMODE). We can stop by setting
+    TCR ENAMODE = 0.
+
+    The initialization process is as follows:
+    - Write 0 to CNTHI:CNTLO and RELHI:RELLO; write desired period to
+      PRDHI:PRDLO
+    - Write 0 to TDDRHI and PSCHI to disable prescaler
+    - Set control bits in TCR/TGCR
+    - Set ENAMODE to 2u
+
+    TCR: Timer Control Register (SPRUGV5A section 5.5)
+
+    Bit   Field          Value         Description
+    31:27 Reserved
+    26    READRSTMODE_HI               Read reset mode enable. Only in 32-bit
+                                       unchained (not used).
+    25:24 Reserved
+    23:22 ENAMODE_HI                   Timer mode for TIMHI.
+                                       0 = disabled
+                                       1 = one-time mode (stop after period is
+                                           reached)
+                                       2 = continuous mode (reset counter once
+                                           period is reached)
+                                       3 = continuous mode with period reload
+                                           (reset counter to 0 but reload the
+                                           period from RELHI:RELLO)
+    21:20 PWID_HI                      Pulse width for TIMHI output.
+                                       0 = 1 clock cycle
+                                       1 = 2 cycles
+                                       2 = 3 cycles
+                                       3 = 4 cycles
+    19    CP_HI                        Clock/pulse mode bit for TIMHI.
+                                       0 = pulse mode
+                                       1 = clock mode (50% duty cycle)
+    17    INVOUTP_HI                   Timer output inverter control.
+                                       0 = output not inverted
+                                       1 = output inverted
+    16    TSTAT_HI                     Timer status bit (matches timer output,
+                                       read-only)
+                                       0 = output is currently low
+                                       1 = output is currently high
+    15:14 Reserved
+    13:12 CAPTEVTMODE_LO               Capture event mode.
+                                       0 = event occurs on rising edge of
+                                           timer input
+                                       1 = event occurs on falling edge of
+                                           timer input
+                                       2 = event occurs on both rising and
+                                           falling edges
+    11    CAPMODE_LO                   Capture mode enable. Only available
+                                       in 32-bit unchained (unused).
+    10    READRSTMODE_LO               See READRSTMODE_HI.
+    9     TIEN_LO                      Timer input enable mode.
+                                       0 = clock not gated by timer input
+                                       1 = clock gated by timer input
+    8     CLKSRC_LO                    Clock source.
+                                       0 = internal clock
+                                       1 = clock source is timer input signal
+    7:6   ENAMODE_LO                   See ENAMODE_HI.
+    5:4   PWID_LO                      See PWID_HI.
+    3     CP_LO                        See CP_HI.
+    2     INVINP_LO                    Timer input inverter control.
+                                       0 = input not inverted
+                                       1 = input inverted
+    1     INVOUTP_LO                   See INVOUTP_HI.
+    0     TSTAT_LO                     See TSTAT_HI.
+
+    Initially we need to configure this such that the timers are disabled
+    (ENAMODE = 0). As it happens, all other values in this register need to
+    be 0 in our configuration, so just set the whole thing to 0.
+    */
+    timer[uart_idx]->TCR = 0;
+
+    /*
+    TCGR: Timer Global Control Register (SPRUGV5A section 3-1)
+
+    Bit   Field          Value         Description
+    31:16 Reserved
+    15:12 TDDRHI                       Timer divide-down ratio. Prescale
+                                       counter for dual 32-bit timers in
+                                       unchained mode (unused).
+    11:8  PSCHI                        Prescale period bits for TIMHI in
+                                       dual 32-bit unchained mode.
+    7:5   Reserved
+    4     PLUSEN                       Enable Timer Plus features.
+                                       0 = disabled
+                                       1 = enabled
+    3:2   TIMMODE                      Configure the timer mode.
+                                       0 = 64-bit general-purpose
+                                       1 = 2x 32-bit unchained timers
+                                       2 = 64-bit watchdog timer
+                                       3 = 2x 32-bit chained timers
+    1     TIMHRS                       Timer reset for TIMHI.
+                                       0 = TIMHI is in reset
+                                       1 = TIMHI operating normally
+    0     TIMLORS                      Timer reset for TIMLO.
+                                       0 = TIMLO is in reset
+                                       1 = TIMLO operating normally
+
+    Initially we'll hold both of these in reset by setting the register to 0.
+    */
+    timer[uart_idx]->TCGR = 0;
+
+
+    /* Now clear the count and reload registers */
+    timer[uart_idx]->CNTHI = 0;
+    timer[uart_idx]->CNTLO = 0;
+    timer[uart_idx]->RELHI = 0;
+    timer[uart_idx]->RELLO = 0;
+
+    /*
+    Set the desired period. The timer peripheral runs at 1/6th CPU frequency,
+    or 166.67MHz; the period is (input freq / baud rate) * 16
+    */
+    float divisor = (166666666.67f / (float)uart_baud[uart_idx]) * 16.0;
+    uint32_t period = divisor;
+
+    /* This more than covers the range from 2400-3Mbaud */
+    assert(8000u <= period && period <= 2000000u);
+
+    timer[uart_idx]->PRDHI = 0;
+    timer[uart_idx]->PRDLO = period;
+
+    /*
+    Take timer out of reset and set the mode enables (both the only bits we
+    need to set in those registers).
+
+    ENAMODE needs to be 2u (in bits 23:22 and 7:6, although 23:22 is actually
+    ignored since we're running in 64-bit mode).
+
+    TIMHRS and TIMLORS need to be 1 to take the timer out of reset.
+    */
+    timer[uart_idx]->TCR = 0x00800080u;
+    timer[uart_idx]->TCGR = 0x2u;
+
+    /* The timer should now be running, and triggering events */
 }
 
 void fcs_emif_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
@@ -267,25 +634,11 @@ uint16_t buf_size) {
     rx_last_buf_size[uart_idx] = buf_size;
 
     /*
-    TODO:
-    - disable external UART RX (if possible)
-    - update mapping for GPINT0/GPINT1 so we don't get UART RX interrupts
-    - configure external UART RX with appropriate settings for its interrupt
-      pin
-    */
-
-    /*
     See implementation of fcs_int_uart_start_rx_edma (in int-uart.c) for a
     detailed description of the EDMA3 stuff.
     */
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = 0xFFFFFFFFu;
-    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
 
     /*
     Configure the DMA queue number -- we use 1 to separate this out from the
@@ -325,15 +678,15 @@ uint16_t buf_size) {
     reload.CCNT = 1u;
     #undef reload
 
-    /* Enable DMA */
+    /* Reset DMA and enable the transfer on the next interrupt */
+    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = 0xFFFFFFFFu;
+    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
     edma3->TPCC_EESR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
-
-    /*
-    TODO:
-    - enable external UART RX (if possible)
-    - update mapping for GPINT0/GPINT1 so we get UART RX interrupts
-    */
 }
 
 void fcs_emif_uart_start_tx_edma(uint8_t uart_idx, uint8_t *restrict buf,
@@ -346,20 +699,10 @@ uint16_t buf_size) {
     */
     tx_last_buf_size[uart_idx] = buf_size;
 
-    /*
-    TODO:
-    - disable TIMER4/TIMER5
-    - reset external UART TX buffers
-    */
-
+    /* Disable DMA events for this channel */
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = 0xFFFFFFFFu;
-    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
+
 
     /* Set up DMA channel -> queue mapping: Q1 like above */
     uint8_t dma_register_idx = tx_edma_event[uart_idx] >> 3;
@@ -384,14 +727,15 @@ uint16_t buf_size) {
     primary.CCNT = 1u;
     #undef primary
 
-    /* Enable the transfer */
+    /* Reset DMA and enable the transfer */
+    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = 0xFFFFFFFFu;
+    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
     edma3->TPCC_EESR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
-
-    /*
-    TODO:
-    - configure TIMER4/TIMER5 based on current baud rate, to trigger TX events
-    */
 }
 
 uint16_t fcs_emif_uart_get_rx_edma_count(uint8_t uart_idx) {

@@ -422,17 +422,9 @@ uint16_t buf_size) {
     /*
     Disable the channel by setting the clear bit in the appropriate register.
     For channels 0-31, this is EECR; for channels 32+, it's EECRH.
-
-    Also clear out the other event status registers.
     */
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = 0xFFFFFFFFu;
-    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
 
     /*
     8 channels per register; determine the DMAQNUM register index based
@@ -628,9 +620,18 @@ uint16_t buf_size) {
     #undef reload
 
     /*
+    First, reset DMA event status for this channel, and clear all missed
+    events.
+
     Enable the channel by setting the enable bit in the appropriate register.
     For channels 0-31, this is EESR; for channels 32+, it's EESRH.
     */
+    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
+                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
+                               rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = 0xFFFFFFFFu;
+    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
     edma3->TPCC_EESR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
 
@@ -660,18 +661,9 @@ uint16_t buf_size) {
     /* Put the UART TX into reset -- clear UTRST in PWREMU_MGMT (bit 14) */
     uart[uart_idx]->PWREMU_MGMT &= 0xFFFFBFFF;
 
-    /*
-    A couple more things to clear than the RX case above because we want to
-    ignore any events missed because the TX buffer was empty
-    */
+    /* Disable the DMA event for this channel */
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = 0xFFFFFFFFu;
-    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
 
     /* Set up DMA channel -> queue mapping */
     uint8_t dma_register_idx = tx_edma_event[uart_idx] >> 3;
@@ -696,7 +688,13 @@ uint16_t buf_size) {
     primary.CCNT = 1u;
     #undef primary
 
-    /* Enable the transfer... */
+    /* Reset DMA event status for the channel and enable the transfer */
+    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
+                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
+                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EMCR = 0xFFFFFFFFu;
+    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
     edma3->TPCC_EESR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
 

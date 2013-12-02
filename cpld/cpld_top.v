@@ -237,6 +237,8 @@ always @(*) begin
 	end
 end
 
+/* TODO: map dsp_gpio[1:0] to DSP_EXT_UART0_INT, DSP_EXT_UART1_INT */
+
 /*
 CPU sequencer -- handle power on/off for the CPU board
 */
