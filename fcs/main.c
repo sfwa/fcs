@@ -41,11 +41,6 @@ uint32_t fcs_main_init_core1(void);
 void fcs_main_init_common(void);
 
 uint32_t fcs_main_init_core0(void) {
-    /*
-    TODO: we're done with the NOR flash, so set the CPLD GPIO to return the
-    SPI bus to the CPU
-    */
-
     return (FCS_CLOCK_HZ / FCS_CORE0_TICK_HZ);
 }
 

@@ -374,8 +374,6 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     */
     emif16->PMCR = 0;
 
-    /* TODO: reset RX/TX DMA channels for external UART? */
-
     /* EDMA3 reset */
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
