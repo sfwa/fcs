@@ -265,16 +265,6 @@ struct emif16_xr16m752_uart_config_t {
     /* There are a bunch of other registers but we don't use them */
 };
 
-/*
-Because of the way the EMIF address lines are wired, we need to convert the
-XR16M752 register offsets to logical addresses.
-
-Logical A22 is wired to UART A0; logical A23 is wired to UART A1, and logical
-A0 is wired to UART A2.
-*/
-
-#define EMIF16_TO_UART_ADDR(x) ((x & 0x1) << 22 + (x & 0x2) << 23 + (x & 0x4))
-
 #define XR16M752_RHR 0x0u
 #define XR16M752_THR 0x0u
 #define XR16M752_DLL 0x0u
@@ -293,7 +283,15 @@ A0 is wired to UART A2.
 #define XR16M752_FIFO_RDY 0x7u
 #define XR16M752_EFR 0x2u
 
-/* Logical addresses for EMIF16 CE1 and CE2 data space */
+/*
+Logical addresses for EMIF16 CE1 and CE2 data space.
+
+In TI's EMIF16 addressing convention, A0 is always 32-bit aligned, and A23:22
+are byte selects in the case of an 8-bit interface. Since EMIF A22 is wired to
+UART A0, EMIF A23 is wired to UART A1, and EMIF A0 is wired to UART A2, we can
+just access the UARTs as regular bytes and the EMIF will operate
+transparently.
+*/
 #define EMIF16_UART0_BASE_ADDR 0x74000000
 #define EMIF16_UART1_BASE_ADDR 0x78000000
 
@@ -325,14 +323,14 @@ static void _fcs_emif_uart_write_config(uint8_t uart_idx) {
 
     volatile uint8_t *restrict uart_mem = uart_regs[uart_idx];
 
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_LCR)] = 0x80u;
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_DLL)] = uart[uart_idx].DLL;
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_DLM)] = uart[uart_idx].DLM;
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_DLD)] = uart[uart_idx].DLD;
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_LCR)] = uart[uart_idx].LCR & 0x7Fu;
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_IER)] = uart[uart_idx].IER;
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_FCR)] = uart[uart_idx].FCR;
-    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_MCR)] = uart[uart_idx].MCR;
+    uart_mem[XR16M752_LCR] = 0x80u;
+    uart_mem[XR16M752_DLL] = uart[uart_idx].DLL;
+    uart_mem[XR16M752_DLM] = uart[uart_idx].DLM;
+    uart_mem[XR16M752_DLD] = uart[uart_idx].DLD;
+    uart_mem[XR16M752_LCR] = uart[uart_idx].LCR & 0x7Fu;
+    uart_mem[XR16M752_IER] = uart[uart_idx].IER;
+    uart_mem[XR16M752_FCR] = uart[uart_idx].FCR;
+    uart_mem[XR16M752_MCR] = uart[uart_idx].MCR;
 }
 
 void fcs_emif_uart_reset(uint8_t uart_idx) {

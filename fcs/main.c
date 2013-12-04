@@ -24,9 +24,8 @@ SOFTWARE.
 #include <assert.h>
 #include <stdlib.h>
 
-#include <c6x.h>
-#include <ti/csl/csl.h>
-#include <ti/csl/csl_chip.h>
+#include "c66x-csl/ti/csl/csl.h"
+#include "c66x-csl/ti/csl/csl_chip.h"
 
 #include "config/config.h"
 #include "ahrs/ahrs.h"
@@ -41,6 +40,12 @@ uint32_t fcs_main_init_core1(void);
 void fcs_main_init_common(void);
 
 uint32_t fcs_main_init_core0(void) {
+    /*
+    EMIF16 fix recommended here:
+    http://e2e.ti.com/support/dsp/c6000_multi-core_dsps/f/639/t/248412.aspx
+    */
+    *(uint32_t*)0x20C00008 |= 0x80000000;
+
     return (FCS_CLOCK_HZ / FCS_CORE0_TICK_HZ);
 }
 
