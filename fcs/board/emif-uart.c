@@ -32,6 +32,7 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/cslr_tmr.h"
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
 
+#include "board.h"
 #include "emif-uart.h"
 
 /*
@@ -264,25 +265,43 @@ struct emif16_xr16m752_uart_config_t {
     /* There are a bunch of other registers but we don't use them */
 };
 
-#define XR16M752_RHR_OFFSET 0x0u
-#define XR16M752_THR_OFFSET 0x0u
-#define XR16M752_DLL_OFFSET 0x0u
-#define XR16M752_DLM_OFFSET 0x1u
-#define XR16M752_DLD_OFFSET 0x2u
-#define XR16M752_IER_OFFSET 0x1u
-#define XR16M752_ISR_OFFSET 0x2u
-#define XR16M752_FCR_OFFSET 0x2u
-#define XR16M752_LCR_OFFSET 0x3u
-#define XR16M752_MCR_OFFSET 0x4u
-#define XR16M752_LSR_OFFSET 0x5u
-#define XR16M752_MSR_OFFSET 0x6u
-#define XR16M752_SPR_OFFSET 0x7u
-#define XR16M752_TCR_OFFSET 0x6u
-#define XR16M752_TLR_OFFSET 0x7u
-#define XR16M752_FIFO_RDY_OFFSET 0x7u
-#define XR16M752_EFR_OFFSET 0x2u
+/*
+Because of the way the EMIF address lines are wired, we need to convert the
+XR16M752 register offsets to logical addresses.
 
-static struct emif16_xr16m752_uart_t uart[2];
+Logical A22 is wired to UART A0; logical A23 is wired to UART A1, and logical
+A0 is wired to UART A2.
+*/
+
+#define EMIF16_TO_UART_ADDR(x) ((x & 0x1) << 22 + (x & 0x2) << 23 + (x & 0x4))
+
+#define XR16M752_RHR 0x0u
+#define XR16M752_THR 0x0u
+#define XR16M752_DLL 0x0u
+#define XR16M752_DLM 0x1u
+#define XR16M752_DLD 0x2u
+#define XR16M752_IER 0x1u
+#define XR16M752_ISR 0x2u
+#define XR16M752_FCR 0x2u
+#define XR16M752_LCR 0x3u
+#define XR16M752_MCR 0x4u
+#define XR16M752_LSR 0x5u
+#define XR16M752_MSR 0x6u
+#define XR16M752_SPR 0x7u
+#define XR16M752_TCR 0x6u
+#define XR16M752_TLR 0x7u
+#define XR16M752_FIFO_RDY 0x7u
+#define XR16M752_EFR 0x2u
+
+/* Logical addresses for EMIF16 CE1 and CE2 data space */
+#define EMIF16_UART0_BASE_ADDR 0x74000000
+#define EMIF16_UART1_BASE_ADDR 0x78000000
+
+static struct emif16_xr16m752_uart_config_t uart[2];
+static volatile uint8_t *uart_regs[2] = {
+    (uint8_t*)EMIF16_UART0_BASE_ADDR,
+    (uint8_t*)EMIF16_UART1_BASE_ADDR
+};
 
 static void _fcs_emif_uart_write_config(uint8_t uart_idx);
 
@@ -304,16 +323,16 @@ static void _fcs_emif_uart_write_config(uint8_t uart_idx) {
     tick, but once or twice is probably fine.
     */
 
-    static volatile uint8_t *uart_regs[2] = { 0x0, 0x0 };
+    volatile uint8_t *restrict uart_mem = uart_regs[uart_idx];
 
-    uart_regs[uart_idx][XR16M752_LCR_OFFSET] = 0x80u;
-    uart_regs[uart_idx][XR16M752_DLL_OFFSET] = uart[uart_idx].DLL;
-    uart_regs[uart_idx][XR16M752_DLM_OFFSET] = uart[uart_idx].DLM;
-    uart_regs[uart_idx][XR16M752_DLD_OFFSET] = uart[uart_idx].DLD;
-    uart_regs[uart_idx][XR16M752_LCR_OFFSET] = uart[uart_idx].LCR & 0x7Fu;
-    uart_regs[uart_idx][XR16M752_IER_OFFSET] = uart[uart_idx].IER;
-    uart_regs[uart_idx][XR16M752_FCR_OFFSET] = uart[uart_idx].FCR;
-    uart_regs[uart_idx][XR16M752_MCR_OFFSET] = uart[uart_idx].MCR;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_LCR)] = 0x80u;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_DLL)] = uart[uart_idx].DLL;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_DLM)] = uart[uart_idx].DLM;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_DLD)] = uart[uart_idx].DLD;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_LCR)] = uart[uart_idx].LCR & 0x7Fu;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_IER)] = uart[uart_idx].IER;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_FCR)] = uart[uart_idx].FCR;
+    uart_mem[EMIF16_TO_UART_ADDR(XR16M752_MCR)] = uart[uart_idx].MCR;
 }
 
 void fcs_emif_uart_reset(uint8_t uart_idx) {
@@ -462,8 +481,8 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     We want to trigger on the negative-going edge, since the UART interrupts
     are active low.
     */
-    gpio->BANK_REGISTERS[0]->DIR |= 0x3u;
-    gpio->BANK_REGISTERS[0]->SET_FAL_TRIG |= 0x3u;
+    gpio->BANK_REGISTERS[0].DIR |= 0x3u;
+    gpio->BANK_REGISTERS[0].SET_FAL_TRIG |= 0x3u;
 
     /*
     For 64-bit timers in continuous mode, we need TCR ENAMODE = 0x2u and
@@ -550,7 +569,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     timer[uart_idx]->TCR = 0;
 
     /*
-    TCGR: Timer Global Control Register (SPRUGV5A section 3-1)
+    TGCR: Timer Global Control Register (SPRUGV5A section 3-1)
 
     Bit   Field          Value         Description
     31:16 Reserved
@@ -577,27 +596,24 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
 
     Initially we'll hold both of these in reset by setting the register to 0.
     */
-    timer[uart_idx]->TCGR = 0;
+    timer[uart_idx]->TGCR = 0;
 
 
-    /* Now clear the count and reload registers */
+    /* Now clear the count registers */
     timer[uart_idx]->CNTHI = 0;
     timer[uart_idx]->CNTLO = 0;
-    timer[uart_idx]->RELHI = 0;
-    timer[uart_idx]->RELLO = 0;
 
     /*
     Set the desired period. The timer peripheral runs at 1/6th CPU frequency,
     or 166.67MHz; the period is (input freq / baud rate) * 16
     */
-    float divisor = (166666666.67f / (float)uart_baud[uart_idx]) * 16.0;
-    uint32_t period = divisor;
+    divisor = (166666666.67f / (float)uart_baud[uart_idx]) * 16.0;
 
     /* This more than covers the range from 2400-3Mbaud */
-    assert(8000u <= period && period <= 2000000u);
+    assert(8000.0f <= divisor && divisor <= 2000000.0f);
 
     timer[uart_idx]->PRDHI = 0;
-    timer[uart_idx]->PRDLO = period;
+    timer[uart_idx]->PRDLO = (uint32_t)divisor;
 
     /*
     Take timer out of reset and set the mode enables (both the only bits we
@@ -609,7 +625,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     TIMHRS and TIMLORS need to be 1 to take the timer out of reset.
     */
     timer[uart_idx]->TCR = 0x00800080u;
-    timer[uart_idx]->TCGR = 0x2u;
+    timer[uart_idx]->TGCR = 0x2u;
 
     /* The timer should now be running, and triggering events */
 }
@@ -654,7 +670,7 @@ uint16_t buf_size) {
 
     #define primary (edma3->PARAMSET[rx_edma_event[uart_idx]])
     primary.OPT = 0;
-    primary.SRC = (uint32_t)&(uart[uart_idx]->RBR); /* FIXME: use EMIF16 address */
+    primary.SRC = (uint32_t)uart_regs[uart_idx];
     primary.A_B_CNT = (buf_size << 16) | 1u;
     /* FIXME: make sure buf is actually a L2 local address */
     primary.DST = GLOBAL_FROM_L2_ADDRESS(buf);
@@ -666,7 +682,7 @@ uint16_t buf_size) {
 
     #define reload (edma3->PARAMSET[100u + rx_edma_event[uart_idx]])
     reload.OPT = 0;
-    reload.SRC = (uint32_t)&(uart[uart_idx]->RBR); /* FIXME: use EMIF16 address */
+    reload.SRC = (uint32_t)uart_regs[uart_idx];
     reload.A_B_CNT = (buf_size << 16) | 1u;
     /* FIXME: make sure buf is actually a L2 local address */
     reload.DST = GLOBAL_FROM_L2_ADDRESS(buf);
@@ -718,7 +734,7 @@ uint16_t buf_size) {
     /* FIXME: make sure buf is actually a L2 local address */
     primary.SRC = GLOBAL_FROM_L2_ADDRESS(buf); /* Read from buf */
     primary.A_B_CNT = (buf_size << 16) | 1u;
-    primary.DST = (uint32_t)&(uart[uart_idx]->THR); /* FIXME: external UART addr */
+    primary.DST = (uint32_t)uart_regs[uart_idx];
     primary.SRC_DST_BIDX = 1u; /* Increment src address, not dest */
     primary.LINK_BCNTRLD = 0xFFFFu; /* NULL PaRAM set for link */
     primary.SRC_DST_CIDX = 0;
