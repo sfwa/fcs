@@ -191,7 +191,7 @@ always @(*) begin
     resetfull_INV = 1'b0;
     vid_oe_INV = 1'b1;
     bootmode_en = 1'b1;
-    bootmode = 16'bz;
+    bootmode = 16'b0;
     dsp_bank_en = 1'b0;
     clkgen_reset = 1'b0;
     clkgen_program = 1'b0;

@@ -215,7 +215,7 @@ c66x_sequencer dsp_seq(
     .vid_oe_INV(dsp_vid_oe_INV),
     .dsp_bank_en(dsp_bank_enable),
     .bootmode_en(dsp_bootmode_enable),
-    .bootmode(/* dsp_bootmode */),
+    .bootmode(dsp_bootmode),
     .state(c66x_state),
     .pll_spi_clk(pll_spi_clk),
     .pll_spi_cs_INV(pll_spi_cs_INV),
@@ -229,15 +229,38 @@ bootmode signals from the C66x sequencer through to the GPIOs.
 If it's not asserted, we can use them however we like.
 */
 always @(*) begin
-	dsp_gpio[15:0] = 16'b0;
+	dsp_gpio[19:0] = 20'b0;
 	if (dsp_bootmode_enable & dsp_bank_enable) begin
-		dsp_gpio = dsp_bootmode;
+		dsp_gpio = { 4'bz, dsp_bootmode };
+	end else if (dsp_bank_enable) begin
+		dsp_gpio = { 18'bz, dsp_ext_uart1_int_INV, dsp_ext_uart0_int_INV };
 	end else begin
-		dsp_gpio = 16'bz;
+		dsp_gpio = 20'bz;
 	end
 end
 
-/* TODO: map dsp_gpio[1:0] to DSP_EXT_UART0_INT, DSP_EXT_UART1_INT */
+/* Handle DSP UART connections */
+always @(*) begin
+	if (dsp_bank_enable) begin
+		dsp_int_uart0_rx = ioboard_uart0_rx;
+		ioboard_uart0_tx = dsp_int_uart0_tx;
+
+		dsp_int_uart1_rx = ioboard_uart1_rx;
+		ioboard_uart1_tx = dsp_int_uart1_tx;
+
+		dsp_ext_uart_rx = ext_uart1_rx;
+		ext_uart1_tx = dsp_ext_uart_tx;
+	end else begin
+		dsp_int_uart0_rx = 1'b0;
+		ioboard_uart0_tx = 1'b0;
+
+		dsp_int_uart1_rx = 1'b0;
+		ioboard_uart1_tx = 1'b0;
+
+		dsp_ext_uart_rx = 1'b0;
+		ext_uart1_tx = 1'b0;
+	end
+end
 
 /*
 CPU sequencer -- handle power on/off for the CPU board
