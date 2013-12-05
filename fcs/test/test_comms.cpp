@@ -227,3 +227,128 @@ TEST(DeserializeState, AllOK) {
 
     EXPECT_EQ(200501234, state.solution_time);
 }
+
+TEST(DeserializeState, InvalidChecksum) {
+    struct fcs_packet_state_t state;
+    uint8_t input[] =
+        "$PSFWAS,200501234,test,-30.0987654,145.0123457,100.50,"
+        "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
+        "45.68,80.12,-175.10,.00,.00,.00,"
+        "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
+        "A,test*03\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
+}
+
+TEST(DeserializeState, InvalidTalker) {
+    struct fcs_packet_state_t state;
+    uint8_t input[] =
+        "$PSFWAs,200501234,test,-30.0987654,145.0123457,100.50,"
+        "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
+        "45.68,80.12,-175.10,.00,.00,.00,"
+        "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
+        "A,test*73\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
+}
+
+TEST(DeserializeState, InvalidFieldData) {
+    struct fcs_packet_state_t state;
+    uint8_t input[] =
+        "$PSFWAS,200501234,test,-3q.0987654,145.0123457,100.50,"
+        "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
+        "45.68,80.12,-175.10,.00,.00,.00,"
+        "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
+        "A,test*73\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
+}
+
+TEST(SerializeWaypoint, AllOK) {
+    struct fcs_packet_waypoint_t waypoint = {
+        .waypoint_id = { 't', 'e', 's', 't'},
+        .waypoint_role = 'q',
+        .target_lat = -30.0987654321,
+        .target_lon = 145.0123456789,
+        .target_alt = 100.5,
+        .target_attitude = { 45.6789, 80.1234, -175.0987 },
+        .target_airspeed = 54.321,
+        .flags = { 't', 'e', 's', 't', '1' }
+    };
+    uint8_t result[256];
+    size_t result_len;
+
+    result_len = fcs_comms_serialize_waypoint(result, &waypoint);
+    ASSERT_TRUE(result_len > 0);
+    ASSERT_TRUE(result_len <= 87u);
+
+    result[result_len] = 0;
+
+    EXPECT_STREQ(
+        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,test1*5B\r\n",
+        (char*)result
+    );
+}
+
+TEST(DeserializeWaypoint, AllOK) {
+    struct fcs_packet_waypoint_t waypoint;
+    uint8_t input[] =
+        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,test1*5B\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_waypoint(&waypoint, input,
+                                            sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_OK, status);
+
+    EXPECT_NEAR(-30.0987654, waypoint.target_lat, 1e-9);
+    EXPECT_NEAR(145.0123457, waypoint.target_lon, 1e-9);
+    EXPECT_NEAR(100.50, waypoint.target_alt, 1e-9);
+    EXPECT_NEAR(45.68, waypoint.target_attitude[0], 1e-9);
+    EXPECT_NEAR(80.12, waypoint.target_attitude[1], 1e-9);
+    EXPECT_NEAR(-175.10, waypoint.target_attitude[2], 1e-9);
+    EXPECT_NEAR(54.32, waypoint.target_airspeed, 1e-9);
+}
+
+TEST(DeserializeWaypoint, InvalidChecksum) {
+    struct fcs_packet_waypoint_t waypoint;
+    uint8_t input[] =
+        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,test1*5A\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_waypoint(&waypoint, input,
+                                            sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
+}
+
+TEST(DeserializeWaypoint, InvalidTalker) {
+    struct fcs_packet_waypoint_t waypoint;
+    uint8_t input[] =
+        "$PSFWAS,test,q,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,test1*5B\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_waypoint(&waypoint, input,
+                                            sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
+}
+
+TEST(DeserializeWaypoint, InvalidFieldData) {
+    struct fcs_packet_waypoint_t waypoint;
+    uint8_t input[] =
+        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
+        "45.q8,80.12,-175.10,54.32,test1*5B\r\n";
+    enum fcs_deserialization_result_t status;
+
+    status = fcs_comms_deserialize_waypoint(&waypoint, input,
+                                            sizeof(input) - 1);
+    EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
+}
