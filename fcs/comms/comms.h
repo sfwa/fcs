@@ -62,19 +62,19 @@ State (FCS->CPU): $PSFWAS
 */
 struct fcs_packet_state_t {
     int32_t solution_time;
-    uint8_t next_waypoint_id[4];
+    uint8_t next_waypoint_id[4u];
     double lat, lon, alt;
-    double velocity[3];
-    double wind_velocity[3];
-    double attitude[3];
-    double angular_velocity[3];
+    double velocity[3u];
+    double wind_velocity[3u];
+    double attitude[3u];
+    double angular_velocity[3u];
     double lat_lon_uncertainty, alt_uncertainty;
-    double velocity_uncertainty[3];
-    double wind_velocity_uncertainty[3];
-    double attitude_uncertainty[3];
-    double angular_velocity_uncertainty[3];
+    double velocity_uncertainty[3u];
+    double wind_velocity_uncertainty[3u];
+    double attitude_uncertainty[3u];
+    double angular_velocity_uncertainty[3u];
     uint8_t mode_indicator;
-    uint8_t flags[4];
+    uint8_t flags[4u];
 };
 
 #define FCS_STATE_MAX_LAT_LON_UNCERTAINTY 1000.0
@@ -84,7 +84,7 @@ struct fcs_packet_state_t {
 #define FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY 90.0
 
 /*
-Waypoint information (CPU->FCS, FCS->CPU):
+Waypoint information (CPU->FCS, FCS->CPU): $PSFWAP
 - waypoint ID -- 4 chars
 - waypoint role ("H" for home, "R" for recovery, "M" for mission boundary,
   "C" for course, "I" for image) -- 1 char
@@ -99,16 +99,16 @@ Waypoint information (CPU->FCS, FCS->CPU):
    87 bytes total
 */
 struct fcs_packet_waypoint_t {
-    uint32_t waypoint_id;
+    uint8_t waypoint_id[4u];
     uint8_t waypoint_role;
     double target_lat, target_lon, target_alt;
-    double target_attitude[3];
+    double target_attitude[3u];
     double target_airspeed;
-    uint8_t flags[5];
+    uint8_t flags[5u];
 };
 
 /*
-GCS information (CPU->FCS):
+GCS information (CPU->FCS): $PSFWAG
 - time of solution (ms) -- 9 chars
 - lat (up to 7dp) -- 12 chars
 - lon (up to 7dp) -- 12 chars
@@ -120,22 +120,24 @@ GCS information (CPU->FCS):
    2 bytes checksum + CRLF = 65 bytes total
 */
 struct fcs_packet_gcs_t {
-    uint32_t solution_time;
+    int32_t solution_time;
     double lat, lon, alt;
     double pressure;
 };
 
 /*
-Config information (CPU->FCS, FCS->CPU)
+Config information (CPU->FCS, FCS->CPU): $PSFWAC
 - param name -- 24 chars
-- param value (Base64) -- up to 216 chars (162 bytes)
+- param value (Base64) -- up to 192 chars (128 bytes)
 
-=> up to 240 bytes + 2 separators + 7 bytes prefix + * + 2 bytes checksum +
-   CRLF = 254 bytes total
+=> up to 216 bytes + 3 separators + 7 bytes prefix + * + 2 bytes checksum +
+   CRLF = 231 bytes total
 */
 struct fcs_packet_config_t {
-    uint8_t param_name[24];
-    uint8_t param_value[162];
+    uint8_t param_name_len;
+    uint8_t param_name[24u];
+    uint8_t param_value_len;
+    uint8_t param_value[128u];
 };
 
 void fcs_comms_init(void);

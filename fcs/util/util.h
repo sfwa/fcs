@@ -167,4 +167,11 @@ The len parameter must be 2. */
 enum fcs_conversion_result_t fcs_uint8_from_ascii_hex(uint8_t *result,
 uint8_t *restrict value, size_t len);
 
+/* Base64 encode/decode routines */
+
+ptrdiff_t fcs_base64_from_data(uint8_t *restrict base64, size_t base64len,
+const uint8_t *restrict data, size_t datalen);
+ptrdiff_t fcs_data_from_base64(uint8_t *restrict data, size_t datalen,
+const uint8_t *restrict base64, size_t base64len);
+
 #endif

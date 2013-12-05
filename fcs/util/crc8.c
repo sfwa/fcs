@@ -15,7 +15,7 @@
  */
 
 #include <stdint.h>
-#include <stdlib.h>
+#include <stddef.h>
 #include <stdbool.h>
 #include <assert.h>
 

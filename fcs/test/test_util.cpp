@@ -933,3 +933,327 @@ TEST(UInt8FromASCIIHex, WrongLength) {
         "Assertion.*failed"
     );
 }
+
+TEST(Base64FromData, Valid) {
+    ptrdiff_t result;
+    uint8_t base64[256u],
+            data[] = "ab\x03""cdefghi\rjklm\x00nopqr\tstuvwxyz01\a2"
+                     "34567\x8e""890\xff";
+
+    /* don't include trailing NUL in buffer size */
+    result = fcs_base64_from_data(base64, sizeof(base64), data,
+                                  sizeof(data) - 1);
+    ASSERT_EQ(60u, result);
+    base64[result] = 0;
+    ASSERT_STREQ(
+        "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY3jjg5MP8=",
+        (char*)base64
+    );
+}
+
+TEST(Base64FromData, NoBuffer) {
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_base64_from_data(NULL, 256, y, 3);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_base64_from_data(x, 256, NULL, 3);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_base64_from_data(NULL, 256, NULL, 3);
+        },
+        "Assertion.*failed"
+    );
+}
+
+TEST(Base64FromData, TooShort) {
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_base64_from_data(x, 0, y, 3);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_base64_from_data(x, 256, y, 0);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_base64_from_data(x, 3, y, 3);
+        },
+        "Assertion.*failed"
+    );
+}
+
+TEST(DataFromBase64, Valid) {
+    ptrdiff_t result;
+    uint8_t base64[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY3j"
+                       "jg5MP8=",
+            data[256];
+
+    /* don't include trailing NUL in buffer size */
+    result = fcs_data_from_base64(data, sizeof(data), base64,
+                                  sizeof(base64) - 1);
+    ASSERT_EQ(44u, result);
+    data[result] = 0;
+    ASSERT_STREQ(
+        "ab\x03""cdefghi\rjklm\x00nopqr\tstuvwxyz01\a234567\x8e""890\xff",
+        (char*)data
+    );
+}
+
+TEST(DataFromBase64, NoBuffer) {
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_data_from_base64(NULL, 256, y, 3);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_data_from_base64(x, 256, NULL, 3);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_data_from_base64(NULL, 256, NULL, 3);
+        },
+        "Assertion.*failed"
+    );
+}
+
+TEST(DataFromBase64, TooShort) {
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_data_from_base64(x, 0, y, 3);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_data_from_base64(x, 256, y, 0);
+        },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        {
+            uint8_t x[256]; uint8_t y[9];
+            fcs_data_from_base64(x, 3, y, 5);
+        },
+        "Assertion.*failed"
+    );
+}
+
+TEST(DataFromBase64, InvalidTooMuchPadding) {
+    ptrdiff_t result;
+    uint8_t base64_1[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8==",
+            base64_2[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8===",
+            base64_3[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8====",
+            data[256];
+
+    /* don't include trailing NUL in buffer size */
+    result = fcs_data_from_base64(data, sizeof(data), base64_1,
+                                  sizeof(base64_1) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_2,
+                                  sizeof(base64_2) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_3,
+                                  sizeof(base64_3) - 1);
+    EXPECT_EQ(0, result);
+}
+
+TEST(DataFromBase64, InvalidTooLittlePadding) {
+    ptrdiff_t result;
+    uint8_t base64[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                       "3jjg5MP8",
+            data[256];
+
+    /* don't include trailing NUL in buffer size */
+    result = fcs_data_from_base64(data, sizeof(data), base64,
+                                  sizeof(base64) - 1);
+    EXPECT_EQ(0, result);
+}
+
+TEST(DataFromBase64, InvalidChars) {
+    ptrdiff_t result;
+    uint8_t base64_1[] = "YWIDY2RlZmd.aQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_2[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCX-0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_3[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDE$MjM0NTY"
+                         "3jjg5MP8=",
+            base64_4[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8.",
+            base64_5[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ@eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_6[] = "~WIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            data[256];
+
+    /* don't include trailing NUL in buffer size */
+    result = fcs_data_from_base64(data, sizeof(data), base64_1,
+                                  sizeof(base64_1) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_2,
+                                  sizeof(base64_2) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_3,
+                                  sizeof(base64_3) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_4,
+                                  sizeof(base64_4) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_5,
+                                  sizeof(base64_5) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_6,
+                                  sizeof(base64_6) - 1);
+    EXPECT_EQ(0, result);
+}
+
+TEST(DataFromBase64, InvalidWhitespace) {
+    ptrdiff_t result;
+    uint8_t base64_1[] = " WIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_2[] = "Y IDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_3[] = "YW DY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_4[] = "YWI Y2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_5[] = "YWID 2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8=",
+            base64_6[] = "YWIDY2RlZmdoaQ1qa2xtAG5vcHFyCXN0dXZ3eHl6MDEHMjM0NTY"
+                         "3jjg5MP8 ",
+            data[256];
+
+    /* don't include trailing NUL in buffer size */
+    result = fcs_data_from_base64(data, sizeof(data), base64_1,
+                                  sizeof(base64_1) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_2,
+                                  sizeof(base64_2) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_3,
+                                  sizeof(base64_3) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_4,
+                                  sizeof(base64_4) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_5,
+                                  sizeof(base64_5) - 1);
+    EXPECT_EQ(0, result);
+
+    result = fcs_data_from_base64(data, sizeof(data), base64_6,
+                                  sizeof(base64_6) - 1);
+    EXPECT_EQ(0, result);
+}
+
+TEST(Base64Roundtrip, Exhaustive1Byte) {
+    ptrdiff_t result;
+    uint8_t base64[256u], data[256u];
+
+    uint32_t i = 0;
+    for (i = 0; i <= 0xFFu; i++) {
+        data[0] = i & 0xFFu;
+
+        result = fcs_base64_from_data(base64, sizeof(base64), data, 1u);
+        ASSERT_EQ(4, result);
+
+        data[0] = 0;
+
+        result = fcs_data_from_base64(data, sizeof(data), base64, result);
+        ASSERT_EQ(1, result);
+
+        ASSERT_EQ(i & 0xFFu, data[0]);
+    }
+}
+
+TEST(Base64Roundtrip, Exhaustive2Bytes) {
+    ptrdiff_t result;
+    uint8_t base64[256u], data[256u];
+
+    uint32_t i = 0;
+    for (i = 0; i <= 0xFFFFu; i++) {
+        data[0] = i & 0xFFu;
+        data[1u] = (i & 0xFF00u) >> 8u;
+
+        result = fcs_base64_from_data(base64, sizeof(base64), data, 2u);
+        ASSERT_EQ(4u, result);
+
+        data[0] = data[1u] = 0;
+
+        result = fcs_data_from_base64(data, sizeof(data), base64, result);
+        ASSERT_EQ(2u, result);
+
+        ASSERT_EQ(i & 0xFFu, data[0]);
+        ASSERT_EQ((i & 0xFF00u) >> 8u, data[1u]);
+    }
+}
+
+TEST(Base64Roundtrip, Exhaustive3Bytes) {
+    ptrdiff_t result;
+    uint8_t base64[256u], data[256u];
+
+    uint32_t i = 0;
+    for (i = 0; i <= 0xFFFFFFu; i++) {
+        data[0] = i & 0xFFu;
+        data[1u] = (i & 0xFF00u) >> 8u;
+        data[2u] = (i & 0xFF0000u) >> 16u;
+
+        result = fcs_base64_from_data(base64, sizeof(base64), data, 3u);
+        ASSERT_EQ(4u, result);
+
+        data[0] = data[1u] = data[2u] = 0;
+
+        result = fcs_data_from_base64(data, sizeof(data), base64, result);
+        ASSERT_EQ(3u, result);
+
+        ASSERT_EQ(i & 0xFFu, data[0]);
+        ASSERT_EQ((i & 0xFF00u) >> 8u, data[1u]);
+        ASSERT_EQ((i & 0xFF0000u) >> 16u, data[2u]);
+    }
+}

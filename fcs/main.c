@@ -22,7 +22,7 @@ SOFTWARE.
 
 #include <stdint.h>
 #include <assert.h>
-#include <stdlib.h>
+#include <stddef.h>
 
 #include "c66x-csl/ti/csl/csl.h"
 #include "c66x-csl/ti/csl/csl_chip.h"
