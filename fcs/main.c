@@ -24,8 +24,7 @@ SOFTWARE.
 #include <assert.h>
 #include <stddef.h>
 
-#include "c66x-csl/ti/csl/csl.h"
-#include "c66x-csl/ti/csl/csl_chip.h"
+#include <c6x.h>
 
 #include "config/config.h"
 #include "ahrs/ahrs.h"
@@ -61,7 +60,7 @@ void fcs_main_init_common(void) {
 int main(void) {
     fcs_main_init_common();
 
-    uint32_t core = CSL_chipReadReg(CSL_CHIP_DNUM);
+    uint32_t core = DNUM & 0xFFu;
     uint32_t cycles_per_tick = 0;
 
     if (core == 0u) {

@@ -183,13 +183,6 @@ static inline uint8_t _fcs_base64_decode_value(uint8_t value_in) {
     }
 }
 
-static inline void _fcs_base64_decode_init(base64_decodestate* S) {
-    assert(S);
-
-    S->step = step_a;
-    S->plainchar = 0;
-}
-
 static ptrdiff_t _fcs_base64_decode_block(const uint8_t *restrict code_in,
 const size_t length_in, uint8_t *plaintext_out) {
     assert(plaintext_out);

@@ -25,6 +25,6 @@ SOFTWARE.
 
 /* Convert an address in an individual core's L2 SRAM to global */
 #define GLOBAL_FROM_L2_ADDRESS(n) ((1u << 28) | \
-    (CSL_chipReadReg(CSL_CHIP_DNUM) << 24) | ((uint32_t)(n) & 0x00FFFFFFu))
+    (DNUM << 24) | ((uint32_t)(n) & 0x00FFFFFFu))
 
 #endif

@@ -23,8 +23,8 @@ SOFTWARE.
 #include <stdint.h>
 #include <assert.h>
 
-#include "../c66x-csl/ti/csl/csl.h"
-#include "../c66x-csl/ti/csl/csl_chip.h"
+#include <c6x.h>
+
 #include "../c66x-csl/ti/csl/cslr.h"
 #include "../c66x-csl/ti/csl/cslr_device.h"
 #include "../c66x-csl/ti/csl/cslr_uart.h"
