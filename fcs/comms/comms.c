@@ -23,7 +23,6 @@ SOFTWARE.
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
@@ -287,23 +286,32 @@ size_t len) {
         goto invalid;
     }
 
-    /* Loop over the buffer and update the checksum. Every time a comma is
-    encountered, process the field corresponding to the preceding values */
+    /*
+    Loop over the buffer and update the checksum. Every time a comma is
+    encountered, process the field corresponding to the preceding values.
+
+    Stop once we've processed all the fields, hit the end of the buffer, or
+    hit the checksum marker ('*').
+    */
     for (field = 0; field < 33u && idx < len && buf[idx] != '*'; field++) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
+                /* End of message -- break without updating checksum value */
                 idx++;
                 break;
             }
 
+            /* Update checksum value with current byte */
             checksum ^= buf[idx];
             if (buf[idx] == ',') {
+                /* End of field -- stop looping and parse it */
                 idx++;
                 break;
             }
         }
 
+        /* Work out the current field length */
         size_t field_len = idx - field_start - 1u;
         if (field_len == 0) {
             continue;
@@ -311,9 +319,7 @@ size_t len) {
         assert(field_len < 256u);
 
         /*
-        After deserializing each field, we check that the value is within the
-        valid range described by the assertions in the serialize function.
-        If not, we return a deserialization error.
+        Handle the field data appropriately, based on the current field index
         */
         switch (field) {
             case 0:
@@ -490,13 +496,16 @@ size_t len) {
         }
     }
 
-    /* Make sure the full message was parsed */
+    /*
+    Check that the full message was parsed, and that the checksum and CRLF
+    markers are in the expected places
+    */
     if (field != 33u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
         goto invalid;
     }
 
-    /* State validity */
+    /* Check data validity */
     if (fcs_comms_validate_state(state) != FCS_VALIDATION_OK) {
         goto invalid;
     }
@@ -637,29 +646,41 @@ size_t len) {
         goto invalid;
     }
 
-    /* Loop over the buffer and update the checksum. Every time a comma is
-    encountered, process the field corresponding to the preceding values */
+    /*
+    Loop over the buffer and update the checksum. Every time a comma is
+    encountered, process the field corresponding to the preceding values.
+
+    Stop once we've processed all the fields, hit the end of the buffer, or
+    hit the checksum marker ('*').
+    */
     for (field = 0; field < 10u && idx < len && buf[idx] != '*'; field++) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
+                /* End of message -- break without updating checksum value */
                 idx++;
                 break;
             }
 
+            /* Update checksum value with current byte */
             checksum ^= buf[idx];
             if (buf[idx] == ',') {
+                /* End of field -- stop looping and parse it */
                 idx++;
                 break;
             }
         }
 
+        /* Work out the current field length */
         size_t field_len = idx - field_start - 1u;
         if (field_len == 0) {
             continue;
         }
         assert(field_len < 256u);
 
+        /*
+        Handle the field data appropriately, based on the current field index
+        */
         switch (field) {
             case 0:
                 if (field_len != 4u) {
@@ -721,7 +742,10 @@ size_t len) {
         }
     }
 
-    /* Make sure the full message was parsed */
+    /*
+    Check that the full message was parsed, and that the checksum and CRLF
+    markers are in the expected places
+    */
     if (field != 10u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
         goto invalid;
@@ -732,7 +756,7 @@ size_t len) {
         goto invalid;
     }
 
-    /* Checksum */
+    /* Checksum validity */
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
@@ -813,29 +837,41 @@ size_t len) {
         goto invalid;
     }
 
-    /* Loop over the buffer and update the checksum. Every time a comma is
-    encountered, process the field corresponding to the preceding values */
+    /*
+    Loop over the buffer and update the checksum. Every time a comma is
+    encountered, process the field corresponding to the preceding values.
+
+    Stop once we've processed all the fields, hit the end of the buffer, or
+    hit the checksum marker ('*').
+    */
     for (field = 0; field < 2u && idx < len && buf[idx] != '*'; field++) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
+                /* End of message -- break without updating checksum value */
                 idx++;
                 break;
             }
 
+            /* Update checksum value with current byte */
             checksum ^= buf[idx];
             if (buf[idx] == ',') {
+                /* End of field -- stop looping and parse it */
                 idx++;
                 break;
             }
         }
 
+        /* Work out the current field length */
         size_t field_len = idx - field_start - 1u;
         if (field_len == 0) {
             continue;
         }
         assert(field_len < 256u);
 
+        /*
+        Handle the field data appropriately, based on the current field index
+        */
         switch (field) {
             case 0:
                 /* Param name -- just copy the string */
@@ -867,7 +903,10 @@ size_t len) {
         }
     }
 
-    /* Make sure the full message was parsed */
+    /*
+    Check that the full message was parsed, and that the checksum and CRLF
+    markers are in the expected places
+    */
     if (field != 2u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
         goto invalid;
@@ -878,7 +917,7 @@ size_t len) {
         goto invalid;
     }
 
-    /* Checksum */
+    /* Checksum validity */
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
@@ -925,23 +964,30 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
+                /* End of message -- break without updating checksum value */
                 idx++;
                 break;
             }
 
+            /* Update checksum value with current byte */
             checksum ^= buf[idx];
             if (buf[idx] == ',') {
+                /* End of field -- stop looping and parse it */
                 idx++;
                 break;
             }
         }
 
+        /* Work out the current field length */
         size_t field_len = idx - field_start - 1u;
         if (field_len == 0) {
             continue;
         }
         assert(field_len < 256u);
 
+        /*
+        Handle the field data appropriately, based on the current field index
+        */
         switch (field) {
             case 0:
                 result = fcs_int32_from_ascii(
@@ -976,7 +1022,10 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
         }
     }
 
-    /* Make sure the full message was parsed */
+    /*
+    Check that the full message was parsed, and that the checksum and CRLF
+    markers are in the expected places
+    */
     if (field != 5u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
         goto invalid;
@@ -987,7 +1036,7 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
         goto invalid;
     }
 
-    /* Checksum */
+    /* Checksum validity */
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {

@@ -663,8 +663,8 @@ uint16_t buf_size) {
               dma_register_bit, 1);
 
     /* PaRAM set -> channel association */
-    CSL_FINS(edma3->TPCC_DCHMAP[rx_edma_event[uart_idx]],
-             TPCC_TPCC_DCHMAP0_PAENTRY, rx_edma_event[uart_idx]);
+    edma3->TPCC_DCHMAP[rx_edma_event[uart_idx]] =
+        rx_edma_event[uart_idx] << 5u;
 
     #define primary (edma3->PARAMSET[rx_edma_event[uart_idx]])
     primary.OPT = 0;
@@ -724,8 +724,8 @@ uint16_t buf_size) {
               dma_register_bit, 1);
 
     /* Map PaRAM set to channel */
-    CSL_FINS(edma3->TPCC_DCHMAP[tx_edma_event[uart_idx]],
-             TPCC_TPCC_DCHMAP0_PAENTRY, tx_edma_event[uart_idx]);
+    edma3->TPCC_DCHMAP[tx_edma_event[uart_idx]] =
+      tx_edma_event[uart_idx] << 5u;
 
     #define primary (edma3->PARAMSET[tx_edma_event[uart_idx]])
     primary.OPT = 0;

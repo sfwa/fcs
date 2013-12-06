@@ -451,8 +451,8 @@ uint16_t buf_size) {
     have bits 31:14 reserved, 13:5 as PAENTRY, and 4:0 reserved. PAENTRY is
     the index of the PaRAM set to map, from 0-1FFh.
     */
-    CSL_FINS(edma3->TPCC_DCHMAP[rx_edma_event[uart_idx]],
-             TPCC_TPCC_DCHMAP0_PAENTRY, rx_edma_event[uart_idx]);
+    edma3->TPCC_DCHMAP[rx_edma_event[uart_idx]] =
+        rx_edma_event[uart_idx] << 5u;
 
     /*
     Configure the PaRAM sets (SPRUGS5A table 2-2)
@@ -673,8 +673,8 @@ uint16_t buf_size) {
               dma_register_bit, 0);
 
     /* Map PaRAM set to channel */
-    CSL_FINS(edma3->TPCC_DCHMAP[tx_edma_event[uart_idx]],
-             TPCC_TPCC_DCHMAP0_PAENTRY, tx_edma_event[uart_idx]);
+    edma3->TPCC_DCHMAP[tx_edma_event[uart_idx]] =
+        tx_edma_event[uart_idx] << 5u;
 
     #define primary (edma3->PARAMSET[tx_edma_event[uart_idx]])
     primary.OPT = 0;
