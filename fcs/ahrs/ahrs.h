@@ -69,6 +69,10 @@ struct fcs_ahrs_dynamics_model_t {
 void fcs_ahrs_init(void);
 void fcs_ahrs_tick(void);
 
+/*
+Updated every AHRS tick -- contains the current state and uncertainty
+estimates
+*/
 extern struct fcs_packet_state_t global_state;
 
 #endif

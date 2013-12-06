@@ -34,6 +34,17 @@ SOFTWARE.
 
 static uint32_t tick;
 static uint8_t comms_buf[256u];
+static size_t comms_buf_len;
+static struct fcs_packet_state_t comms_state_in;
+static bool comms_state_valid;
+static struct fcs_packet_config_t comms_config_in;
+static bool comms_config_valid;
+static struct fcs_packet_gcs_t comms_gcs_in;
+static bool comms_gcs_valid;
+static struct fcs_packet_waypoint_t comms_waypoint_in;
+static bool comms_waypoint_valid;
+
+size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
 
 void fcs_comms_init(void) {
     /* Open the CPU comms stream */
@@ -56,6 +67,38 @@ void fcs_comms_tick(void) {
         assert(packet_len == write_len);
     }
 
+    /* Check for packets */
+    comms_buf_len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, comms_buf);
+    assert(comms_buf_len < 256u);
+
+    if (comms_buf_len >= FCS_COMMS_MIN_PACKET_SIZE) {
+        enum fcs_deserialization_result_t result;
+        switch (comms_buf[6u]) {
+            case 'S':
+                result = fcs_comms_deserialize_state(
+                    &comms_state_in, comms_buf, comms_buf_len);
+                comms_state_valid = (result == FCS_DESERIALIZATION_OK);
+                break;
+            case 'P':
+                result = fcs_comms_deserialize_waypoint(
+                    &comms_waypoint_in, comms_buf, comms_buf_len);
+                comms_waypoint_valid = (result == FCS_DESERIALIZATION_OK);
+                break;
+            case 'G':
+                result = fcs_comms_deserialize_gcs(
+                    &comms_gcs_in, comms_buf, comms_buf_len);
+                comms_gcs_valid = (result == FCS_DESERIALIZATION_OK);
+                break;
+            case 'C':
+                result = fcs_comms_deserialize_config(
+                    &comms_config_in, comms_buf, comms_buf_len);
+                comms_config_valid = (result == FCS_DESERIALIZATION_OK);
+                break;
+            default:
+                break;
+        }
+    }
+
     /*
     Increment tick, but wrap to 0 at a (decimal) round number in order to keep
     the output packet rate steady.
@@ -63,6 +106,45 @@ void fcs_comms_tick(void) {
     tick++;
     if (tick == 4000000000u) {
         tick = 0;
+    }
+}
+
+size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
+    assert(buf);
+
+    uint8_t i = 0;
+    uint32_t nbytes;
+
+    nbytes = fcs_stream_bytes_available(dev);
+
+    /*
+    If the initial byte is not $, we haven't synchronised with the start of a
+    message -- try to do that now by skipping until we see a \n (which should
+    be the end of \r\n).
+
+    Give up after 4 tries.
+    */
+    while (i < 4u && fcs_stream_peek(dev) != '$' &&
+           nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
+        fcs_stream_skip_until_after(dev, (uint8_t)'\n');
+        nbytes = fcs_stream_bytes_available(dev);
+        i++;
+    }
+
+    /*
+    Give up if there aren't enough bytes remaining, or we're not currently at
+    a '$' character
+    */
+    if (nbytes < FCS_COMMS_MIN_PACKET_SIZE || i == 4) {
+        return false;
+    }
+
+    /* Read until after the next (terminating) '\n' */
+    nbytes = fcs_stream_read_until_after(dev, (uint8_t)'\n', buf, 255u);
+    if (nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
+        return nbytes;
+    } else {
+        return 0;
     }
 }
 
@@ -275,7 +357,7 @@ struct fcs_packet_state_t *restrict state, uint8_t *restrict buf,
 size_t len) {
     assert(state);
     assert(buf);
-    assert(len > 10u && len < 256u);
+    assert(FCS_COMMS_MIN_PACKET_SIZE <= len && len < 256u);
 
     uint8_t field = 0,
             checksum = 'P' ^ 'S' ^ 'F' ^ 'W' ^ 'A' ^ 'S' ^ ',';
@@ -635,7 +717,7 @@ struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
 size_t len) {
     assert(waypoint);
     assert(buf);
-    assert(len > 10u && len < 256u);
+    assert(FCS_COMMS_MIN_PACKET_SIZE <= len && len < 256u);
 
     uint8_t field = 0,
             checksum = 'P' ^ 'S' ^ 'F' ^ 'W' ^ 'A' ^ 'P' ^ ',';
@@ -826,7 +908,7 @@ struct fcs_packet_config_t *restrict config, uint8_t *restrict buf,
 size_t len) {
     assert(config);
     assert(buf);
-    assert(len > 10u && len < 256u);
+    assert(FCS_COMMS_MIN_PACKET_SIZE <= len && len < 256u);
 
     uint8_t field = 0,
             checksum = 'P' ^ 'S' ^ 'F' ^ 'W' ^ 'A' ^ 'C' ^ ',';
@@ -947,7 +1029,7 @@ enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
 struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
     assert(gcs);
     assert(buf);
-    assert(len > 10u && len < 256u);
+    assert(FCS_COMMS_MIN_PACKET_SIZE <= len && len < 256u);
 
     uint8_t field = 0,
             checksum = 'P' ^ 'S' ^ 'F' ^ 'W' ^ 'A' ^ 'G' ^ ',';

@@ -26,9 +26,25 @@ extern "C" {
 #include "config/config.h"
 #include "util/util.h"
 #include "comms/comms.h"
+#include "drivers/stream.h"
+
+/* Prototypes for private test functions */
+
+/* from drivers/stream.c */
+size_t _fcs_stream_write_to_rx_buffer(uint8_t buffer_idx, const uint8_t *val,
+size_t len);
+size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx, uint8_t *val,
+size_t len);
+
+/* from comms/comms.c */
+size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
 }
 
-TEST(SerializeState, NoBuffers) {
+TEST(Comms, Initialisation) {
+    fcs_comms_init();
+}
+
+TEST(CommsSerializeState, NoBuffers) {
     EXPECT_DEATH(
         { fcs_comms_serialize_state(NULL, NULL); }, "Assertion.*failed");
 
@@ -43,7 +59,7 @@ TEST(SerializeState, NoBuffers) {
     );
 }
 
-TEST(SerializeState, InvalidSolutionTime) {
+TEST(CommsSerializeState, InvalidSolutionTime) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -53,7 +69,7 @@ TEST(SerializeState, InvalidSolutionTime) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidLat) {
+TEST(CommsSerializeState, InvalidLat) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -63,7 +79,7 @@ TEST(SerializeState, InvalidLat) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidLon) {
+TEST(CommsSerializeState, InvalidLon) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -73,7 +89,7 @@ TEST(SerializeState, InvalidLon) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidAlt) {
+TEST(CommsSerializeState, InvalidAlt) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -83,7 +99,7 @@ TEST(SerializeState, InvalidAlt) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidVelocityN) {
+TEST(CommsSerializeState, InvalidVelocityN) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -93,7 +109,7 @@ TEST(SerializeState, InvalidVelocityN) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidVelocityE) {
+TEST(CommsSerializeState, InvalidVelocityE) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -103,7 +119,7 @@ TEST(SerializeState, InvalidVelocityE) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidVelocityD) {
+TEST(CommsSerializeState, InvalidVelocityD) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -113,7 +129,7 @@ TEST(SerializeState, InvalidVelocityD) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidWindN) {
+TEST(CommsSerializeState, InvalidWindN) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -123,7 +139,7 @@ TEST(SerializeState, InvalidWindN) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidWindE) {
+TEST(CommsSerializeState, InvalidWindE) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -133,7 +149,7 @@ TEST(SerializeState, InvalidWindE) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidWindD) {
+TEST(CommsSerializeState, InvalidWindD) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -143,7 +159,7 @@ TEST(SerializeState, InvalidWindD) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidYaw) {
+TEST(CommsSerializeState, InvalidYaw) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -153,7 +169,7 @@ TEST(SerializeState, InvalidYaw) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidPitch) {
+TEST(CommsSerializeState, InvalidPitch) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -163,7 +179,7 @@ TEST(SerializeState, InvalidPitch) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidRoll) {
+TEST(CommsSerializeState, InvalidRoll) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -173,7 +189,7 @@ TEST(SerializeState, InvalidRoll) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidAngularVelocityX) {
+TEST(CommsSerializeState, InvalidAngularVelocityX) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -183,7 +199,7 @@ TEST(SerializeState, InvalidAngularVelocityX) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidAngularVelocityY) {
+TEST(CommsSerializeState, InvalidAngularVelocityY) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -193,7 +209,7 @@ TEST(SerializeState, InvalidAngularVelocityY) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, InvalidAngularVelocityZ) {
+TEST(CommsSerializeState, InvalidAngularVelocityZ) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_state_t y;
@@ -203,7 +219,7 @@ TEST(SerializeState, InvalidAngularVelocityZ) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeState, AllOK) {
+TEST(CommsSerializeState, AllOK) {
     struct fcs_packet_state_t state = {
         .solution_time = 200501234,
         .next_waypoint_id = { 't', 'e', 's', 't'},
@@ -246,7 +262,7 @@ TEST(SerializeState, AllOK) {
     );
 }
 
-TEST(DeserializeState, AllOK) {
+TEST(CommsDeserializeState, AllOK) {
     struct fcs_packet_state_t state;
     uint8_t input[] =
         "$PSFWAS,200501234,test,-30.0987654,145.0123457,100.50,"
@@ -262,7 +278,7 @@ TEST(DeserializeState, AllOK) {
     EXPECT_EQ(200501234, state.solution_time);
 }
 
-TEST(DeserializeState, InvalidChecksum) {
+TEST(CommsDeserializeState, InvalidChecksum) {
     struct fcs_packet_state_t state;
     uint8_t input[] =
         "$PSFWAS,200501234,test,-30.0987654,145.0123457,100.50,"
@@ -276,7 +292,7 @@ TEST(DeserializeState, InvalidChecksum) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeState, InvalidTalker) {
+TEST(CommsDeserializeState, InvalidTalker) {
     struct fcs_packet_state_t state;
     uint8_t input[] =
         "$PSFWAs,200501234,test,-30.0987654,145.0123457,100.50,"
@@ -290,7 +306,7 @@ TEST(DeserializeState, InvalidTalker) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeState, InvalidFieldData) {
+TEST(CommsDeserializeState, InvalidFieldData) {
     struct fcs_packet_state_t state;
     uint8_t input[] =
         "$PSFWAS,200501234,test,-3q.0987654,145.0123457,100.50,"
@@ -304,7 +320,7 @@ TEST(DeserializeState, InvalidFieldData) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(SerializeWaypoint, AllOK) {
+TEST(CommsSerializeWaypoint, AllOK) {
     struct fcs_packet_waypoint_t waypoint = {
         .waypoint_id = { 't', 'e', 's', 't'},
         .waypoint_role = 'q',
@@ -333,7 +349,7 @@ TEST(SerializeWaypoint, AllOK) {
     );
 }
 
-TEST(SerializeWaypoint, InvalidLat) {
+TEST(CommsSerializeWaypoint, InvalidLat) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_waypoint_t y;
@@ -343,7 +359,7 @@ TEST(SerializeWaypoint, InvalidLat) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeWaypoint, InvalidLon) {
+TEST(CommsSerializeWaypoint, InvalidLon) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_waypoint_t y;
@@ -353,7 +369,7 @@ TEST(SerializeWaypoint, InvalidLon) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeWaypoint, InvalidAlt) {
+TEST(CommsSerializeWaypoint, InvalidAlt) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_waypoint_t y;
@@ -363,7 +379,7 @@ TEST(SerializeWaypoint, InvalidAlt) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeWaypoint, InvalidYaw) {
+TEST(CommsSerializeWaypoint, InvalidYaw) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_waypoint_t y;
@@ -373,7 +389,7 @@ TEST(SerializeWaypoint, InvalidYaw) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeWaypoint, InvalidPitch) {
+TEST(CommsSerializeWaypoint, InvalidPitch) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_waypoint_t y;
@@ -383,7 +399,7 @@ TEST(SerializeWaypoint, InvalidPitch) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeWaypoint, InvalidRoll) {
+TEST(CommsSerializeWaypoint, InvalidRoll) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_waypoint_t y;
@@ -393,7 +409,7 @@ TEST(SerializeWaypoint, InvalidRoll) {
     }, "Assertion.*failed");
 }
 
-TEST(SerializeWaypoint, InvalidAirspeed) {
+TEST(CommsSerializeWaypoint, InvalidAirspeed) {
     EXPECT_DEATH({
         uint8_t x[256];
         struct fcs_packet_waypoint_t y;
@@ -403,7 +419,7 @@ TEST(SerializeWaypoint, InvalidAirspeed) {
     }, "Assertion.*failed");
 }
 
-TEST(DeserializeWaypoint, AllOK) {
+TEST(CommsDeserializeWaypoint, AllOK) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
@@ -423,7 +439,7 @@ TEST(DeserializeWaypoint, AllOK) {
     EXPECT_NEAR(54.32, waypoint.target_airspeed, 1e-9);
 }
 
-TEST(DeserializeWaypoint, InvalidChecksum) {
+TEST(CommsDeserializeWaypoint, InvalidChecksum) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
@@ -435,7 +451,7 @@ TEST(DeserializeWaypoint, InvalidChecksum) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidTalker) {
+TEST(CommsDeserializeWaypoint, InvalidTalker) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAS,test,q,-30.0987654,145.0123457,100.50,"
@@ -447,7 +463,7 @@ TEST(DeserializeWaypoint, InvalidTalker) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidFieldData) {
+TEST(CommsDeserializeWaypoint, InvalidFieldData) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
@@ -459,7 +475,7 @@ TEST(DeserializeWaypoint, InvalidFieldData) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidLat) {
+TEST(CommsDeserializeWaypoint, InvalidLat) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-92.0987654,145.0123457,100.50,"
@@ -471,7 +487,7 @@ TEST(DeserializeWaypoint, InvalidLat) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidLon) {
+TEST(CommsDeserializeWaypoint, InvalidLon) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,185.0123457,100.50,"
@@ -483,7 +499,7 @@ TEST(DeserializeWaypoint, InvalidLon) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidAlt) {
+TEST(CommsDeserializeWaypoint, InvalidAlt) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100000.50,"
@@ -495,7 +511,7 @@ TEST(DeserializeWaypoint, InvalidAlt) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidYaw) {
+TEST(CommsDeserializeWaypoint, InvalidYaw) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
@@ -507,7 +523,7 @@ TEST(DeserializeWaypoint, InvalidYaw) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidPitch) {
+TEST(CommsDeserializeWaypoint, InvalidPitch) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
@@ -519,7 +535,7 @@ TEST(DeserializeWaypoint, InvalidPitch) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidRoll) {
+TEST(CommsDeserializeWaypoint, InvalidRoll) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
@@ -531,7 +547,7 @@ TEST(DeserializeWaypoint, InvalidRoll) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeWaypoint, InvalidAirspeed) {
+TEST(CommsDeserializeWaypoint, InvalidAirspeed) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
         "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
@@ -543,7 +559,7 @@ TEST(DeserializeWaypoint, InvalidAirspeed) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeGCS, AllOK) {
+TEST(CommsDeserializeGCS, AllOK) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
@@ -560,7 +576,7 @@ TEST(DeserializeGCS, AllOK) {
     EXPECT_NEAR(1034.68, gcs.pressure, 1e-9);
 }
 
-TEST(DeserializeGCS, InvalidChecksum) {
+TEST(CommsDeserializeGCS, InvalidChecksum) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
@@ -571,7 +587,7 @@ TEST(DeserializeGCS, InvalidChecksum) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeGCS, InvalidTalker) {
+TEST(CommsDeserializeGCS, InvalidTalker) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAg,12345678,-30.0987654,145.0123457,100.50,"
@@ -582,7 +598,7 @@ TEST(DeserializeGCS, InvalidTalker) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeGCS, InvalidSolutionTime) {
+TEST(CommsDeserializeGCS, InvalidSolutionTime) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAG,-50,-30.0987654,145.0123457,100.50,"
@@ -593,7 +609,7 @@ TEST(DeserializeGCS, InvalidSolutionTime) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeGCS, InvalidLat) {
+TEST(CommsDeserializeGCS, InvalidLat) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAG,12345678,130.0987654,145.0123457,100.50,"
@@ -604,7 +620,7 @@ TEST(DeserializeGCS, InvalidLat) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeGCS, InvalidLon) {
+TEST(CommsDeserializeGCS, InvalidLon) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAG,12345678,-30.0987654,245.0123457,100.50,"
@@ -615,7 +631,7 @@ TEST(DeserializeGCS, InvalidLon) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeGCS, InvalidAlt) {
+TEST(CommsDeserializeGCS, InvalidAlt) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAG,12345678,-30.0987654,145.0123457,-600,"
@@ -626,7 +642,7 @@ TEST(DeserializeGCS, InvalidAlt) {
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
 }
 
-TEST(DeserializeGCS, InvalidPressure) {
+TEST(CommsDeserializeGCS, InvalidPressure) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
         "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
@@ -635,4 +651,118 @@ TEST(DeserializeGCS, InvalidPressure) {
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
     EXPECT_EQ(FCS_DESERIALIZATION_ERROR, status);
+}
+
+TEST(CommsIO, ReadPacket) {
+    bool result;
+    size_t len;
+    uint8_t buf[256];
+    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
+                  "1034.68*15\r\n";
+
+    /* Reset stream state */
+    fcs_stream_open(FCS_STREAM_UART_INT0);
+
+    /* Write a full packet */
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
+    ASSERT_EQ(60, len);
+
+    /* Read back and confirm results */
+    len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
+    ASSERT_EQ(60, len);
+
+    buf[len] = 0;
+    ASSERT_STREQ((char*)s, (char*)buf);
+}
+
+TEST(CommsIO, ReadPacketPartial) {
+    bool result;
+    size_t len;
+    uint8_t buf[256];
+    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
+                  "1034.68*15\r\n";
+
+    /* Reset stream state */
+    fcs_stream_open(FCS_STREAM_UART_INT0);
+
+    /* Write a partial packet */
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 30);
+    ASSERT_EQ(30, len);
+
+    /* Read back and confirm there's no packet */
+    len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
+    ASSERT_EQ(0, len);
+
+    /* Write the remainder */
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, &s[30], 30);
+    ASSERT_EQ(30, len);
+
+    /* Read the full packet */
+    len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
+    ASSERT_EQ(60, len);
+
+    buf[len] = 0;
+    ASSERT_STREQ((char*)s, (char*)buf);
+}
+
+TEST(CommsIO, ReadPacketAfterGarbage) {
+    bool result;
+    size_t len;
+    uint8_t buf[256];
+    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
+                  "1034.68*15\r\n";
+    uint8_t garbage[] = "garbage\r\n";
+
+    /* Reset stream state */
+    fcs_stream_open(FCS_STREAM_UART_INT0);
+
+    /* Write some garbage */
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, garbage, 9);
+    ASSERT_EQ(9, len);
+
+    /* Write a full packet */
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
+    ASSERT_EQ(60, len);
+
+    /* Read back and confirm results */
+    len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
+    ASSERT_EQ(60, len);
+
+    buf[len] = 0;
+    ASSERT_STREQ((char*)s, (char*)buf);
+}
+
+TEST(CommsIO, ReadPacketAfterPacket) {
+    bool result;
+    size_t len;
+    uint8_t buf[256];
+    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
+                  "1034.68*15\r\n";
+
+    /* Reset stream state */
+    fcs_stream_open(FCS_STREAM_UART_INT0);
+
+    /* Write a full packet */
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
+    ASSERT_EQ(60, len);
+
+    /* Write another full packet */
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
+    ASSERT_EQ(60, len);
+
+    /* Read first packet back and confirm results */
+    len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
+    ASSERT_EQ(60, len);
+
+    buf[len] = 0;
+    ASSERT_STREQ((char*)s, (char*)buf);
+
+    memset(buf, 0, sizeof(buf));
+
+    /* Read second packet back and confirm results */
+    len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
+    ASSERT_EQ(60, len);
+
+    buf[len] = 0;
+    ASSERT_STREQ((char*)s, (char*)buf);
 }

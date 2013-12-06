@@ -23,6 +23,8 @@ SOFTWARE.
 #ifndef _FCS_COMMS_H
 #define _FCS_COMMS_H
 
+#define FCS_COMMS_MIN_PACKET_SIZE 13u
+
 /*
 State (FCS->CPU): $PSFWAS
 - time of solution (ms) -- 9 chars
@@ -155,6 +157,7 @@ enum fcs_validation_result_t {
 
 /* In all these cases, buf must be at least 256 chars long */
 
+/* State serialization/deserialization */
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_packet_state_t *restrict state);
 
@@ -165,6 +168,7 @@ size_t len);
 enum fcs_validation_result_t fcs_comms_validate_state(
 const struct fcs_packet_state_t *restrict state);
 
+/* Waypoint serialization/deserialization */
 size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
 const struct fcs_packet_waypoint_t *restrict waypoint);
 
@@ -175,6 +179,7 @@ size_t len);
 enum fcs_validation_result_t fcs_comms_validate_waypoint(
 const struct fcs_packet_waypoint_t *restrict waypoint);
 
+/* Config serialization/deserialization */
 size_t fcs_comms_serialize_config(uint8_t *restrict buf,
 const struct fcs_packet_config_t *restrict config);
 
@@ -185,6 +190,7 @@ size_t len);
 enum fcs_validation_result_t fcs_comms_validate_config(
 const struct fcs_packet_config_t *restrict config);
 
+/* GCS deserialization */
 enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
 struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len);
 
