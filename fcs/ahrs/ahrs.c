@@ -432,9 +432,9 @@ double *restrict covariance) {
     assert(-90.0 <= pitch && pitch <= 90.0);
     assert(-180.0 <= roll && roll <= 180.0);
 
-    global_state.attitude[0] = yaw;
-    global_state.attitude[1] = pitch;
-    global_state.attitude[2] = roll;
+    global_state.yaw = yaw;
+    global_state.pitch = pitch;
+    global_state.roll = roll;
 
     /*
     Work out 95th percentile confidence intervals for each of the output
@@ -456,12 +456,12 @@ double *restrict covariance) {
     global_state.wind_velocity_uncertainty[2] = 1.96 * sqrt(covariance[20]);
 
     /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
-    global_state.attitude_uncertainty[0] = 1.96 *
-        sqrt(covariance[11]) * (180.0/M_PI);
-    global_state.attitude_uncertainty[1] = 1.96 *
-        sqrt(covariance[10]) * (180.0/M_PI);
-    global_state.attitude_uncertainty[2] = 1.96 *
+    global_state.roll_uncertainty = 1.96 *
         sqrt(covariance[9]) * (180.0/M_PI);
+    global_state.pitch_uncertainty = 1.96 *
+        sqrt(covariance[10]) * (180.0/M_PI);
+    global_state.yaw_uncertainty= 1.96 *
+        sqrt(covariance[11]) * (180.0/M_PI);
 
     global_state.angular_velocity_uncertainty[0] = 1.96 *
         sqrt(covariance[12]) * (180.0/M_PI);

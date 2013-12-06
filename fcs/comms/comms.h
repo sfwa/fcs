@@ -66,12 +66,12 @@ struct fcs_packet_state_t {
     double lat, lon, alt;
     double velocity[3u];
     double wind_velocity[3u];
-    double attitude[3u];
+    double yaw, pitch, roll;
     double angular_velocity[3u];
     double lat_lon_uncertainty, alt_uncertainty;
     double velocity_uncertainty[3u];
     double wind_velocity_uncertainty[3u];
-    double attitude_uncertainty[3u];
+    double yaw_uncertainty, pitch_uncertainty, roll_uncertainty;
     double angular_velocity_uncertainty[3u];
     uint8_t mode_indicator;
     uint8_t flags[4u];
@@ -102,7 +102,7 @@ struct fcs_packet_waypoint_t {
     uint8_t waypoint_id[4u];
     uint8_t waypoint_role;
     double target_lat, target_lon, target_alt;
-    double target_attitude[3u];
+    double target_yaw, target_pitch, target_roll;
     double target_airspeed;
     uint8_t flags[5u];
 };
@@ -148,6 +148,11 @@ enum fcs_deserialization_result_t {
     FCS_DESERIALIZATION_ERROR
 };
 
+enum fcs_validation_result_t {
+    FCS_VALIDATION_OK,
+    FCS_VALIDATION_ERROR
+};
+
 /* In all these cases, buf must be at least 256 chars long */
 
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
@@ -157,12 +162,18 @@ enum fcs_deserialization_result_t fcs_comms_deserialize_state(
 struct fcs_packet_state_t *restrict state, uint8_t *restrict buf,
 size_t len);
 
+enum fcs_validation_result_t fcs_comms_validate_state(
+const struct fcs_packet_state_t *restrict state);
+
 size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
 const struct fcs_packet_waypoint_t *restrict waypoint);
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_waypoint(
 struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
 size_t len);
+
+enum fcs_validation_result_t fcs_comms_validate_waypoint(
+const struct fcs_packet_waypoint_t *restrict waypoint);
 
 size_t fcs_comms_serialize_config(uint8_t *restrict buf,
 const struct fcs_packet_config_t *restrict config);
@@ -171,7 +182,13 @@ enum fcs_deserialization_result_t fcs_comms_deserialize_config(
 struct fcs_packet_config_t *restrict config, uint8_t *restrict buf,
 size_t len);
 
+enum fcs_validation_result_t fcs_comms_validate_config(
+const struct fcs_packet_config_t *restrict config);
+
 enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
 struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len);
+
+enum fcs_validation_result_t fcs_comms_validate_gcs(
+const struct fcs_packet_gcs_t *restrict gcs);
 
 #endif

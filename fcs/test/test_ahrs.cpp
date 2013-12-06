@@ -934,9 +934,9 @@ TEST(AHRSOutput, UpdateGlobalState) {
     EXPECT_DOUBLE_EQ(-1.0, global_state.wind_velocity[0]);
     EXPECT_DOUBLE_EQ(2.0, global_state.wind_velocity[1]);
     EXPECT_DOUBLE_EQ(-3.0, global_state.wind_velocity[2]);
-    EXPECT_DOUBLE_EQ(0.0, global_state.attitude[0]);
-    EXPECT_DOUBLE_EQ(0.0, global_state.attitude[1]);
-    EXPECT_DOUBLE_EQ(0.0, global_state.attitude[2]);
+    EXPECT_DOUBLE_EQ(0.0, global_state.yaw);
+    EXPECT_DOUBLE_EQ(0.0, global_state.pitch);
+    EXPECT_DOUBLE_EQ(0.0, global_state.roll);
     EXPECT_DOUBLE_EQ(-18.0, global_state.angular_velocity[0]);
     EXPECT_DOUBLE_EQ(36.0, global_state.angular_velocity[1]);
     EXPECT_DOUBLE_EQ(-54.0, global_state.angular_velocity[2]);
@@ -949,9 +949,9 @@ TEST(AHRSOutput, UpdateGlobalState) {
     EXPECT_NEAR(0.854, global_state.wind_velocity_uncertainty[0], 1e-3);
     EXPECT_NEAR(0.876, global_state.wind_velocity_uncertainty[1], 1e-3);
     EXPECT_NEAR(0.898, global_state.wind_velocity_uncertainty[2], 1e-3);
-    EXPECT_NEAR(38.902, global_state.attitude_uncertainty[0], 1e-3);
-    EXPECT_NEAR(37.246, global_state.attitude_uncertainty[1], 1e-3);
-    EXPECT_NEAR(35.512, global_state.attitude_uncertainty[2], 1e-3);
+    EXPECT_NEAR(38.902, global_state.yaw_uncertainty, 1e-3);
+    EXPECT_NEAR(37.246, global_state.pitch_uncertainty, 1e-3);
+    EXPECT_NEAR(35.512, global_state.roll_uncertainty, 1e-3);
     EXPECT_NEAR(40.490, global_state.angular_velocity_uncertainty[0], 1e-3);
     EXPECT_NEAR(42.019, global_state.angular_velocity_uncertainty[1], 1e-3);
     EXPECT_NEAR(43.493, global_state.angular_velocity_uncertainty[2], 1e-3);
@@ -977,9 +977,9 @@ TEST(AHRSOutput, UpdateGlobalStateAttitude1) {
     _fcs_ahrs_update_global_state(&s, covariance);
     ASSERT_EQ(1u, global_state.solution_time);
 
-    EXPECT_NEAR(90.0, global_state.attitude[0], 1e-3);
-    EXPECT_NEAR(0.0, global_state.attitude[1], 1e-3);
-    EXPECT_NEAR(0.0, global_state.attitude[2], 1e-3);
+    EXPECT_NEAR(90.0, global_state.yaw, 1e-3);
+    EXPECT_NEAR(0.0, global_state.pitch, 1e-3);
+    EXPECT_NEAR(0.0, global_state.roll, 1e-3);
 }
 
 TEST(AHRSControl, SerializeControlPacket) {

@@ -71,7 +71,7 @@ size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_packet_state_t *restrict state) {
     assert(buf);
     assert(state);
-    assert(state->solution_time >= 0);
+    assert(fcs_comms_validate_state(state) == FCS_VALIDATION_OK);
 
     size_t index = 0;
 
@@ -85,28 +85,29 @@ const struct fcs_packet_state_t *restrict state) {
     index += 4u;
     buf[index++] = ',';
 
-    assert(-90.0 <= state->lat && state->lat <= 90.0);
+    /*
+    Serialize the data fields. In most cases we check that the field
+    uncertainty is below a certain threshold in order to output the data at
+    all.
+    */
     if (state->lat_lon_uncertainty < FCS_STATE_MAX_LAT_LON_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->lat, 2u, 7u);
     }
     buf[index++] = ',';
 
-    assert(-180.0 <= state->lon && state->lon <= 180.0);
     if (state->lat_lon_uncertainty < FCS_STATE_MAX_LAT_LON_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->lon, 3u, 7u);
     }
     buf[index++] = ',';
 
-    assert(-500.0 <= state->alt && state->alt < 10000.0);
     if (state->alt_uncertainty < FCS_STATE_MAX_ALT_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->alt, 4u, 2u);
     }
     buf[index++] = ',';
 
-    assert(-1000.0 < state->velocity[0] && state->velocity[0] < 1000.0);
     if (state->velocity_uncertainty[0] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -114,7 +115,6 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(-1000.0 < state->velocity[1u] && state->velocity[1] < 1000.0);
     if (state->velocity_uncertainty[1u] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -122,7 +122,6 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(-1000.0 < state->velocity[2u] && state->velocity[2] < 1000.0);
     if (state->velocity_uncertainty[2u] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -130,8 +129,6 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(-100.0 < state->wind_velocity[0] &&
-           state->wind_velocity[0] < 100.0);
     if (state->wind_velocity_uncertainty[0] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -139,8 +136,6 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(-100.0 < state->wind_velocity[1u] &&
-           state->wind_velocity[1u] < 100.0);
     if (state->wind_velocity_uncertainty[1u] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -148,8 +143,6 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(-100.0 < state->wind_velocity[2u] &&
-           state->wind_velocity[2u] < 100.0);
     if (state->wind_velocity_uncertainty[2u] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -157,32 +150,28 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(0.0 <= state->attitude[0] && state->attitude[0] < 360.0);
-    if (state->attitude_uncertainty[2u] <
-            FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
-        index += fcs_ascii_fixed_from_double(
-            &buf[index], state->attitude[0], 3u, 2u);
+    if (state->yaw_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
+        index += fcs_ascii_fixed_from_double(&buf[index], state->yaw, 3u, 2u);
     }
     buf[index++] = ',';
 
-    assert(-90.0 <= state->attitude[1] && state->attitude[1] <= 90.0);
-    if (state->attitude_uncertainty[2u] <
-            FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
+    if (state->pitch_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->attitude[1], 2u, 2u);
+            &buf[index], state->pitch, 2u, 2u);
     }
     buf[index++] = ',';
 
-    assert(-180.0 <= state->attitude[2u] && state->attitude[2u] <= 180.0);
-    if (state->attitude_uncertainty[2u] <
-            FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
+    if (state->roll_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->attitude[2u], 3u, 2u);
+            &buf[index], state->roll, 3u, 2u);
     }
     buf[index++] = ',';
 
-    assert(-360.0 <= state->angular_velocity[0] &&
-           state->angular_velocity[0] <= 360.0);
+    /*
+    angular_velocity[0] is around the body x axis (roll), angular_velocity[1]
+    is around the body y axis (pitch), and angular_velocity[2] is around the
+    body z axis (yaw)
+    */
     if (state->angular_velocity_uncertainty[0] <
             FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -190,8 +179,6 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(-360.0 <= state->angular_velocity[1u] &&
-           state->angular_velocity[1u] <= 360.0);
     if (state->angular_velocity_uncertainty[1u] <
             FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -199,8 +186,6 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(-360.0 <= state->angular_velocity[2u] &&
-           state->angular_velocity[2u] <= 360.0);
     if (state->angular_velocity_uncertainty[2u] <
             FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY) {
         index += fcs_ascii_fixed_from_double(
@@ -208,72 +193,63 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    assert(0.0 <= state->lat_lon_uncertainty);
+    /*
+    Uncertainty values are half the 95th percentile confidence interval, i.e.
+    the extent of the interval away from the midpoint (being the field value
+    output above).
+    */
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->lat_lon_uncertainty, 3u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->alt_uncertainty);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->alt_uncertainty, 2u, 1u);
     buf[index++] = ',';
 
-    assert(0.0 <= state->velocity_uncertainty[0]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->velocity_uncertainty[0], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->velocity_uncertainty[1u]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->velocity_uncertainty[1u], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->velocity_uncertainty[2u]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->velocity_uncertainty[2u], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->wind_velocity_uncertainty[0]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->wind_velocity_uncertainty[0], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->wind_velocity_uncertainty[1u]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->wind_velocity_uncertainty[1u], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->wind_velocity_uncertainty[2u]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->wind_velocity_uncertainty[2u], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->attitude_uncertainty[0]);
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->attitude_uncertainty[0], 2u, 0);
+        &buf[index], state->yaw_uncertainty, 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->attitude_uncertainty[1u]);
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->attitude_uncertainty[1u], 2u, 0);
+        &buf[index], state->pitch_uncertainty, 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->attitude_uncertainty[2u]);
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->attitude_uncertainty[2u], 2u, 0);
+        &buf[index], state->roll_uncertainty, 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->angular_velocity_uncertainty[0]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->angular_velocity_uncertainty[0], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->angular_velocity_uncertainty[1u]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->angular_velocity_uncertainty[1u], 2u, 0);
     buf[index++] = ',';
 
-    assert(0.0 <= state->angular_velocity_uncertainty[2u]);
     index += fcs_ascii_fixed_from_double(
         &buf[index], state->angular_velocity_uncertainty[2u], 2u, 0);
     buf[index++] = ',';
@@ -334,13 +310,15 @@ size_t len) {
         }
         assert(field_len < 256u);
 
+        /*
+        After deserializing each field, we check that the value is within the
+        valid range described by the assertions in the serialize function.
+        If not, we return a deserialization error.
+        */
         switch (field) {
             case 0:
                 result = fcs_int32_from_ascii(
                     &state->solution_time, &buf[field_start], field_len);
-                if (state->solution_time < 0) {
-                    goto invalid;
-                }
                 break;
             case 1u:
                 if (field_len != 4u) {
@@ -388,15 +366,15 @@ size_t len) {
                 break;
             case 11u:
                 result = fcs_double_from_ascii_fixed(
-                    &state->attitude[0], &buf[field_start], field_len);
+                    &state->yaw, &buf[field_start], field_len);
                 break;
             case 12u:
                 result = fcs_double_from_ascii_fixed(
-                    &state->attitude[1u], &buf[field_start], field_len);
+                    &state->pitch, &buf[field_start], field_len);
                 break;
             case 13u:
                 result = fcs_double_from_ascii_fixed(
-                    &state->attitude[2u], &buf[field_start], field_len);
+                    &state->roll, &buf[field_start], field_len);
                 break;
             case 14u:
                 result = fcs_double_from_ascii_fixed(
@@ -460,21 +438,15 @@ size_t len) {
                 break;
             case 25u:
                 result = fcs_double_from_ascii_fixed(
-                    &state->attitude_uncertainty[0], &buf[field_start],
-                    field_len
-                );
+                    &state->yaw_uncertainty, &buf[field_start], field_len);
                 break;
             case 26u:
                 result = fcs_double_from_ascii_fixed(
-                    &state->attitude_uncertainty[1u], &buf[field_start],
-                    field_len
-                );
+                    &state->pitch_uncertainty, &buf[field_start], field_len);
                 break;
             case 27u:
                 result = fcs_double_from_ascii_fixed(
-                    &state->attitude_uncertainty[2u], &buf[field_start],
-                    field_len
-                );
+                    &state->roll_uncertainty, &buf[field_start], field_len);
                 break;
             case 28u:
                 result = fcs_double_from_ascii_fixed(
@@ -524,7 +496,12 @@ size_t len) {
         goto invalid;
     }
 
-    /* Check validity */
+    /* State validity */
+    if (fcs_comms_validate_state(state) != FCS_VALIDATION_OK) {
+        goto invalid;
+    }
+
+    /* Checksum validity */
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
@@ -534,14 +511,61 @@ size_t len) {
     return FCS_DESERIALIZATION_OK;
 
 invalid:
-    memset(state, 0, sizeof(struct fcs_packet_state_t));
+    memset(state, 0xFFu, sizeof(struct fcs_packet_state_t));
     return FCS_DESERIALIZATION_ERROR;
+}
+
+enum fcs_validation_result_t fcs_comms_validate_state(
+const struct fcs_packet_state_t *restrict state) {
+    assert(state);
+
+    if (0 <= state->solution_time &&
+        -90.0 <= state->lat && state->lat <= 90.0 &&
+        -180.0 <= state->lon && state->lon <= 180.0 &&
+        -500.0 <= state->alt && state->alt < 10000.0 &&
+        -1000.0 < state->velocity[0] && state->velocity[0] < 1000.0 &&
+        -1000.0 < state->velocity[1u] && state->velocity[1] < 1000.0 &&
+        -1000.0 < state->velocity[2u] && state->velocity[2] < 1000.0 &&
+        -100.0 < state->wind_velocity[0] &&
+            state->wind_velocity[0] < 100.0 &&
+        -100.0 < state->wind_velocity[1u] &&
+            state->wind_velocity[1u] < 100.0 &&
+        -100.0 < state->wind_velocity[2u] &&
+            state->wind_velocity[2u] < 100.0 &&
+        0.0 <= state->yaw && state->yaw < 360.0 &&
+        -90.0 <= state->pitch && state->pitch <= 90.0 &&
+        -180.0 <= state->roll && state->roll <= 180.0 &&
+        -360.0 <= state->angular_velocity[0] &&
+            state->angular_velocity[0] <= 360.0 &&
+        -360.0 <= state->angular_velocity[1u] &&
+            state->angular_velocity[1u] <= 360.0 &&
+        -360.0 <= state->angular_velocity[2u] &&
+            state->angular_velocity[2u] <= 360.0 &&
+        0.0 <= state->lat_lon_uncertainty &&
+        0.0 <= state->alt_uncertainty &&
+        0.0 <= state->velocity_uncertainty[0] &&
+        0.0 <= state->velocity_uncertainty[1u] &&
+        0.0 <= state->velocity_uncertainty[2u] &&
+        0.0 <= state->wind_velocity_uncertainty[0] &&
+        0.0 <= state->wind_velocity_uncertainty[1u] &&
+        0.0 <= state->wind_velocity_uncertainty[2u] &&
+        0.0 <= state->yaw_uncertainty &&
+        0.0 <= state->pitch_uncertainty &&
+        0.0 <= state->roll_uncertainty &&
+        0.0 <= state->angular_velocity_uncertainty[0] &&
+        0.0 <= state->angular_velocity_uncertainty[1u] &&
+        0.0 <= state->angular_velocity_uncertainty[2u]) {
+        return FCS_VALIDATION_OK;
+    } else {
+        return FCS_VALIDATION_ERROR;
+    }
 }
 
 size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
 const struct fcs_packet_waypoint_t *restrict waypoint) {
     assert(buf);
     assert(waypoint);
+    assert(fcs_comms_validate_waypoint(waypoint) == FCS_VALIDATION_OK);
 
     size_t index = 0;
 
@@ -555,44 +579,30 @@ const struct fcs_packet_waypoint_t *restrict waypoint) {
     buf[index++] = waypoint->waypoint_role;
     buf[index++] = ',';
 
-    assert(-90.0 <= waypoint->target_lat && waypoint->target_lat <= 90.0);
     index += fcs_ascii_fixed_from_double(&buf[index], waypoint->target_lat,
                                          2u, 7u);
     buf[index++] = ',';
 
-    assert(-180.0 <= waypoint->target_lon && waypoint->target_lon <= 180.0);
     index += fcs_ascii_fixed_from_double(&buf[index], waypoint->target_lon,
                                          3u, 7u);
     buf[index++] = ',';
 
-    assert(-500.0 <= waypoint->target_alt && waypoint->target_alt < 10000.0);
     index += fcs_ascii_fixed_from_double(&buf[index], waypoint->target_alt,
                                          4u, 2u);
     buf[index++] = ',';
 
-    assert(0.0 <= waypoint->target_attitude[0] &&
-           waypoint->target_attitude[0] < 360.0);
-    index += fcs_ascii_fixed_from_double(&buf[index],
-                                         waypoint->target_attitude[0], 3u,
-                                         2u);
+    index += fcs_ascii_fixed_from_double(&buf[index], waypoint->target_yaw,
+                                         3u, 2u);
     buf[index++] = ',';
 
-    assert(-90.0 <= waypoint->target_attitude[1u] &&
-           waypoint->target_attitude[1u] <= 90.0);
-    index += fcs_ascii_fixed_from_double(&buf[index],
-                                         waypoint->target_attitude[1u], 2u,
-                                         2u);
+    index += fcs_ascii_fixed_from_double(&buf[index], waypoint->target_pitch,
+                                         2u, 2u);
     buf[index++] = ',';
 
-    assert(-180.0 <= waypoint->target_attitude[2u] &&
-           waypoint->target_attitude[2] <= 180.0);
-    index += fcs_ascii_fixed_from_double(&buf[index],
-                                         waypoint->target_attitude[2u], 3u,
-                                         2u);
+    index += fcs_ascii_fixed_from_double(&buf[index], waypoint->target_roll,
+                                         3u, 2u);
     buf[index++] = ',';
 
-    assert(-1000.0 < waypoint->target_airspeed &&
-           waypoint->target_airspeed < 1000.0);
     index += fcs_ascii_fixed_from_double(&buf[index],
                                          waypoint->target_airspeed, 3u, 2u);
     buf[index++] = ',';
@@ -679,21 +689,15 @@ size_t len) {
                 break;
             case 5u:
                 result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_attitude[0], &buf[field_start],
-                    field_len
-                );
+                    &waypoint->target_yaw, &buf[field_start], field_len);
                 break;
             case 6u:
                 result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_attitude[1u], &buf[field_start],
-                    field_len
-                );
+                    &waypoint->target_pitch, &buf[field_start], field_len);
                 break;
             case 7u:
                 result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_attitude[2u], &buf[field_start],
-                    field_len
-                );
+                    &waypoint->target_roll, &buf[field_start], field_len);
                 break;
             case 8u:
                 result = fcs_double_from_ascii_fixed(
@@ -723,7 +727,12 @@ size_t len) {
         goto invalid;
     }
 
-    /* Check validity */
+    /* Check data validity */
+    if (fcs_comms_validate_waypoint(waypoint) != FCS_VALIDATION_OK) {
+        goto invalid;
+    }
+
+    /* Checksum */
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
@@ -733,27 +742,44 @@ size_t len) {
     return FCS_DESERIALIZATION_OK;
 
 invalid:
-    memset(waypoint, 0, sizeof(struct fcs_packet_waypoint_t));
+    memset(waypoint, 0xFFu, sizeof(struct fcs_packet_waypoint_t));
     return FCS_DESERIALIZATION_ERROR;
+}
+
+enum fcs_validation_result_t fcs_comms_validate_waypoint(
+const struct fcs_packet_waypoint_t *restrict waypoint) {
+    assert(waypoint);
+
+    if (-90.0 <= waypoint->target_lat && waypoint->target_lat <= 90.0 &&
+        -180.0 <= waypoint->target_lon && waypoint->target_lon <= 180.0 &&
+        -500.0 <= waypoint->target_alt && waypoint->target_alt < 10000.0 &&
+        0.0 <= waypoint->target_yaw && waypoint->target_yaw < 360.0 &&
+        -90.0 <= waypoint->target_pitch && waypoint->target_pitch <= 90.0 &&
+        -180.0 <= waypoint->target_roll && waypoint->target_roll <= 180.0 &&
+        0.0 < waypoint->target_airspeed &&
+            waypoint->target_airspeed < 1000.0) {
+        return FCS_VALIDATION_OK;
+    } else {
+        return FCS_VALIDATION_ERROR;
+    }
 }
 
 size_t fcs_comms_serialize_config(uint8_t *restrict buf,
 const struct fcs_packet_config_t *restrict config) {
     assert(buf);
     assert(config);
+    assert(fcs_comms_validate_config(config) == FCS_VALIDATION_OK);
 
     size_t index = 0;
 
     memcpy(buf, "$PSFWAC,", 8u);
     index += 8u;
 
-    assert(0 < config->param_name_len && config->param_name_len <= 24u);
     memcpy(&buf[index], config->param_name, config->param_name_len);
     index += config->param_name_len;
     buf[index++] = ',';
 
     /* Base64-encode config value */
-    assert(0 < config->param_value_len && config->param_value_len <= 128u);
     uint8_t len = fcs_base64_from_data(&buf[index], 192u, config->param_value,
                                        config->param_value_len);
     assert(0 < len && len < 192u);
@@ -829,10 +855,6 @@ size_t len) {
 
                 config->param_value_len = fcs_data_from_base64(
                     config->param_value, 128u, &buf[field_start], field_len);
-
-                if (config->param_value_len == 0) {
-                    goto invalid;
-                }
                 result = FCS_CONVERSION_OK;
                 break;
             default:
@@ -851,7 +873,12 @@ size_t len) {
         goto invalid;
     }
 
-    /* Check validity */
+    /* Check data validity */
+    if (fcs_comms_validate_config(config) != FCS_VALIDATION_OK) {
+        goto invalid;
+    }
+
+    /* Checksum */
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
@@ -861,8 +888,20 @@ size_t len) {
     return FCS_DESERIALIZATION_OK;
 
 invalid:
-    memset(config, 0, sizeof(struct fcs_packet_config_t));
+    memset(config, 0xFFu, sizeof(struct fcs_packet_config_t));
     return FCS_DESERIALIZATION_ERROR;
+}
+
+enum fcs_validation_result_t fcs_comms_validate_config(
+const struct fcs_packet_config_t *restrict config) {
+    assert(config);
+
+    if (0 < config->param_name_len && config->param_name_len <= 24u &&
+        0 < config->param_value_len && config->param_value_len <= 128u) {
+        return FCS_VALIDATION_OK;
+    } else {
+        return FCS_VALIDATION_ERROR;
+    }
 }
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
@@ -943,7 +982,12 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
         goto invalid;
     }
 
-    /* Check validity */
+    /* Check data validity */
+    if (fcs_comms_validate_gcs(gcs) != FCS_VALIDATION_OK) {
+        goto invalid;
+    }
+
+    /* Checksum */
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
@@ -953,6 +997,21 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
     return FCS_DESERIALIZATION_OK;
 
 invalid:
-    memset(gcs, 0, sizeof(struct fcs_packet_gcs_t));
+    memset(gcs, 0xFFu, sizeof(struct fcs_packet_gcs_t));
     return FCS_DESERIALIZATION_ERROR;
+}
+
+enum fcs_validation_result_t fcs_comms_validate_gcs(
+const struct fcs_packet_gcs_t *restrict gcs) {
+    assert(gcs);
+
+    if (0 <= gcs->solution_time &&
+        -90.0 <= gcs->lat && gcs->lat <= 90.0 &&
+        -180.0 <= gcs->lon && gcs->lon <= 180.0 &&
+        -500.0 <= gcs->alt && gcs->alt < 10000.0 &&
+        700.0 <= gcs->pressure && gcs->pressure < 1200.0) {
+        return FCS_VALIDATION_OK;
+    } else {
+        return FCS_VALIDATION_ERROR;
+    }
 }
