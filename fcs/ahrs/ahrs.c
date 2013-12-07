@@ -167,13 +167,32 @@ static double control_pos[4];
 
 /* Latest I/O board state packets */
 static struct sensor_packet_t ioboard[2];
-static uint16_t ioboard_last_tick[2];
+static uint8_t ioboard_last_tick[2];
 
 /* Global FCS state structure */
 struct fcs_packet_state_t global_state;
 
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
+
+/* Endian swap functions -- AVR32s are big-endian */
+static inline uint16_t swap_uint16(uint16_t val) {
+    return (val << 8) | (val >> 8 );
+}
+
+static inline int16_t swap_int16(int16_t val) {
+    return (val << 8) | ((val >> 8) & 0xFF);
+}
+
+static inline uint32_t swap_uint32(uint32_t val) {
+    val = ((val << 8) & 0xFF00FF00 ) | ((val >> 8) & 0xFF00FF );
+    return (val << 16) | (val >> 16);
+}
+
+static inline int32_t swap_int32(int32_t val) {
+    val = ((val << 8) & 0xFF00FF00) | ((val >> 8) & 0xFF00FF );
+    return (val << 16) | ((val >> 16) & 0xFFFF);
+}
 
 /* Internal functions */
 void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
@@ -295,14 +314,16 @@ void fcs_ahrs_init(void) {
 }
 
 void fcs_ahrs_tick(void) {
+    uint8_t t = (uint8_t)(global_state.solution_time & 0xFFu);
+
     if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &ioboard[0])) {
-        ioboard_last_tick[0] = ioboard[0].tick;
+        ioboard_last_tick[0] = t;
     } else {
         ioboard[0].sensor_update_flags = 0;
     }
 
     if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT1, &ioboard[1])) {
-        ioboard_last_tick[1] = ioboard[1].tick;
+        ioboard_last_tick[1] = t;
     } else {
         ioboard[1].sensor_update_flags = 0;
     }
@@ -311,6 +332,17 @@ void fcs_ahrs_tick(void) {
     TODO: Reset I/O board if time since last tick > 2ms and time since last
     reset > 100ms
     */
+    if (t - ioboard_last_tick[0] > 2u) {
+        assert(fcs_stream_set_rate(FCS_STREAM_UART_INT0, 921600)
+               == FCS_STREAM_OK);
+        assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
+    }
+
+    if (t - ioboard_last_tick[1] > 2u) {
+        assert(fcs_stream_set_rate(FCS_STREAM_UART_INT1, 921600)
+               == FCS_STREAM_OK);
+        assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
+    }
 
     /*
     Read sensor data from latest I/O board packets, and convert to UKF
@@ -372,6 +404,7 @@ void fcs_ahrs_tick(void) {
     assert(control_len < 16);
 
     fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
+    fcs_stream_write(FCS_STREAM_UART_INT1, control_buf, control_len);
 
     /* Run the UKF */
     ukf_iterate(AHRS_DELTA, control_pos);
@@ -492,7 +525,7 @@ struct sensor_packet_t *dest) {
     Give up after 4 tries.
     */
     while (i < 4 && fcs_stream_peek(dev) > 0 &&
-           nbytes > sizeof(struct control_packet_t) + 1) {
+           nbytes > sizeof(struct sensor_packet_t) + 1) {
         fcs_stream_skip_until_after(dev, (uint8_t)0);
         nbytes = fcs_stream_bytes_available(dev);
         i++;
@@ -531,6 +564,32 @@ struct sensor_packet_t *dest) {
             /* Validate the packet checksum */
             uint8_t checksum = fcs_crc8(
                 (uint8_t*)&dest->tick, result.out_len - 1, 0x0);
+
+            /* Swap bytes for multi-byte values -- AVR32 is big-endian */
+            dest->tick = swap_uint16(dest->tick);
+            dest->status = swap_uint16(dest->status);
+            dest->accel.x = swap_int16(dest->accel.x);
+            dest->accel.y = swap_int16(dest->accel.y);
+            dest->accel.z = swap_int16(dest->accel.z);
+            dest->gyro.x = swap_int16(dest->gyro.x);
+            dest->gyro.y = swap_int16(dest->gyro.y);
+            dest->gyro.z = swap_int16(dest->gyro.z);
+            dest->accel_gyro_temp = swap_int16(dest->accel_gyro_temp);
+            dest->pressure = swap_uint16(dest->pressure);
+            dest->barometer_temp = swap_uint16(dest->barometer_temp);
+            dest->pitot = swap_int16(dest->pitot);
+            dest->i = swap_int16(dest->i);
+            dest->v = swap_int16(dest->v);
+            dest->range = swap_int16(dest->range);
+            dest->mag.x = swap_int16(dest->mag.x);
+            dest->mag.y = swap_int16(dest->mag.y);
+            dest->mag.z = swap_int16(dest->mag.z);
+            dest->gps.position.lat = swap_int32(dest->gps.position.lat);
+            dest->gps.position.lng = swap_int32(dest->gps.position.lng);
+            dest->gps.position.alt = swap_int32(dest->gps.position.alt);
+            dest->gps.velocity.n = swap_int16(dest->gps.velocity.n);
+            dest->gps.velocity.e = swap_int16(dest->gps.velocity.e);
+            dest->gps.velocity.d = swap_int16(dest->gps.velocity.d);
 
             return checksum == dest->crc;
         }
@@ -831,8 +890,9 @@ const double *restrict control_values) {
     uint8_t i;
     #pragma MUST_ITERATE(4)
     for (i = 0; i < 4; i++) {
-        val = min(max(0.0, control_values[i] * 65535.0), 65535.0);
-        packet.pwm[i] = (uint16_t)val;
+        val = min(max(1.0, control_values[i] * 65535.0), 65535.0);
+        /* Swap bytes for big-endian AVR32 */
+        packet.pwm[i] = swap_uint16((uint16_t)val);
     }
 
     /* Calculate the packet's CRC8 */

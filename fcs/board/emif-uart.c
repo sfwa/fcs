@@ -450,9 +450,10 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     - RX interrupt on data
     - Loopback if debugging
     - 8 bits, no parity, 1 stop bit
+    -> MCR = 0x18 for loopback, 0x08 without
     */
     uart[uart_idx].IER = 0x01u; /* RX interrupt only */
-    uart[uart_idx].MCR = 0x18u; /* 0x18 for loopback + INT_OE */
+    uart[uart_idx].MCR = 0x08u; /* 0x18 for loopback + INT_OE */
     uart[uart_idx].LCR = 0x03u; /* 8 bit, 1 stop bit, no parity */
 
     /* Send configuration to the UART */

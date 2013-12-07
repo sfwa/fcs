@@ -313,6 +313,9 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     We don't want any interrupts, so set to 0.
     */
     uart[uart_idx]->IER = 0;
+
+    uint8_t dummy = uart[uart_idx]->LSR;
+    #pragma unused(dummy);
 }
 
 void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
@@ -418,6 +421,8 @@ uint16_t buf_size) {
 
     /* Disable the UART RX */
     uart[uart_idx]->PWREMU_MGMT &= 0xFFFFDFFFu;
+    uint8_t dummy = uart[uart_idx]->LSR;
+    #pragma unused(dummy);
 
     /*
     Disable the channel by setting the clear bit in the appropriate register.
@@ -660,6 +665,8 @@ uint16_t buf_size) {
 
     /* Put the UART TX into reset -- clear UTRST in PWREMU_MGMT (bit 14) */
     uart[uart_idx]->PWREMU_MGMT &= 0xFFFFBFFF;
+    uint8_t dummy = uart[uart_idx]->LSR;
+    #pragma unused(dummy);
 
     /* Disable the DMA event for this channel */
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],

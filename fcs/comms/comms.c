@@ -54,18 +54,18 @@ void fcs_comms_init(void) {
 }
 
 void fcs_comms_tick(void) {
-    /* Send a state update packet to the CPU every 20ms (50Hz) */
-    if (tick % 20u == 0) {
-        size_t packet_len, write_len;
-        packet_len = fcs_comms_serialize_state(comms_buf, &global_state);
-        assert(packet_len && packet_len < 256u);
-
-        write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
-                                     packet_len);
-
-        /* We should definitely have enough room in the write buffer */
-        assert(packet_len == write_len);
-    }
+//    /* Send a state update packet to the CPU every 20ms (50Hz) */
+//    if (tick % 20u == 0) {
+//        size_t packet_len, write_len;
+//        packet_len = fcs_comms_serialize_state(comms_buf, &global_state);
+//        assert(packet_len && packet_len < 256u);
+//
+//        write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
+//                                     packet_len);
+//
+//        /* We should definitely have enough room in the write buffer */
+//        assert(packet_len == write_len);
+//    }
 
     /* Check for packets */
     comms_buf_len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, comms_buf);
