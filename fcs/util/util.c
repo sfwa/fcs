@@ -155,7 +155,6 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
     assert(max_fractional_digits <= 7u);
     assert(max_integer_digits || max_fractional_digits);
     assert(result);
-    assert(!isnan(value));
 
     size_t out_len = 0;
 
@@ -176,8 +175,14 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
     */
     value = round(value * _fcs_exp10[max_fractional_digits]);
 
-    /* Check for overflow -- output "OF" or "-OF" */
-    if (value >= _fcs_exp10[max_integer_digits + max_fractional_digits]) {
+    if (isnan(value)) {
+        /* Not a number -- output NaN */
+        result[out_len++] = 'N';
+        result[out_len++] = 'a';
+        result[out_len++] = 'N';
+    } else if (value >= _fcs_exp10[max_integer_digits +
+                                   max_fractional_digits]) {
+         /* Overflow -- output "OF" or "-OF" */
         result[out_len++] = 'O';
         result[out_len++] = 'F';
     } else {

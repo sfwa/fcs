@@ -408,10 +408,13 @@ TEST(ASCIIFixedFromDouble, TooLong) {
 }
 
 TEST(ASCIIFixedFromDouble, NaN) {
-    EXPECT_DEATH(
-        { uint8_t x[32]; fcs_ascii_fixed_from_double(x, 0.0/0.0, 1u, 1u); },
-        "Assertion.*failed"
-    );
+    size_t result_length;
+    uint8_t result[32];
+
+    result_length = fcs_ascii_fixed_from_double(result, 0.0/0.0, 1u, 3u);
+    ASSERT_EQ(3u, result_length);
+    result[result_length] = 0;
+    EXPECT_STREQ("NaN", (char*)result);
 }
 
 TEST(ASCIIFromInt32, Valid) {

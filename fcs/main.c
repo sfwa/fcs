@@ -121,7 +121,7 @@ uint32_t fcs_main_init_core0(void) {
     */
     volatile CSL_GpioRegs* gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
     gpio->BANK_REGISTERS[0].DIR &= 0xF33FFFFFu;
-    gpio->BANK_REGISTERS[0].OUT_DATA = 0;
+    gpio->BANK_REGISTERS[0].OUT_DATA = 0x0CC00000u;
 
     return (FCS_CLOCK_HZ / FCS_CORE0_TICK_HZ);
 }
@@ -145,6 +145,8 @@ int main(void) {
     	cycles_per_tick = fcs_main_init_core0();
     } else if (core == 1u) {
     	cycles_per_tick = fcs_main_init_core1();
+    } else {
+    	assert(0);
     }
 
     if (core == FCS_CORE_CONFIG) {
