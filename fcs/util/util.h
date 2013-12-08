@@ -51,6 +51,7 @@ pdata: pointer to data buffer.
 nbytes: number of bytes in data buffer.
 crc: previous returned crc8 value.
 */
+#pragma FUNC_IS_PURE(fcs_crc8);
 uint8_t fcs_crc8(const uint8_t *restrict pdata, uint32_t nbytes,
 uint8_t crc);
 
@@ -62,6 +63,7 @@ pdata: pointer to data buffer.
 nbytes: number of bytes in data buffer.
 crc: starting value; must be 0xffffffffu for standards compliance.
 */
+#pragma FUNC_IS_PURE(fcs_crc32);
 uint32_t fcs_crc32(const uint8_t *restrict pdata, uint32_t nbytes,
 uint32_t crc);
 
@@ -69,6 +71,7 @@ uint32_t crc);
 fcs_text_checksum - calculate an NMEA0183-compatible checksum over the given
 input data.
 */
+#pragma FUNC_IS_PURE(fcs_text_checksum);
 uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes);
 
 /* COBS-R prototypes */

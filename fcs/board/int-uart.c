@@ -329,6 +329,55 @@ void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
     uart_baud[uart_idx] = baud;
 }
 
+uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
+    assert(uart_idx == 0 || uart_idx == 1);
+
+    uint8_t lsr = uart[uart_idx]->LSR;
+
+    /*
+    LSR: Line Status Register (section 3.8 in SPRUGP1)
+
+    Bit   Field          Value         Description
+    31:8  Reserved
+    7     RXFIFOE                      RX FIFO error
+                                       0 = no errors
+                                       1 = at least one parity error, framing
+                                           error or break indicator in the
+                                           FIFO
+    6     TEMT                         TX empty
+                                       0 = TX FIFO or TSR contains a character
+                                       1 = Neither TX FIFO nor TSR contains a
+                                           character
+    5     THRE                         THR empty
+                                       0 = TX FIFO contains a character
+                                       1 = TX FIFO empty
+    4     BI                           Break indicator. Set when the RX input
+                                       is held low for more than a full word
+                                       time.
+                                       0 = Next RX FIFO byte is not a break
+                                       1 = Next RX FIFO byte is a break
+    3     FE                           Framing error in RX.
+                                       0 = Next RX FIFO byte does not have a
+                                           framing error
+                                       1 = Next RX FIFO byte has a framing
+                                           error
+    2     PE                           Parity error in RX.
+                                       0 = Next RX FIFO byte does not have a
+                                           parity error
+                                       1 = Next RX FIFO byte has a parity
+                                           error
+    1     OE                           Overrun error in RX FIFO.
+                                       0 = No overrun error
+                                       1 = Overrun error
+    0     DR                           Data ready in RX.
+                                       0 = No byte in RBR
+                                       1 = Byte in RBR
+    */
+
+    /* Error if RXFIFOE, BI, FE or OE was set */
+    return lsr & 0x9Au;
+}
+
 /*
 EDMA event/channel mapping: on the C6657, the mapping between events and
 channels is fixed. The ID numbers are therefore interchangeable.

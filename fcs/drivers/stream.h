@@ -58,6 +58,11 @@ enum fcs_stream_result_t fcs_stream_set_rate(enum fcs_stream_device_t dev,
 uint32_t baud);
 
 /*
+fcs_stream_check_error -- checks if an error has occurred
+*/
+enum fcs_stream_result_t fcs_stream_check_error(enum fcs_stream_device_t dev);
+
+/*
 fcs_stream_read - reads up to "nbytes" from the device's input buffer into
 "buf".
 

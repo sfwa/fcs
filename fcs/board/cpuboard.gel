@@ -393,43 +393,44 @@ Delay_milli_seconds(myDelay)
 
 ddr3_memory_test ()
 {
-    unsigned int index, value;
-
-    GEL_TextOut( "DDR3 memory test... Started\n" );
-
-    /* Write a pattern */
-    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-        *index = index;
-    }
-
-    /* Read and check the pattern */
-    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-
-        value = *index;
-
-        if (value  != index) {
-            GEL_TextOut( "DDR3 memory test... Failed\n" );
-            return -1;
-        }
-    }
-
-    /* Write a pattern for complementary values */
-    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-        *index = ~index;
-    }
-
-    /* Read and check the pattern */
-    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-
-        value = *index;
-
-        if (value  != ~index) {
-            GEL_TextOut( "DDR3 memory test... Failed\n" );
-            return -1;
-        }
-    }
-
-    GEL_TextOut( "DDR3 memory test... Passed\n" );
+    GEL_TextOut( "DDR3 memory test... Skipped\n" );
+//    unsigned int index, value;
+//
+//    GEL_TextOut( "DDR3 memory test... Started\n" );
+//
+//    /* Write a pattern */
+//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+//        *index = index;
+//    }
+//
+//    /* Read and check the pattern */
+//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+//
+//        value = *index;
+//
+//        if (value  != index) {
+//            GEL_TextOut( "DDR3 memory test... Failed\n" );
+//            return -1;
+//        }
+//    }
+//
+//    /* Write a pattern for complementary values */
+//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+//        *index = ~index;
+//    }
+//
+//    /* Read and check the pattern */
+//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+//
+//        value = *index;
+//
+//        if (value  != ~index) {
+//            GEL_TextOut( "DDR3 memory test... Failed\n" );
+//            return -1;
+//        }
+//    }
+//
+//    GEL_TextOut( "DDR3 memory test... Passed\n" );
     return 0;
 }
 

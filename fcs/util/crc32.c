@@ -122,7 +122,7 @@ uint32_t crc) {
     assert(nbytes);
 
     /* loop over the buffer data */
-    #pragma MUST_ITERATE(1,1,24)
+    #pragma MUST_ITERATE(1,256)
     for (i = 0; i < nbytes; i++) {
         crc = crc_lookup[(crc ^ pdata[i]) & 0xffu] ^ (crc >> 8);
     }

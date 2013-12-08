@@ -34,6 +34,9 @@ The external UART must be reset for the new configuration to take effect.
 */
 void fcs_emif_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud);
 
+/* Check the UART status and return a value describing any current errors */
+uint32_t fcs_emif_uart_check_error(uint8_t uart_idx);
+
 /*
 Start an ongoing DMA transfer from the UART `uart_idx` to the RX buffer `buf`,
 with `buf_size` bytes being written to the buffer before the write pointer

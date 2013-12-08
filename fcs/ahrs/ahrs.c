@@ -332,17 +332,15 @@ void fcs_ahrs_tick(void) {
     TODO: Reset I/O board if time since last tick > 20ms and time since last
     reset > 20ms. Also reset the UART and EDMA3 at that point.
     */
-    if (((t - ioboard_last_tick[0]) & 0xFFu) > 5u) {
-        assert(fcs_stream_set_rate(FCS_STREAM_UART_INT0, 921600)
-               == FCS_STREAM_OK);
+    if (fcs_stream_check_error(FCS_STREAM_UART_INT0) == FCS_STREAM_ERROR ||
+            ((t - ioboard_last_tick[0]) & 0xFFu) > 20u) {
         assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
 
         ioboard_last_tick[0] = t;
     }
 
-    if (((t - ioboard_last_tick[1]) & 0xFFu) > 5u) {
-        assert(fcs_stream_set_rate(FCS_STREAM_UART_INT1, 921600)
-               == FCS_STREAM_OK);
+    if (fcs_stream_check_error(FCS_STREAM_UART_INT1) == FCS_STREAM_ERROR ||
+            ((t - ioboard_last_tick[1]) & 0xFFu) > 20u) {
         assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
 
         ioboard_last_tick[1] = t;
@@ -387,7 +385,7 @@ void fcs_ahrs_tick(void) {
     Work out the nominal current control position, taking into account the
     control response time configured in control_rates.
     */
-    #pragma MUST_ITERATE(4)
+    #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4; i++) {
         double delta = control_set[i] - control_pos[i],
                limit = control_rate[i] * AHRS_DELTA;
@@ -892,7 +890,7 @@ const double *restrict control_values) {
 
     double val;
     uint8_t i;
-    #pragma MUST_ITERATE(4)
+    #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
         val = min(max(1.0, control_values[i] * 65535.0), 65535.0);
         /* Swap bytes for big-endian AVR32 */

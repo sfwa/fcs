@@ -33,10 +33,10 @@ void fcs_crc8_init(uint8_t polynomial) {
     uint32_t i, j;
     uint8_t t = 0;
 
-    #pragma MUST_ITERATE(256)
+    #pragma MUST_ITERATE(256,256)
     for (i = 0; i < 256u; i++) {
         t = i;
-        #pragma MUST_ITERATE(8)
+        #pragma MUST_ITERATE(8,8)
         for (j = 0; j < 8u; j++) {
             t = (t << 1u) ^ ((t & 0x80u) ? polynomial : 0);
         }
@@ -62,7 +62,7 @@ uint8_t crc) {
     assert(crc_inited);
 
     /* loop over the buffer data */
-    #pragma MUST_ITERATE(1,1,24)
+    #pragma MUST_ITERATE(1,256)
     for (i = 0; i < nbytes; i++) {
         crc = crc_lookup[(crc ^ pdata[i]) & 0xffu];
     }

@@ -108,7 +108,7 @@ uint32_t fcs_main_init_core0(void) {
     and GPIO16_TIMI0_MUX high.
     */
     volatile CSL_BootcfgRegs *cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
-    cfg->CHIP_PIN_CONTROL_0 = 0xCCF0000u;
+    cfg->CHIP_PIN_CONTROL_0 = 0x0CCF0000u;
 
     /*
     Each GPIO bank has DIR, OUT_DATA, SET_DATA, CLR_DATA, IN_DATA,
@@ -135,6 +135,7 @@ void fcs_main_init_common(void) {
     TSCL = 1u;
 }
 
+#pragma FUNC_NEVER_RETURNS(main);
 int main(void) {
     fcs_main_init_common();
 

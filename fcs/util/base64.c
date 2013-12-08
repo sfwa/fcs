@@ -56,6 +56,7 @@ static inline void _fcs_base64_encode_init(base64_encodestate *S) {
 static const uint8_t encoding[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop"
                                   "qrstuvwxyz0123456789+/";
 
+#pragma FUNC_IS_PURE(_fcs_base64_encode_value);
 static inline uint8_t _fcs_base64_encode_value(uint8_t value) {
     if (value > 63u) {
         return '=';
@@ -175,6 +176,7 @@ static const uint8_t decoding[] = {
 };
 static const size_t decoding_size = sizeof(decoding);
 
+#pragma FUNC_IS_PURE(_fcs_base64_decode_value);
 static inline uint8_t _fcs_base64_decode_value(uint8_t value_in) {
     if (value_in < 43u || value_in >= decoding_size + 43u) {
         return 255u;

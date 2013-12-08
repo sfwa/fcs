@@ -636,6 +636,52 @@ void fcs_emif_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
     uart_baud[uart_idx] = baud;
 }
 
+uint32_t fcs_emif_uart_check_error(uint8_t uart_idx) {
+    assert(uart_idx == 0 || uart_idx == 1);
+
+    volatile uint8_t *restrict uart_mem = uart_regs[uart_idx];
+    uint8_t lsr = uart_mem[XR16M752_LSR];
+
+    /*
+    LSR: Line Status Register (table 8 of datasheet)
+
+    Bit   Field          Value         Description
+    31:8  Reserved
+    7     RXFIFOE                      RX FIFO error
+                                       0 = no errors
+                                       1 = at least one parity error, framing
+                                           error or break indicator in the
+                                           FIFO
+    6     TEMT                         THR & TSR empty
+                                       0 = THR or TSR contains a character
+                                       1 = Neither THR nor TSR contains a
+                                           character
+    5     THRE                         THR empty
+                                       0 = THR contains a character
+                                       1 = THR empty
+    4     BI                           Break indicator. Set when the RX input
+                                       is held low for more than a full word
+                                       time.
+                                       0 = RBR is not a break
+                                       1 = RBR is a break
+    3     FE                           Framing error in RBR.
+                                       0 = RBR does not have a framing error
+                                       1 = RBR has a framing error
+    2     PE                           Parity error in RBR.
+                                       0 = RBR does not have a parity error
+                                       1 = RBR has a parity error
+    1     OE                           Overrun error in RBR.
+                                       0 = No overrun error
+                                       1 = Overrun error
+    0     DR                           Data ready in RX.
+                                       0 = No byte in RBR
+                                       1 = Byte in RBR
+    */
+
+    /* Error if BI, FE or OE was set */
+    return lsr & 0x1Au;
+}
+
 void fcs_emif_uart_start_rx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);

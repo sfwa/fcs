@@ -181,13 +181,11 @@ enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev) {
     if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
         /* Start internal UART RX EDMA transfer */
         uint8_t dev_idx = dev == FCS_STREAM_UART_INT0 ? 0 : 1;
-        fcs_int_uart_reset(dev_idx);
         fcs_int_uart_start_rx_edma(
             dev_idx, rx_buffers[dev], FCS_STREAM_BUFFER_SIZE);
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
         /* Start external UART RX EDMA transfer */
         uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
-        fcs_emif_uart_reset(dev_idx);
         fcs_emif_uart_start_rx_edma(
             dev_idx, rx_buffers[dev], FCS_STREAM_BUFFER_SIZE);
     } else {
@@ -196,6 +194,28 @@ enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev) {
 #endif
 
     return FCS_STREAM_OK;
+}
+
+/*
+fcs_stream_check_error -- checks if an error has occurred
+*/
+enum fcs_stream_result_t fcs_stream_check_error(
+enum fcs_stream_device_t dev) {
+    assert(dev < FCS_STREAM_NUM_DEVICES);
+
+    uint32_t err = 0;
+
+#ifdef __TI_COMPILER_VERSION__
+    if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
+        err = fcs_int_uart_check_error(dev == FCS_STREAM_UART_INT0 ? 0 : 1);
+    } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
+        err = fcs_emif_uart_check_error(dev == FCS_STREAM_UART_EXT0 ? 0 : 1);
+    } else {
+        assert(false);
+    }
+#endif
+
+    return err ? FCS_STREAM_ERROR : FCS_STREAM_OK;
 }
 
 /*

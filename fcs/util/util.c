@@ -62,7 +62,7 @@ uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes) {
     assert(nbytes <= 256);
 
     uint8_t result = 0x00, i;
-    #pragma MUST_ITERATE(1, 1, 256)
+    #pragma MUST_ITERATE(1, 256)
     for (i = 0; i < nbytes; i++) {
         result ^= pdata[i];
     }
