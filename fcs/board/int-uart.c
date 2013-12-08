@@ -29,6 +29,7 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/cslr_device.h"
 #include "../c66x-csl/ti/csl/cslr_uart.h"
 #include "../c66x-csl/ti/csl/cslr_tpcc.h"
+#include "../c66x-csl/ti/csl/cslr_gpio.h"
 
 #include "board.h"
 #include "int-uart.h"
@@ -54,6 +55,9 @@ accept further writes until it's complete.
 */
 
 static volatile CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
+
+/* GPIO registers */
+static volatile CSL_GpioRegs* gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
 
 static uint16_t rx_edma_event[2] = { 4u, 14u },
                 tx_edma_event[2] = { 5u, 15u };
@@ -712,29 +716,45 @@ uint16_t buf_size) {
 uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    if (rx_last_buf_size[uart_idx] == 0) {
-        return 0;
-    } else {
+    uint16_t nbytes = 0;
+    if (rx_last_buf_size[uart_idx] != 0) {
         /*
         Subtract BCNT from last buffer size to get the number of bytes written
         to RX buffer
         */
-        return rx_last_buf_size[uart_idx] -
-               (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16);
+        nbytes = rx_last_buf_size[uart_idx] -
+               (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16u);
     }
+
+    /* If there are bytes available, turn the output LED on */
+    if (nbytes > 0) {
+        gpio->BANK_REGISTERS[0].OUT_DATA |= 0x00800000 << (uart_idx ? 4u : 0);
+    } else {
+        gpio->BANK_REGISTERS[0].OUT_DATA &= 0xFF7FFFFF << (uart_idx ? 4u : 0);
+    }
+
+    return nbytes;
 }
 
 uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    if (tx_last_buf_size[uart_idx] == 0) {
-        return 0;
-    } else {
+    uint16_t nbytes = 0;
+    if (tx_last_buf_size[uart_idx] != 0) {
         /*
         Subtract BCNT from last buffer size to get the number of bytes read
         from TX buffer
         */
-        return tx_last_buf_size[uart_idx] -
+        nbytes = tx_last_buf_size[uart_idx] -
                (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT >> 16);
     }
+
+    /* If there are bytes available, turn the output LED on */
+    if (nbytes > 0) {
+        gpio->BANK_REGISTERS[0].OUT_DATA |= 0x00400000 << (uart_idx ? 4u : 0);
+    } else {
+        gpio->BANK_REGISTERS[0].OUT_DATA &= 0xFFBFFFFF << (uart_idx ? 4u : 0);
+    }
+
+    return nbytes;
 }

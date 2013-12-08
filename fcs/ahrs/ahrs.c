@@ -330,15 +330,15 @@ void fcs_ahrs_tick(void) {
 
     /*
     TODO: Reset I/O board if time since last tick > 2ms and time since last
-    reset > 100ms
+    reset > 100ms. Also reset the UART and EDMA3 at that point.
     */
-    if (t - ioboard_last_tick[0] > 2u) {
+    if (t - ioboard_last_tick[0] > 10u) {
         assert(fcs_stream_set_rate(FCS_STREAM_UART_INT0, 921600)
                == FCS_STREAM_OK);
         assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
     }
 
-    if (t - ioboard_last_tick[1] > 2u) {
+    if (t - ioboard_last_tick[1] > 10u) {
         assert(fcs_stream_set_rate(FCS_STREAM_UART_INT1, 921600)
                == FCS_STREAM_OK);
         assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
@@ -884,30 +884,30 @@ const double *restrict control_values) {
 
     packet.tick = tick;
     packet.msg_type = MSG_TYPE_CONTROL;
-    packet.gpout = 0x0;
+    packet.gpout = 0;
 
     double val;
     uint8_t i;
     #pragma MUST_ITERATE(4)
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 4u; i++) {
         val = min(max(1.0, control_values[i] * 65535.0), 65535.0);
         /* Swap bytes for big-endian AVR32 */
         packet.pwm[i] = swap_uint16((uint16_t)val);
     }
 
     /* Calculate the packet's CRC8 */
-    packet.crc = fcs_crc8(&(packet.tick), sizeof(packet) - 1, 0x0);
+    packet.crc = fcs_crc8(&(packet.tick), sizeof(packet) - 1u, 0);
 
     /* Set the packet start/end and COBS-R encode the result */
     struct fcs_cobsr_encode_result result;
-    result = fcs_cobsr_encode(&buf[1], sizeof(packet) + 3, (uint8_t*)&packet,
+    result = fcs_cobsr_encode(&buf[1], sizeof(packet) + 3u, (uint8_t*)&packet,
                               sizeof(packet));
     assert(result.status == FCS_COBSR_ENCODE_OK);
 
     /* Set the NUL packet delimiters */
     buf[0] = 0;
-    buf[result.out_len + 1] = 0;
+    buf[result.out_len + 1u] = 0;
 
     /* Return the total length */
-    return result.out_len + 2;
+    return result.out_len + 2u;
 }

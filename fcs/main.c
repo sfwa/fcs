@@ -25,6 +25,9 @@ SOFTWARE.
 #include <stddef.h>
 
 #include <c6x.h>
+#include "c66x-csl/ti/csl/cslr_device.h"
+#include "c66x-csl/ti/csl/cslr_bootcfg.h"
+#include "c66x-csl/ti/csl/cslr_gpio.h"
 
 #include "config/config.h"
 #include "ahrs/ahrs.h"
@@ -44,6 +47,81 @@ uint32_t fcs_main_init_core0(void) {
     http://e2e.ti.com/support/dsp/c6000_multi-core_dsps/f/639/t/248412.aspx
     */
     *(uint32_t*)0x20C00008 |= 0x80000000;
+
+    /*
+    Set UART CTS/RTS and TIMI/O pins as GPIOs
+    CHIP_PIN_CONTROL_0: Pin Control 0 (section 3.3.20 in SPRS814A)
+
+    Bit   Field          Value         Description
+    31    GPIO31_SPIDOUT_MUX           SPI or GPIO mux control
+                                       0 = SPIDOUT enabled
+                                       1 = GPIO31 enabled
+    30    GPIO30_SPIDIN_MUX            SPI or GPIO mux control
+                                       0 = SPIDIN enabled
+                                       1 = GPIO30 enabled
+    29    GPIO29_SPICS1_MUX            SPI or GPIO mux control
+                                       0 = SPICS1 enabled
+                                       1 = GPIO29 enabled
+    28    GPIO28_SPICS0_MUX            SPI or GPIO mux control
+                                       0 = SPICS0 enabled
+                                       1 = GPIO28 enabled
+    27    GPIO27_UARTRTS1_MUX          UART or GPIO mux control
+                                       0 = UARTRTS1 enabled
+                                       1 = GPIO27 enabled
+    26    GPIO26_UARTCTS1_MUX          UART or GPIO mux control
+                                       0 = UARTCTS1 enabled
+                                       1 = GPIO26 enabled
+    25    GPIO25_UARTTX1_MUX           UART or GPIO mux control
+                                       0 = UARTTX1 enabled
+                                       1 = GPIO25 enabled
+    24    GPIO24_UARTRX1_MUX           UART or GPIO mux control
+                                       0 = UARTRX1 enabled
+                                       1 = GPIO24 enabled
+    23    GPIO23_UARTRTS0_MUX          UART or GPIO mux control
+                                       0 = UARTRTS0 enabled
+                                       1 = GPIO23 enabled
+    22    GPIO22_UARTCTS0_MUX          UART or GPIO mux control
+                                       0 = UARTCTS0 enabled
+                                       1 = GPIO22 enabled
+    21    GPIO21_UARTTX0_MUX           UART or GPIO mux control
+                                       0 = UARTTX0 enabled
+                                       1 = GPIO21 enabled
+    20    GPIO20_UARTRX0_MUX           UART or GPIO mux control
+                                       0 = UARTRX0 enabled
+                                       1 = GPIO20 enabled
+    19    GPIO19_TIMO1_MUX             TIMER or GPIO mux control
+                                       0 = TIMO1 enabled
+                                       1 = GPIO19 enabled
+    18    GPIO18_TIMO0_MUX             TIMER or GPIO mux control
+                                       0 = TIMO0 enabled
+                                       1 = GPIO18 enabled
+    17    GPIO17_TIMI1_MUX             TIMER or GPIO mux control
+                                       0 = TIMI1 enabled
+                                       1 = GPIO17 enabled
+    16    GPIO16_TIMI0_MUX             TIMER or GPIO mux control
+                                       0 = TIMI0 enabled
+                                       1 = GPIO16 enabled
+    15:0  Reserved
+
+    We want GPIO27_UARTRTS1_MUX, GPIO26_UARTCTS1_MUX, GPIO23_UARTRTS0_MUX,
+    GPIO22_UARTCTS0_MUX, GPIO19_TIMO1_MUX, GPIO18_TIMO0_MUX, GPIO17_TIMI1_MUX,
+    and GPIO16_TIMI0_MUX high.
+    */
+    volatile CSL_BootcfgRegs *cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
+    cfg->CHIP_PIN_CONTROL_0 = 0xCCF0000u;
+
+    /*
+    Each GPIO bank has DIR, OUT_DATA, SET_DATA, CLR_DATA, IN_DATA,
+    SET_RIS_TRIG, CLR_RIS_TRIG, SET_FAL_TRIG and CLR_FAL_TRIG. Those registers
+    are 32 bits wide, one bit per pin (31-0 maps to GPIO31-GPIO0). DATA is 0
+    low, 1 high; DIR is 0 for output, and 1 for input.
+
+    Clear bits 27, 26, 23 and 22 of DIR to set them as outputs, and then set
+    the value to 0 to turn off the LEDs.
+    */
+    volatile CSL_GpioRegs* gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+    gpio->BANK_REGISTERS[0].DIR &= 0xF33FFFFFu;
+    gpio->BANK_REGISTERS[0].OUT_DATA = 0;
 
     return (FCS_CLOCK_HZ / FCS_CORE0_TICK_HZ);
 }
