@@ -27,6 +27,7 @@ SOFTWARE.
 #include <assert.h>
 
 #include "stream.h"
+#include "../stats/stats.h"
 
 #ifdef __TI_COMPILER_VERSION__
 #include "../board/int-uart.h"
@@ -122,6 +123,8 @@ int32_t _fcs_stream_check_overrun(enum fcs_stream_device_t dev) {
     */
     if (rx_write_idx[dev] - rx_read_idx[dev] >= FCS_STREAM_BUFFER_SIZE - 1 ||
         tx_write_idx[dev] - tx_read_idx[dev] >= FCS_STREAM_BUFFER_SIZE - 1) {
+
+        fcs_global_counters.stream_tx_overrun[dev]++;
         fcs_stream_open(dev);
         return 1;
     } else {
@@ -177,6 +180,8 @@ enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev) {
     tx_read_idx[dev] = 0;
     tx_write_idx[dev] = 0;
 
+    fcs_global_counters.stream_reset[dev]++;
+
 #ifdef __TI_COMPILER_VERSION__
     if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
         /* Start internal UART RX EDMA transfer */
@@ -214,6 +219,10 @@ enum fcs_stream_device_t dev) {
         assert(false);
     }
 #endif
+
+    if (err) {
+        fcs_global_counters.stream_rx_err[dev]++;
+    }
 
     return err ? FCS_STREAM_ERROR : FCS_STREAM_OK;
 }
@@ -259,6 +268,8 @@ uint32_t nbytes) {
         buf[i] = rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
     }
 
+    fcs_global_counters.stream_rx_byte[dev] += i;
+
     return i;
 }
 
@@ -288,6 +299,7 @@ uint8_t ch) {
             /* Increment these because we want to read until after "ch" */
             rx_read_idx[dev]++;
             i++;
+            fcs_global_counters.stream_rx_byte[dev] += i;
             return i;
         }
     }
@@ -329,6 +341,7 @@ uint8_t ch, uint8_t *restrict buf, uint32_t nbytes) {
             /* Increment these because we want to read until after "ch" */
             rx_read_idx[dev]++;
             i++;
+            fcs_global_counters.stream_rx_byte[dev] += i;
             return i;
         }
     }
@@ -406,6 +419,8 @@ const uint8_t *restrict buf, uint32_t nbytes) {
             tx_write_idx[dev]++, i++) {
         tx_buffers[dev][tx_write_idx[dev] & 0xFFu] = buf[i];
     }
+
+    fcs_global_counters.stream_tx_byte[dev] += nbytes;
 
 #ifdef __TI_COMPILER_VERSION__
     /* Trigger a DMA transfer / copy the number of bytes to the PaRAM */

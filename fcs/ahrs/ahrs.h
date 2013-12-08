@@ -73,6 +73,6 @@ void fcs_ahrs_tick(void);
 Updated every AHRS tick -- contains the current state and uncertainty
 estimates
 */
-extern struct fcs_packet_state_t global_state;
+extern struct fcs_packet_state_t fcs_global_state;
 
 #endif

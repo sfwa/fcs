@@ -33,6 +33,7 @@ SOFTWARE.
 #include "../comms/comms.h"
 #include "../ukf/cukf.h"
 #include "../drivers/stream.h"
+#include "../stats/stats.h"
 #include "ahrs.h"
 
 #define AHRS_DELTA 0.001
@@ -170,7 +171,7 @@ static struct sensor_packet_t ioboard[2];
 static uint8_t ioboard_last_tick[2];
 
 /* Global FCS state structure */
-struct fcs_packet_state_t global_state;
+struct fcs_packet_state_t fcs_global_state;
 
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
@@ -234,7 +235,7 @@ void fcs_ahrs_init(void) {
     assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
 
     /* Set up global state */
-    memset(&global_state, 0, sizeof(global_state));
+    memset(&fcs_global_state, 0, sizeof(fcs_global_state));
 
     /* Set default geometry and calibration */
     _fcs_ahrs_ioboard_reset_calibration(&ioboard_calibration[0]);
@@ -314,7 +315,7 @@ void fcs_ahrs_init(void) {
 }
 
 void fcs_ahrs_tick(void) {
-    uint8_t t = (uint8_t)(global_state.solution_time & 0xFFu);
+    uint8_t t = (uint8_t)(fcs_global_state.solution_time & 0xFFu);
 
     if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &ioboard[0])) {
         ioboard_last_tick[0] = t;
@@ -337,6 +338,7 @@ void fcs_ahrs_tick(void) {
         assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
 
         ioboard_last_tick[0] = t;
+        fcs_global_counters.ioboard_reset[0]++;
     }
 
     if (fcs_stream_check_error(FCS_STREAM_UART_INT1) == FCS_STREAM_ERROR ||
@@ -344,6 +346,7 @@ void fcs_ahrs_tick(void) {
         assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
 
         ioboard_last_tick[1] = t;
+        fcs_global_counters.ioboard_reset[1]++;
     }
 
     /*
@@ -400,13 +403,16 @@ void fcs_ahrs_tick(void) {
     uint8_t control_buf[16];
     control_len = _fcs_ahrs_format_control_packet(
         control_buf,
-        (uint8_t)(global_state.solution_time & 0xFFu),
+        (uint8_t)(fcs_global_state.solution_time & 0xFFu),
         control_set
     );
     assert(control_len < 16);
 
     fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
     fcs_stream_write(FCS_STREAM_UART_INT1, control_buf, control_len);
+
+    fcs_global_counters.ioboard_packet_tx[0]++;
+    fcs_global_counters.ioboard_packet_tx[1]++;
 
     /* Run the UKF */
     ukf_iterate(AHRS_DELTA, control_pos);
@@ -428,25 +434,28 @@ void fcs_ahrs_tick(void) {
 
 void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
 double *restrict covariance) {
-    if (global_state.solution_time < INT32_MAX) {
-        global_state.solution_time++;
+    if (fcs_global_state.solution_time < INT32_MAX) {
+        fcs_global_state.solution_time++;
     } else {
-        global_state.solution_time = 0;
+        fcs_global_state.solution_time = 0;
     }
 
     /* Convert lat/lon to degrees */
-    global_state.lat = s->position[0] * (180.0/M_PI);
-    global_state.lon = s->position[1] * (180.0/M_PI);
-    global_state.alt = s->position[2];
+    fcs_global_state.lat = s->position[0] * (180.0/M_PI);
+    fcs_global_state.lon = s->position[1] * (180.0/M_PI);
+    fcs_global_state.alt = s->position[2];
 
-    memcpy(global_state.velocity, s->velocity, 3 * sizeof(double));
-    memcpy(global_state.wind_velocity, s->wind_velocity,
+    memcpy(fcs_global_state.velocity, s->velocity, 3 * sizeof(double));
+    memcpy(fcs_global_state.wind_velocity, s->wind_velocity,
            3 * sizeof(double));
 
     /* Convert angular velocity to degrees/s */
-    global_state.angular_velocity[0] = s->angular_velocity[0] * (180.0/M_PI);
-    global_state.angular_velocity[1] = s->angular_velocity[1] * (180.0/M_PI);
-    global_state.angular_velocity[2] = s->angular_velocity[2] * (180.0/M_PI);
+    fcs_global_state.angular_velocity[0] = s->angular_velocity[0] *
+                                           (180.0/M_PI);
+    fcs_global_state.angular_velocity[1] = s->angular_velocity[1] *
+                                           (180.0/M_PI);
+    fcs_global_state.angular_velocity[2] = s->angular_velocity[2] *
+                                           (180.0/M_PI);
 
     /* Convert state.attitude to yaw/pitch/roll, in degrees */
     double yaw, pitch, roll;
@@ -466,9 +475,9 @@ double *restrict covariance) {
     assert(-90.0 <= pitch && pitch <= 90.0);
     assert(-180.0 <= roll && roll <= 180.0);
 
-    global_state.yaw = yaw;
-    global_state.pitch = pitch;
-    global_state.roll = roll;
+    fcs_global_state.yaw = yaw;
+    fcs_global_state.pitch = pitch;
+    fcs_global_state.roll = roll;
 
     /*
     Work out 95th percentile confidence intervals for each of the output
@@ -477,35 +486,38 @@ double *restrict covariance) {
     */
 
     /* Ignore changes in lon with varying lat -- small angles and all that */
-    global_state.lat_lon_uncertainty = 1.96 *
+    fcs_global_state.lat_lon_uncertainty = 1.96 *
         sqrt(max(covariance[0], covariance[1])) * (40008000.0 / 360.0);
-    global_state.alt_uncertainty = 1.96 * sqrt(covariance[2]);
+    fcs_global_state.alt_uncertainty = 1.96 * sqrt(covariance[2]);
 
-    global_state.velocity_uncertainty[0] = 1.96 * sqrt(covariance[3]);
-    global_state.velocity_uncertainty[1] = 1.96 * sqrt(covariance[4]);
-    global_state.velocity_uncertainty[2] = 1.96 * sqrt(covariance[5]);
+    fcs_global_state.velocity_uncertainty[0] = 1.96 * sqrt(covariance[3]);
+    fcs_global_state.velocity_uncertainty[1] = 1.96 * sqrt(covariance[4]);
+    fcs_global_state.velocity_uncertainty[2] = 1.96 * sqrt(covariance[5]);
 
-    global_state.wind_velocity_uncertainty[0] = 1.96 * sqrt(covariance[18]);
-    global_state.wind_velocity_uncertainty[1] = 1.96 * sqrt(covariance[19]);
-    global_state.wind_velocity_uncertainty[2] = 1.96 * sqrt(covariance[20]);
+    fcs_global_state.wind_velocity_uncertainty[0] = 1.96 *
+                                                    sqrt(covariance[18]);
+    fcs_global_state.wind_velocity_uncertainty[1] = 1.96 *
+                                                    sqrt(covariance[19]);
+    fcs_global_state.wind_velocity_uncertainty[2] = 1.96 *
+                                                    sqrt(covariance[20]);
 
     /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
-    global_state.roll_uncertainty = 1.96 *
+    fcs_global_state.roll_uncertainty = 1.96 *
         sqrt(covariance[9]) * (180.0/M_PI);
-    global_state.pitch_uncertainty = 1.96 *
+    fcs_global_state.pitch_uncertainty = 1.96 *
         sqrt(covariance[10]) * (180.0/M_PI);
-    global_state.yaw_uncertainty= 1.96 *
+    fcs_global_state.yaw_uncertainty= 1.96 *
         sqrt(covariance[11]) * (180.0/M_PI);
 
-    global_state.angular_velocity_uncertainty[0] = 1.96 *
+    fcs_global_state.angular_velocity_uncertainty[0] = 1.96 *
         sqrt(covariance[12]) * (180.0/M_PI);
-    global_state.angular_velocity_uncertainty[1] = 1.96 *
+    fcs_global_state.angular_velocity_uncertainty[1] = 1.96 *
         sqrt(covariance[13]) * (180.0/M_PI);
-    global_state.angular_velocity_uncertainty[2] = 1.96 *
+    fcs_global_state.angular_velocity_uncertainty[2] = 1.96 *
         sqrt(covariance[14]) * (180.0/M_PI);
 
     /* TODO: Update state mode indicator based on confidence in filter lock */
-    global_state.mode_indicator = 'A';
+    fcs_global_state.mode_indicator = 'A';
 }
 
 bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
@@ -513,7 +525,7 @@ struct sensor_packet_t *dest) {
     assert(dest);
 
     /* Read latest I/O board packets from the UART streams */
-    uint8_t buf[64], i = 0;
+    uint8_t buf[64], i = 0, checksum;
     uint32_t nbytes;
     struct fcs_cobsr_decode_result result;
 
@@ -555,48 +567,64 @@ struct sensor_packet_t *dest) {
 
     /* Read until after the next (terminating) NUL */
     nbytes = fcs_stream_read_until_after(dev, (uint8_t)0, buf, 64u);
-    if (nbytes >= sizeof(struct sensor_packet_t)) {
-        /* Decode the message into the packet buffer */
-        result = fcs_cobsr_decode((uint8_t*)dest,
-                                  sizeof(struct sensor_packet_t),
-                                  buf, nbytes - 1);
-
-        if (result.status == FCS_COBSR_DECODE_OK &&
-                result.out_len == sizeof(struct sensor_packet_t)) {
-            /* Validate the packet checksum */
-            uint8_t checksum = fcs_crc8(
-                (uint8_t*)&dest->tick, result.out_len - 1, 0x0);
-
-            /* Swap bytes for multi-byte values -- AVR32 is big-endian */
-            dest->tick = swap_uint16(dest->tick);
-            dest->status = swap_uint16(dest->status);
-            dest->accel.x = swap_int16(dest->accel.x);
-            dest->accel.y = swap_int16(dest->accel.y);
-            dest->accel.z = swap_int16(dest->accel.z);
-            dest->gyro.x = swap_int16(dest->gyro.x);
-            dest->gyro.y = swap_int16(dest->gyro.y);
-            dest->gyro.z = swap_int16(dest->gyro.z);
-            dest->accel_gyro_temp = swap_int16(dest->accel_gyro_temp);
-            dest->pressure = swap_uint16(dest->pressure);
-            dest->barometer_temp = swap_uint16(dest->barometer_temp);
-            dest->pitot = swap_int16(dest->pitot);
-            dest->i = swap_int16(dest->i);
-            dest->v = swap_int16(dest->v);
-            dest->range = swap_int16(dest->range);
-            dest->mag.x = swap_int16(dest->mag.x);
-            dest->mag.y = swap_int16(dest->mag.y);
-            dest->mag.z = swap_int16(dest->mag.z);
-            dest->gps.position.lat = swap_int32(dest->gps.position.lat);
-            dest->gps.position.lng = swap_int32(dest->gps.position.lng);
-            dest->gps.position.alt = swap_int32(dest->gps.position.alt);
-            dest->gps.velocity.n = swap_int16(dest->gps.velocity.n);
-            dest->gps.velocity.e = swap_int16(dest->gps.velocity.e);
-            dest->gps.velocity.d = swap_int16(dest->gps.velocity.d);
-
-            return checksum == dest->crc;
-        }
+    if (nbytes < sizeof(struct sensor_packet_t)) {
+        goto invalid;
     }
 
+    /* Decode the message into the packet buffer */
+    result = fcs_cobsr_decode((uint8_t*)dest,
+                              sizeof(struct sensor_packet_t),
+                              buf, nbytes - 1);
+
+    /* Confirm decode was successful */
+    if (result.status != FCS_COBSR_DECODE_OK) {
+        goto invalid;
+    }
+
+    /* Confirm packet size is what we expect */
+    if (result.out_len != sizeof(struct sensor_packet_t)) {
+        goto invalid;
+    }
+
+    /* Validate the packet checksum */
+    checksum = fcs_crc8(
+        (uint8_t*)&dest->tick, result.out_len - 1, 0x0);
+
+    if (checksum != dest->crc) {
+        goto invalid;
+    }
+
+    /* Swap bytes for multi-byte values -- AVR32 is big-endian */
+    dest->tick = swap_uint16(dest->tick);
+    dest->status = swap_uint16(dest->status);
+    dest->accel.x = swap_int16(dest->accel.x);
+    dest->accel.y = swap_int16(dest->accel.y);
+    dest->accel.z = swap_int16(dest->accel.z);
+    dest->gyro.x = swap_int16(dest->gyro.x);
+    dest->gyro.y = swap_int16(dest->gyro.y);
+    dest->gyro.z = swap_int16(dest->gyro.z);
+    dest->accel_gyro_temp = swap_int16(dest->accel_gyro_temp);
+    dest->pressure = swap_uint16(dest->pressure);
+    dest->barometer_temp = swap_uint16(dest->barometer_temp);
+    dest->pitot = swap_int16(dest->pitot);
+    dest->i = swap_int16(dest->i);
+    dest->v = swap_int16(dest->v);
+    dest->range = swap_int16(dest->range);
+    dest->mag.x = swap_int16(dest->mag.x);
+    dest->mag.y = swap_int16(dest->mag.y);
+    dest->mag.z = swap_int16(dest->mag.z);
+    dest->gps.position.lat = swap_int32(dest->gps.position.lat);
+    dest->gps.position.lng = swap_int32(dest->gps.position.lng);
+    dest->gps.position.alt = swap_int32(dest->gps.position.alt);
+    dest->gps.velocity.n = swap_int16(dest->gps.velocity.n);
+    dest->gps.velocity.e = swap_int16(dest->gps.velocity.e);
+    dest->gps.velocity.d = swap_int16(dest->gps.velocity.d);
+
+    fcs_global_counters.ioboard_packet_rx[dev]++;
+    return true;
+
+invalid:
+    fcs_global_counters.ioboard_packet_rx_err[dev]++;
     return false;
 }
 

@@ -31,6 +31,7 @@ SOFTWARE.
 #include "../drivers/stream.h"
 #include "comms.h"
 #include "../ahrs/ahrs.h"
+#include "../stats/stats.h"
 
 static uint32_t tick;
 static uint8_t comms_buf[256u];
@@ -57,11 +58,12 @@ void fcs_comms_tick(void) {
     /* Send a state update packet to the CPU every 20ms (50Hz) */
     if (tick % 20u == 0) {
         size_t packet_len, write_len;
-        packet_len = fcs_comms_serialize_state(comms_buf, &global_state);
+        packet_len = fcs_comms_serialize_state(comms_buf, &fcs_global_state);
         assert(packet_len && packet_len < 256u);
 
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
                                      packet_len);
+        fcs_global_counters.cpu_packet_tx++;
 
         /* We should definitely have enough room in the write buffer */
         //assert(packet_len == write_len);
@@ -78,23 +80,28 @@ void fcs_comms_tick(void) {
                 result = fcs_comms_deserialize_state(
                     &comms_state_in, comms_buf, comms_buf_len);
                 comms_state_valid = (result == FCS_DESERIALIZATION_OK);
+                fcs_global_counters.cpu_packet_rx++;
                 break;
             case 'P':
                 result = fcs_comms_deserialize_waypoint(
                     &comms_waypoint_in, comms_buf, comms_buf_len);
                 comms_waypoint_valid = (result == FCS_DESERIALIZATION_OK);
+                fcs_global_counters.cpu_packet_rx++;
                 break;
             case 'G':
                 result = fcs_comms_deserialize_gcs(
                     &comms_gcs_in, comms_buf, comms_buf_len);
                 comms_gcs_valid = (result == FCS_DESERIALIZATION_OK);
+                fcs_global_counters.cpu_packet_rx++;
                 break;
             case 'C':
                 result = fcs_comms_deserialize_config(
                     &comms_config_in, comms_buf, comms_buf_len);
                 comms_config_valid = (result == FCS_DESERIALIZATION_OK);
+                fcs_global_counters.cpu_packet_rx++;
                 break;
             default:
+                fcs_global_counters.cpu_packet_rx_err++;
                 break;
         }
     }

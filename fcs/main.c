@@ -35,6 +35,7 @@ SOFTWARE.
 #include "util/util.h"
 #include "piksi/piksi.h"
 #include "comms/comms.h"
+#include "stats/stats.h"
 
 int main(void);
 uint32_t fcs_main_init_core0(void);
@@ -192,6 +193,11 @@ int main(void) {
         */
         uint32_t start_t = frame * cycles_per_tick;
         frame++;
+
+        fcs_global_counters.main_loop_count++;
+        if (TSCL - start_t > fcs_global_counters.main_loop_cycle_max) {
+            fcs_global_counters.main_loop_cycle_max = TSCL - start_t;
+        }
 
         /* FIXME: use idle/sleep instead of busy loop */
         while (TSCL - start_t < cycles_per_tick);

@@ -36,6 +36,7 @@ INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
 
 # Add test executable target
 ADD_EXECUTABLE(unittest
+    ../stats/stats.c
     ../util/cobsr.c
     ../util/base64.c
     ../util/crc8.c
@@ -70,6 +71,7 @@ ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
 
 # Add a dynamic library target for the test driver
 ADD_LIBRARY(fcs SHARED
+    ../stats/stats.c
     ../util/cobsr.c
     ../util/base64.c
     ../util/crc8.c
