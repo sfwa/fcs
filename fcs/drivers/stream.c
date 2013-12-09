@@ -45,20 +45,21 @@ static uint16_t rx_write_idx[FCS_STREAM_NUM_DEVICES];
 static uint16_t tx_read_idx[FCS_STREAM_NUM_DEVICES];
 static uint16_t tx_write_idx[FCS_STREAM_NUM_DEVICES];
 
-size_t _fcs_stream_write_to_rx_buffer(uint8_t buffer_idx, const uint8_t *val,
-size_t len);
-size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx, uint8_t *val,
-size_t len);
+size_t _fcs_stream_write_to_rx_buffer(uint8_t buffer_idx,
+const uint8_t *restrict val, size_t len);
+size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx,
+uint8_t *restrict val, size_t len);
 int32_t _fcs_stream_check_overrun(enum fcs_stream_device_t dev);
 
 
 /* Buffer access functions for the test harness */
-size_t _fcs_stream_write_to_rx_buffer(uint8_t buffer_idx, const uint8_t *val,
-size_t len) {
+size_t _fcs_stream_write_to_rx_buffer(uint8_t buffer_idx,
+const uint8_t *restrict val, size_t len) {
     assert(buffer_idx < FCS_STREAM_NUM_DEVICES);
     assert(len < FCS_STREAM_BUFFER_SIZE);
 
     size_t i;
+    #pragma MUST_ITERATE(1,256)
     for (i = 0; i < len; rx_write_idx[buffer_idx]++, i++) {
         rx_buffers[buffer_idx][
             rx_write_idx[buffer_idx] % FCS_STREAM_BUFFER_SIZE] = val[i];
@@ -69,12 +70,13 @@ size_t len) {
     return i;
 }
 
-size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx, uint8_t *val,
-size_t len) {
+size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx,
+uint8_t *restrict val, size_t len) {
     assert(buffer_idx < FCS_STREAM_NUM_DEVICES);
     assert(len <= FCS_STREAM_BUFFER_SIZE);
 
     size_t i;
+    #pragma MUST_ITERATE(1,256)
     for (i = 0; i < len && tx_write_idx[buffer_idx] - tx_read_idx[buffer_idx];
             tx_read_idx[buffer_idx]++, i++) {
         val[i] = tx_buffers[buffer_idx][
