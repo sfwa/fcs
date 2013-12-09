@@ -42,9 +42,9 @@ struct fcs_stats_counter_t {
     uint64_t stream_tx_overrun[5];
     uint64_t stream_reset[5];
 
-    /* Maximum per-iteration cycle counter */
-    uint32_t main_loop_count;
-    uint32_t main_loop_cycle_max;
+    /* Maximum per-iteration cycle counter (per core) */
+    uint32_t main_loop_count[2];
+    uint32_t main_loop_cycle_max[2];
 };
 
 extern struct fcs_stats_counter_t fcs_global_counters;

@@ -393,44 +393,43 @@ Delay_milli_seconds(myDelay)
 
 ddr3_memory_test ()
 {
-    GEL_TextOut( "DDR3 memory test... Skipped\n" );
-//    unsigned int index, value;
-//
-//    GEL_TextOut( "DDR3 memory test... Started\n" );
-//
-//    /* Write a pattern */
-//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-//        *index = index;
-//    }
-//
-//    /* Read and check the pattern */
-//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-//
-//        value = *index;
-//
-//        if (value  != index) {
-//            GEL_TextOut( "DDR3 memory test... Failed\n" );
-//            return -1;
-//        }
-//    }
-//
-//    /* Write a pattern for complementary values */
-//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-//        *index = ~index;
-//    }
-//
-//    /* Read and check the pattern */
-//    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
-//
-//        value = *index;
-//
-//        if (value  != ~index) {
-//            GEL_TextOut( "DDR3 memory test... Failed\n" );
-//            return -1;
-//        }
-//    }
-//
-//    GEL_TextOut( "DDR3 memory test... Passed\n" );
+    unsigned int index, value;
+
+    GEL_TextOut( "DDR3 memory test... Started\n" );
+
+    /* Write a pattern */
+    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+        *index = index;
+    }
+
+    /* Read and check the pattern */
+    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+
+        value = *index;
+
+        if (value  != index) {
+            GEL_TextOut( "DDR3 memory test... Failed\n" );
+            return -1;
+        }
+    }
+
+    /* Write a pattern for complementary values */
+    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+        *index = ~index;
+    }
+
+    /* Read and check the pattern */
+    for (index = DDR3_TEST_START_ADDRESS; index < DDR3_TEST_END_ADDRESS; index += 4) {
+
+        value = *index;
+
+        if (value  != ~index) {
+            GEL_TextOut( "DDR3 memory test... Failed\n" );
+            return -1;
+        }
+    }
+
+    GEL_TextOut( "DDR3 memory test... Passed\n" );
     return 0;
 }
 
@@ -508,7 +507,8 @@ OnTargetConnect( )
             // Comment the following line at production application test
             // when the application need to initialize everything, but not the
             // GEL file.
-            Global_Default_Setup_Silent();
+            //Global_Default_Setup_Silent();
+            GEL_TextOut("Skipping GlobalDefaultSetup...\n");
         }
     } else {
         GEL_TextOut("No initialization performed in real time mode\n");
@@ -764,7 +764,6 @@ Global_Default_Setup_Silent()
         for (count = 0; count < PLL_REINIT_MAX_COUNT; count++) {
             // Setup Pll1 DSP @ TARGET_FREQ
             status = Init_PLL(PLL1_M, PLL1_D);
-
             if (status == -1) {
                 GEL_TextOut( "Error in Setting up main PLL, please power cycle the board and re-run Global Default Setup...\n" );
                 while (1);
@@ -1638,8 +1637,8 @@ hotmenu Set_Psc_All_On( )
     if (DNUM == 0)
     {
         GEL_TextOut( "Power on all PSC modules and DSP domains... \n");
-        Set_PSC_State(PD0, LPSC_EMAC, PSC_ENABLE);
-        Set_PSC_State(PD1, LPSC_TETB_TRC, PSC_ENABLE);
+        //Set_PSC_State(PD0, LPSC_EMAC, PSC_ENABLE);
+        //Set_PSC_State(PD1, LPSC_TETB_TRC, PSC_ENABLE);
         //Set_PSC_State(PD3, LPSC_PCIEX, PSC_ENABLE);
         //Set_PSC_State(PD4, LPSC_SRIO, PSC_ENABLE);
         //Set_PSC_State(PD5, LPSC_Hyperbridge, PSC_ENABLE);

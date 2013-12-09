@@ -68,9 +68,5 @@ First steps:
 ##############################################################################
 
 Code needed:
-* Internal UART read/write driver -- DMA [can start on EVM]
-* EMIF UART read/write driver -- DMA [requires prototype]
-* CPU packet serialisation / deserialisation and command handling [can start on EVM]
 * Power management -- disable unused peripherals [can start on EVM]
 * Code for PLLs, DDR3 check etc [can start on EVM]
-* GPIO driver (?) [can start on EVM]

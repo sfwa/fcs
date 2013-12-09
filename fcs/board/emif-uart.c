@@ -31,6 +31,7 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/cslr_tpcc.h"
 #include "../c66x-csl/ti/csl/cslr_tmr.h"
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
+#include "../c66x-csl/ti/csl/cslr_cgem.h"
 
 #include "board.h"
 #include "emif-uart.h"
@@ -301,6 +302,9 @@ static volatile uint8_t *uart_regs[2] = {
     (uint8_t*)EMIF16_UART1_BASE_ADDR
 };
 
+static volatile CSL_CgemRegs* cgem =
+    (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
+
 static void _fcs_emif_uart_write_config(uint8_t uart_idx);
 
 static void _fcs_emif_uart_write_config(uint8_t uart_idx) {
@@ -335,6 +339,33 @@ static void _fcs_emif_uart_write_config(uint8_t uart_idx) {
 
 void fcs_emif_uart_reset(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    /*
+    Prior to accessing the EMIF16 we need to configure its cacheability in the
+    appropriate MAR (see SPRUGW0C section 4.4.4).
+
+    The MAR for UART0 is 116 (for locations 7400 0000 - 74FF FFFF), and for
+    UART1 it's 120 (locations 7800 0000 - 78FF FFFF).
+
+    MARn: Memory Attribute Register (SPRUGW0C section 4.4.5)
+
+    Bit   Field          Value         Description
+    31:4  Reserved
+    3     PFX                          Enable/disable prefetchability of the
+                                       address range.
+                                       0 = not prefetchable
+                                       1 = prefetchable
+    2     Reserved
+    1     Reserved
+    0     PC                           Enable/disable cacheability of the
+                                       address range.
+                                       0 = not cacheable
+                                       1 = cacheable
+
+    For EMIF16 we want to configure the MARs as non-cacheable,
+    non-prefetchable -- so set them to 0.
+    */
+    cgem->MAR[uart_idx == 0 ? 116 : 120] = 0;
 
     /*
     Configure the EMIF CE1 (for UART 0) or CE2 (for UART 1), via A1CR and A2CR
