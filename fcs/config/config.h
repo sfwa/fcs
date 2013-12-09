@@ -24,7 +24,7 @@ SOFTWARE.
 #define _FCS_CONFIG_H
 
 #define FCS_CORE_AHRS 0
-#define FCS_CORE_NMPC 1
+#define FCS_CORE_NMPC 1u
 #define FCS_CORE_UTIL 0
 #define FCS_CORE_COMMS 0
 #define FCS_CORE_CONFIG 0
@@ -34,13 +34,12 @@ SOFTWARE.
 #define FCS_CORE0_TICK_HZ 1000u
 #define FCS_CORE1_TICK_HZ 50u
 
-#define FCS_DEADLINE_EXCEEDED_CYCLES (FCS_CLOCK_HZ << 2)
-
-#define FCS_SEMAPHORE_CORE0_BOOT 0
-#define FCS_SEMAPHORE_CORE1_BOOT 1
-#define FCS_SEMAPHORE_GLOBAL_STATE 2
-#define FCS_SEMAPHORE_GLOBAL_WAYPOINTS 3
-#define FCS_SEMAPHORE_GLOBAL_CONTROL 4
+/* Semaphore 0 always seems to be busy, so don't use it */
+#define FCS_SEMAPHORE_CORE0_BOOT 1u
+#define FCS_SEMAPHORE_CORE1_BOOT 2u
+#define FCS_SEMAPHORE_GLOBAL_STATE 3u
+#define FCS_SEMAPHORE_GLOBAL_WAYPOINTS 4u
+#define FCS_SEMAPHORE_GLOBAL_CONTROL 5u
 
 /*
 Called by CORE0 on boot. Initializes I2C and starts reading from the EEPROM.

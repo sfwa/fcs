@@ -640,7 +640,7 @@ static bool _fcs_ddr3_test(uint32_t start_idx, uint32_t nwords) {
 }
 
 static void _fcs_enable_edc(void) {
-	volatile CSL_CgemRegs* cgem =
+    volatile CSL_CgemRegs* cgem =
         (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
 
     /* L1P EDC enable */
@@ -875,30 +875,41 @@ void fcs_main_init_common(void) {
 
 #pragma FUNC_NEVER_RETURNS(main);
 int main(void) {
+    /* Perform common initialization */
+    fcs_main_init_common();
+
     uint32_t core = DNUM & 0xFFu,
              cycles_per_tick = 0,
-             /* Acquire the boot semaphore for our core by reading it */
-             sem_val = semaphore->SEM[core];
+             start_t = TSCL;
 
+    /* Wait for the semaphore module to be ready, or for 1us/10us to elapse */
+    while (!(semaphore->SEM_RST_RUN & 1u) && TSCL - start_t < 1000u);
+    assert(TSCL - start_t < 1000u);
+
+    /*
+    Acquire the boot semaphore for our core by reading it. See SPRUGS3A for
+    details on how this process works, but basically if the read returns 1
+    we've got it.
+
+    For some reason semaphore 0 is always busy, so use 1-31.
+    */
+    uint32_t sem_val = semaphore->SEM[core + 1];
     assert(sem_val == 1u);
 
     /* Wait a little to make sure both semaphores have been acquired */
     _fcs_delay_cycles(1000u); /* 1us to 10us depending on PLL state */
 
-    /* Perform common initialization */
-    fcs_main_init_common();
-
     /* Perform core-specific initialization */
     if (core == 0u) {
-    	cycles_per_tick = fcs_main_init_core0();
+        cycles_per_tick = fcs_main_init_core0();
     } else if (core == 1u) {
-    	cycles_per_tick = fcs_main_init_core1();
+        cycles_per_tick = fcs_main_init_core1();
     } else {
-    	assert(0);
+        assert(0);
     }
 
     /* Release the boot semaphore by writing 1 back to the register */
-    semaphore->SEM[core] = 1u;
+    semaphore->SEM[core + 1] = 1u;
 
     if (core == FCS_CORE_CONFIG) {
         fcs_config_init();
@@ -937,10 +948,8 @@ int main(void) {
             fcs_nmpc_tick();
         }
 
-        /*
-        Wait until next frame start time
-        */
-        uint32_t start_t = frame * cycles_per_tick;
+        /* Wait until next frame start time */
+        start_t = frame * cycles_per_tick;
         frame++;
 
         fcs_global_counters.main_loop_count[core]++;
@@ -957,5 +966,5 @@ int main(void) {
         }
     }
 
-	return 0;
+    return 0;
 }
