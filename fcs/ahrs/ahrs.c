@@ -27,6 +27,11 @@ SOFTWARE.
 #include <math.h>
 #include <assert.h>
 
+#ifdef __TI_COMPILER_VERSION__
+#include "../c66x-csl/ti/csl/cslr_device.h"
+#include "../c66x-csl/ti/csl/cslr_sem.h"
+#endif
+
 #include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
@@ -434,6 +439,16 @@ void fcs_ahrs_tick(void) {
 
 void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
 double *restrict covariance) {
+#ifdef __TI_COMPILER_VERSION__
+    /*
+    Use a semaphore to prevent the NMPC code accessing the state while we're
+    updating it.
+    */
+    volatile CSL_SemRegs *semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
+    assert(sem_val == 1u);
+#endif
+
     if (fcs_global_state.solution_time < INT32_MAX) {
         fcs_global_state.solution_time++;
     } else {
@@ -518,6 +533,11 @@ double *restrict covariance) {
 
     /* TODO: Update state mode indicator based on confidence in filter lock */
     fcs_global_state.mode_indicator = 'A';
+
+#ifdef __TI_COMPILER_VERSION__
+    /* Release the semaphore */
+    semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
+#endif
 }
 
 bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,

@@ -67,6 +67,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "c66x-csl/ti/csl/cslr_emif4f.h"
 #include "c66x-csl/ti/csl/cslr_psc.h"
 #include "c66x-csl/ti/csl/cslr_xmc.h"
+#include "c66x-csl/ti/csl/cslr_sem.h"
 
 #include "config/config.h"
 #include "ahrs/ahrs.h"
@@ -77,6 +78,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "stats/stats.h"
 
 static volatile CSL_BootcfgRegs *cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
+static volatile CSL_SemRegs *semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
 
 static void _fcs_core_pll_setup(void);
 static void _fcs_ddr3_pll_setup(void);
@@ -694,8 +696,14 @@ uint32_t fcs_main_init_core0(void) {
         assert((psc->MDSTAT[14] & 0x1Fu) == 3u );
     }
 
+    /*
+    This stuff is in a loop because that's how the EVM6657 GEL and evm6657.c
+    init scripts do it. No, it doesn't seem like a good idea to me either.
+    */
     uint8_t tries = 0;
     do {
+        tries++;
+
         /*
         PLL setup -- same as on the EVM6657, based on code from the GEL file.
         */
@@ -708,7 +716,7 @@ uint32_t fcs_main_init_core0(void) {
         */
         _fcs_ddr3_emif_setup();
 
-        tries++;
+        /* And wait for the DDR3 test to pass... */
     } while (!_fcs_ddr3_test(0, 1024) && tries < 10u);
 
     assert(tries < 10u);
@@ -845,8 +853,14 @@ uint32_t fcs_main_init_core1(void) {
     Most of the platform config has been done by core 0. Here we just need to
     wait until core 0 is done, then enable EDC on the local SRAMs.
 
-    TODO: need to wait!
+    Query core 0's boot semaphore until it's released, then start ourselves.
+    If we reach 100000000 cycles (0.1s or 1s depending on PLL), abort.
     */
+    uint32_t start_t = TSCL;
+    while (!semaphore->QSEM[FCS_SEMAPHORE_CORE0_BOOT] &&
+           TSCL - start_t < 100000000u);
+    assert(TSCL - start_t < 100000000u);
+
     KICK_UNLOCK();
     _fcs_enable_edc();
     KICK_LOCK();
@@ -861,11 +875,20 @@ void fcs_main_init_common(void) {
 
 #pragma FUNC_NEVER_RETURNS(main);
 int main(void) {
+    uint32_t core = DNUM & 0xFFu,
+             cycles_per_tick = 0,
+             /* Acquire the boot semaphore for our core by reading it */
+             sem_val = semaphore->SEM[core];
+
+    assert(sem_val == 1u);
+
+    /* Wait a little to make sure both semaphores have been acquired */
+    _fcs_delay_cycles(1000u); /* 1us to 10us depending on PLL state */
+
+    /* Perform common initialization */
     fcs_main_init_common();
 
-    uint32_t core = DNUM & 0xFFu;
-    uint32_t cycles_per_tick = 0;
-
+    /* Perform core-specific initialization */
     if (core == 0u) {
     	cycles_per_tick = fcs_main_init_core0();
     } else if (core == 1u) {
@@ -873,6 +896,9 @@ int main(void) {
     } else {
     	assert(0);
     }
+
+    /* Release the boot semaphore by writing 1 back to the register */
+    semaphore->SEM[core] = 1u;
 
     if (core == FCS_CORE_CONFIG) {
         fcs_config_init();
