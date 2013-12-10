@@ -785,7 +785,9 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
                (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16u);
     }
 
-    /* If there are bytes available, turn the output LED on */
+    /*
+    If there are bytes available, turn the output LED on -- GPIO 23 or 27
+    */
     if (nbytes > 0) {
         gpio->BANK_REGISTERS[0].OUT_DATA |= 0x00800000 << (uart_idx ? 4u : 0);
     } else {
@@ -811,7 +813,9 @@ uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
                (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT >> 16);
     }
 
-    /* If there are bytes available, turn the output LED on */
+    /*
+    If there are bytes available, turn the output LED on -- GPIO 22 or 26
+    */
     if (nbytes > 0) {
         gpio->BANK_REGISTERS[0].OUT_DATA |= 0x00400000 << (uart_idx ? 4u : 0);
     } else {

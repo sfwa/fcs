@@ -232,10 +232,16 @@ always @(*) begin
 	dsp_gpio[19:0] = 20'b0;
 	if (dsp_bootmode_enable & dsp_bank_enable) begin
 		dsp_gpio = { 4'bz, dsp_bootmode };
+		ioboard_2_reset_out = 1'b0;
+		ioboard_1_reset_out = 1'b0;
 	end else if (dsp_bank_enable) begin
 		dsp_gpio = { 18'bz, dsp_ext_uart1_int_INV, dsp_ext_uart0_int_INV };
+		ioboard_2_reset_out = dsp_gpio[3];
+		ioboard_1_reset_out = dsp_gpio[2];
 	end else begin
 		dsp_gpio = 20'bz;
+		ioboard_2_reset_out = 1'b0;
+		ioboard_1_reset_out = 1'b0;
 	end
 end
 

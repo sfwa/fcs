@@ -30,6 +30,7 @@ SOFTWARE.
 #ifdef __TI_COMPILER_VERSION__
 #include "../c66x-csl/ti/csl/cslr_device.h"
 #include "../c66x-csl/ti/csl/cslr_sem.h"
+#include "../c66x-csl/ti/csl/cslr_gpio.h"
 #endif
 
 #include "../config/config.h"
@@ -174,7 +175,11 @@ static double control_pos[4];
 
 /* Latest I/O board state packets */
 static struct sensor_packet_t ioboard[2];
-static uint8_t ioboard_last_tick[2];
+static int16_t ioboard_timeout[2];
+
+#define FCS_IOBOARD_RESET_TIMEOUT 50
+#define FCS_IOBOARD_PACKET_TIMEOUT 5
+#define FCS_IOBOARD_RESTART_WINDOW 10
 
 /* Global FCS state structure */
 struct fcs_packet_state_t fcs_global_state;
@@ -244,6 +249,7 @@ void fcs_ahrs_init(void) {
         fcs_stream_set_rate(FCS_STREAM_UART_INT0, 921600) == FCS_STREAM_OK);
     assert(
         fcs_stream_set_rate(FCS_STREAM_UART_INT1, 921600) == FCS_STREAM_OK);
+    ioboard_timeout[0] = ioboard_timeout[1] = 0;
 
     /* Set up global state */
     memset(&fcs_global_state, 0, sizeof(fcs_global_state));
@@ -323,41 +329,89 @@ void fcs_ahrs_init(void) {
     params.barometer_amsl_covariance = covariance.barometer_amsl_covariance;
 
     ukf_set_params(&params);
+
+#ifdef __TI_COMPILER_VERSION__
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+
+    /*
+    Set I/O board reset line directions -- 0 for output, 1 for input. We're
+    using GPIOs 2 and 3 for IOBOARD_1_RESET_OUT and IOBOARD_2_RESET_OUT
+    respectively.
+    */
+    gpio->BANK_REGISTERS[0].DIR &= ~0xFFFFFFFCu;
+#endif
 }
 
 void fcs_ahrs_tick(void) {
-    uint8_t t = (uint8_t)(fcs_global_state.solution_time & 0xFFu);
-
     if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &ioboard[0])) {
-        ioboard_last_tick[0] = t;
+        ioboard_timeout[0] = FCS_IOBOARD_PACKET_TIMEOUT;
     } else {
         ioboard[0].sensor_update_flags = 0;
     }
 
     if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT1, &ioboard[1])) {
-        ioboard_last_tick[1] = t;
+        ioboard_timeout[1] = FCS_IOBOARD_PACKET_TIMEOUT;
     } else {
         ioboard[1].sensor_update_flags = 0;
     }
 
     /*
-    TODO: Reset I/O board if time since last tick > 10ms and time since last
-    reset > 10ms. Also reset the UART and EDMA3 at that point.
-    */
-    if (fcs_stream_check_error(FCS_STREAM_UART_INT0) == FCS_STREAM_ERROR ||
-            ((t - ioboard_last_tick[0]) & 0xFFu) > 10u) {
-        assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
+    Handle I/O board comms errors. Errors in UARTs should trigger an immediate
+    reset of the relevant stream, but the I/O board itself should not reset.
 
-        ioboard_last_tick[0] = t;
-        fcs_global_counters.ioboard_reset[0]++;
+    If the time since last I/O board tick/reset is too high, both the I/O
+    board and the stream should be reset.
+
+    HOWEVER, the two I/O boards should never be reset at the same time, since
+    that will increase the likelihood of the failsafe system activating.
+    */
+    if (fcs_stream_check_error(FCS_STREAM_UART_INT0) == FCS_STREAM_ERROR) {
+        assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
+    }
+    if (fcs_stream_check_error(FCS_STREAM_UART_INT1) == FCS_STREAM_ERROR) {
+        assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
     }
 
-    if (fcs_stream_check_error(FCS_STREAM_UART_INT1) == FCS_STREAM_ERROR ||
-            ((t - ioboard_last_tick[1]) & 0xFFu) > 10u) {
-        assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
+#ifdef __TI_COMPILER_VERSION__
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+#endif
 
-        ioboard_last_tick[1] = t;
+    if (ioboard_timeout[0] <= 0 &&
+            0 < ioboard_timeout[1] &&
+            ioboard_timeout[1] < FCS_IOBOARD_RESTART_WINDOW) {
+        ioboard_timeout[0] = FCS_IOBOARD_RESET_TIMEOUT;
+        fcs_global_counters.ioboard_reset[0]++;
+
+#ifdef __TI_COMPILER_VERSION__
+        /* Assert IOBOARD_1_RESET_OUT on GPIO 2 */
+        gpio->BANK_REGISTERS[0].OUT_DATA |= 1u << 2u;
+#endif
+    } else if (ioboard_timeout[0] > INT16_MIN) {
+        ioboard_timeout[0]--;
+
+#ifdef __TI_COMPILER_VERSION__
+        /* De-assert IOBOARD_1_RESET_OUT on GPIO 2 */
+        gpio->BANK_REGISTERS[0].OUT_DATA &= ~(1u << 2u);
+#endif
+    }
+
+    if (!ioboard_timeout[1] <= 0 &&
+            0 < ioboard_timeout[0] &&
+            ioboard_timeout[0] < FCS_IOBOARD_RESTART_WINDOW) {
+        ioboard_timeout[1] = FCS_IOBOARD_RESET_TIMEOUT;
         fcs_global_counters.ioboard_reset[1]++;
+
+#ifdef __TI_COMPILER_VERSION__
+        /* Assert IOBOARD_2_RESET_OUT on GPIO 3 */
+        gpio->BANK_REGISTERS[0].OUT_DATA |= 1u << 3u;
+#endif
+    } else if (ioboard_timeout[1] > INT16_MIN) {
+        ioboard_timeout[1]--;
+
+#ifdef __TI_COMPILER_VERSION__
+        /* De-assert IOBOARD_2_RESET_OUT on GPIO 3 */
+        gpio->BANK_REGISTERS[0].OUT_DATA &= ~(1u << 3u);
+#endif
     }
 
     /*
