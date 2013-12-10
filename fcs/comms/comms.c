@@ -68,7 +68,7 @@ void fcs_comms_tick(void) {
         fcs_global_counters.cpu_packet_tx++;
 
         /* We should definitely have enough room in the write buffer */
-        //assert(packet_len == write_len);
+        assert(packet_len == write_len);
     }
 
     /* Check for packets */

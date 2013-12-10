@@ -64,47 +64,46 @@ how many bytes have been transferred by looking at BCNT.
 static uint16_t rx_last_buf_size[2] = { 0, 0 },
                 tx_last_buf_size[2] = { 0, 0 };
 
-/*
-UART registers (table 3-1 in SPRUGP1):
-
-RBR: Receive Buffer Register (read-only)
-THR: Transmitter Holding Register (write-only)
-IER: Interrupt Enable Register
-IIR: Interrupt Identification Register
-FCR: FIFO Control Register (write-only)
-LCR: Line Control Register
-MCR: Modem Control Register
-LSR: Line Status Register
-MSR: Modem Status Register
-SCR: Scratch Pad Register
-DLL: Divisor LSB Latch
-DLH: Divisor MSB Latch
-REVID1: Revision Identification Register 1
-REVID2: Revision Identification Register 2
-PWREMU_MGMT: Power and Emulation Management Register
-MDR: Mode Definition Register
-
-If using the shared addresses, RBR and THR can only be accessed when the DLAB
-bit in LCR is low; DLL can only be accessed when the DLAB bit in LCR is high.
-
-IER can only be accessed when DLAB is low. DLH can only be accessed when DLAB
-is high.
-
-HOWEVER, the C66 CSL uses *dedicated* addresses for DLH and DLL, so we don't
-need to mess around with that -- they can be written at any time.
-*/
-
-static volatile CSL_UartRegs *const uart[2] = {
-    (CSL_UartRegs*)CSL_UART_REGS,
-    (CSL_UartRegs*)CSL_UART_B_REGS
-};
-
 static uint32_t uart_baud[2] = { 115200u, 115200u };
 
 void fcs_int_uart_reset(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
     /* Initialization process as described in part 2.7 of SPRUGP1 */
+
+    /*
+    UART registers (table 3-1 in SPRUGP1):
+
+    RBR: Receive Buffer Register (read-only)
+    THR: Transmitter Holding Register (write-only)
+    IER: Interrupt Enable Register
+    IIR: Interrupt Identification Register
+    FCR: FIFO Control Register (write-only)
+    LCR: Line Control Register
+    MCR: Modem Control Register
+    LSR: Line Status Register
+    MSR: Modem Status Register
+    SCR: Scratch Pad Register
+    DLL: Divisor LSB Latch
+    DLH: Divisor MSB Latch
+    REVID1: Revision Identification Register 1
+    REVID2: Revision Identification Register 2
+    PWREMU_MGMT: Power and Emulation Management Register
+    MDR: Mode Definition Register
+
+    If using the shared addresses, RBR and THR can only be accessed when the
+    DLAB bit in LCR is low; DLL can only be accessed when the DLAB bit in LCR
+    is high.
+
+    IER can only be accessed when DLAB is low. DLH can only be accessed when
+    DLAB is high.
+
+    HOWEVER, the C66 CSL uses *dedicated* addresses for DLH and DLL, so we
+    don't need to mess around with that -- they can be written at any time.
+    */
+
+    volatile CSL_UartRegs *const uart[2] =
+        { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
 
     /*
     PWREMU_MGMT: Power and Emulation Management Register (section 3.13 in
@@ -329,6 +328,9 @@ void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
 uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
+    volatile CSL_UartRegs *const uart[2] =
+        { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
+
     uint8_t lsr = uart[uart_idx]->LSR;
 
     /*
@@ -468,6 +470,9 @@ uint16_t buf_size) {
 
     Start by disabling the channel.
     */
+
+    volatile CSL_UartRegs *const uart[2] =
+        { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
 
     /* Disable the UART RX */
     uart[uart_idx]->PWREMU_MGMT &= 0xFFFFDFFFu;
@@ -713,6 +718,9 @@ uint16_t buf_size) {
     based on the current BCNT value
     */
     tx_last_buf_size[uart_idx] = buf_size;
+
+    volatile CSL_UartRegs *const uart[2] =
+        { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
 
     /* Put the UART TX into reset -- clear UTRST in PWREMU_MGMT (bit 14) */
     uart[uart_idx]->PWREMU_MGMT &= 0xFFFFBFFF;

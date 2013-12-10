@@ -108,141 +108,125 @@ static uint16_t rx_last_buf_size[2] = { 0, 0 },
 
 static uint32_t uart_baud[2] = { 115200u, 115200u };
 
-/*
-Configuration structure for the UART. This doesn't actually match the memory
-map, because we drive everything through DMA and need to perform writes in a
-particular sequence to get access to some of the registers.
-
-Re-configuring the UART involves setting up a PaRAM set pushing LCR[7] high,
-then setting the DLL/DLM/DLD bytes, then clearing LCR[7], then configuring
-each byte in order: IER, FCR, LCR, MCR. This means 4 chained PaRAM sets, and
-about 1188 cycles.
-
-It may actually be easier just to set each byte via the memory map -- check
-performance to make sure it's as expected.
-*/
-struct emif16_xr16m752_uart_config_t {
-    /* These registers should be configured when LCR[7] is high. */
-
-    /* Divisor latch LSB */
-    uint8_t DLL;
-    /* Divisor latch MSB */
-    uint8_t DLM;
-    /* Divisor latch fractional component */
-    uint8_t DLD;
-
-    /* These registers should be configured when LCR[7] is low. */
-
-    /*
-    IER: Interrupt Enable Register
-
-    Bit   Field          Value         Description
-    7     CTS_INT_EN     0             Only valid when EFR[4] = 1. Unused.
-    6     RTS_INT_EN     0             Only valid when EFR[4] = 1. Unused.
-    5     XOFF_INT_EN    0             Only valid when EFR[4] = 1. Unused.
-    4     SLEEP_MODE_EN  0             Only valid when EFR[4] = 1. Unused.
-    3     MODEM_INT_EN                 Modem status interrupt enable.
-                                       0 = disabled
-                                       1 = enabled
-    2     RX_LINE_STAT_INT_EN          RX line status interrupt enable.
-                                       0 = disabled
-                                       1 = enabled
-    1     TX_EMPTY_INT_EN              TX empty interrupt enable.
-                                       0 = disabled
-                                       1 = enabled
-    0     RX_DATA_INT_EN               RX data interrupt enable.
-                                       0 = disabled
-                                       1 = enabled
-    */
-    uint8_t IER;
-
-    /*
-    FCR: FIFO Control Register
-
-    Bit   Field          Value         Description
-    7:6   RXFIFO_TRIGGER               RX FIFO trigger
-    5:4   TXFIFO_TRIGGER 0             Only valid when EFR[4] = 1. Unused.
-    3     DMAMODE_EN                   DMA mode enable.
-                                       0 = disabled
-                                       1 = enabled
-    2     TXFIFO_RESET                 TX FIFO reset.
-                                       0 = ?
-                                       1 = ?
-    1     RXFIFO_RESET                 RX FIFO reset.
-                                       0 = ?
-                                       1 = ?
-    0     FIFO_EN                      FIFO enable.
-                                       0 = disabled
-                                       1 = enabled
-    */
-    uint8_t FCR;
-
-    /*
-    LCR: Line Control Register
-
-    Bit   Field          Value         Description
-    7     DIVISOR_EN                   Enable access to DLL, DLM and DLH
-                                       instead of RHR, IER and FCR.
-                                       0 = disabled (no access to latch)
-                                       1 = enabled (access to latch)
-    6     SET_TX_BREAK                 Set TX break.
-                                       0 = no break condition
-                                       1 = break condition
-    5     SET_PARITY                   Set parity.
-                                       0 = parity not forced
-                                       1 = parity forced to 1 if even, 0 if
-                                           odd
-    4     EVEN_PARITY                  Even parity.
-                                       0 = odd parity
-                                       1 = even parity
-    3     PARITY_EN                    Parity enable.
-                                       0 = no parity
-                                       1 = parity
-    2     STOP_BITS                    Stop bits.
-                                       0 = 1 stop bit
-                                       1 = 1.5 stop bits for WORD_LEN=0, 2
-                                           otherwise
-    1:0   WORD_LEN                     Word length.
-                                       0 = 5 bits
-                                       1 = 6 bits
-                                       2 = 7 bits
-                                       3 = 8 bits
-    */
-    uint8_t LCR;
-
-    /*
-    MCR: Modem Control Register
-
-    Bit   Field          Value         Description
-    7     PRESCALER_SEL  0             Clock prescaler select. Only valid when
-                                       EFR[4] = 1. Unused.
-    6     TCL_TLR_EN     0             TCL and TLR enable. Only valid when
-                                       EFR[4] = 1. Unused.
-    5     XON_ANY        0             XON any. Only valid when EFR[4] = 1.
-                                       Unused.
-    4     LOOPBACK_EN                  Loop TX back to RX when enabled.
-                                       0 = loopback disabled (normal)
-                                       1 = loopback enabled
-    3     INT_OE                       OP2#/Interrupt output enable.
-    2     FIFO_RDY                     OP1#/FIFO ready.
-    1     RTS_OC                       RTS# output control.
-    0     DTR_OC                       DTR# output control.
-    */
-    uint8_t MCR;
-
-    /* There are a bunch of other registers but we don't use them */
-};
+/* UART register offsets */
 
 #define XR16M752_RHR 0x0u
 #define XR16M752_THR 0x0u
+
+/* These registers should be configured when LCR[7] is high. */
+
+/* Divisor latch LSB */
 #define XR16M752_DLL 0x0u
+
+/* Divisor latch MSB */
 #define XR16M752_DLM 0x1u
+
+/* Divisor latch fractional component */
 #define XR16M752_DLD 0x2u
+
+/* These registers should be configured when LCR[7] is low. */
+
+/*
+IER: Interrupt Enable Register
+
+Bit   Field          Value         Description
+7     CTS_INT_EN     0             Only valid when EFR[4] = 1. Unused.
+6     RTS_INT_EN     0             Only valid when EFR[4] = 1. Unused.
+5     XOFF_INT_EN    0             Only valid when EFR[4] = 1. Unused.
+4     SLEEP_MODE_EN  0             Only valid when EFR[4] = 1. Unused.
+3     MODEM_INT_EN                 Modem status interrupt enable.
+                                   0 = disabled
+                                   1 = enabled
+2     RX_LINE_STAT_INT_EN          RX line status interrupt enable.
+                                   0 = disabled
+                                   1 = enabled
+1     TX_EMPTY_INT_EN              TX empty interrupt enable.
+                                   0 = disabled
+                                   1 = enabled
+0     RX_DATA_INT_EN               RX data interrupt enable.
+                                   0 = disabled
+                                   1 = enabled
+*/
 #define XR16M752_IER 0x1u
+
+/* We don't use ISR */
 #define XR16M752_ISR 0x2u
+
+/*
+FCR: FIFO Control Register
+
+Bit   Field          Value         Description
+7:6   RXFIFO_TRIGGER               RX FIFO trigger
+5:4   TXFIFO_TRIGGER 0             Only valid when EFR[4] = 1. Unused.
+3     DMAMODE_EN                   DMA mode enable.
+                                   0 = disabled
+                                   1 = enabled
+2     TXFIFO_RESET                 TX FIFO reset.
+                                   0 = ?
+                                   1 = ?
+1     RXFIFO_RESET                 RX FIFO reset.
+                                   0 = ?
+                                   1 = ?
+0     FIFO_EN                      FIFO enable.
+                                   0 = disabled
+                                   1 = enabled
+*/
 #define XR16M752_FCR 0x2u
+
+/*
+LCR: Line Control Register
+
+Bit   Field          Value         Description
+7     DIVISOR_EN                   Enable access to DLL, DLM and DLH
+                                   instead of RHR, IER and FCR.
+                                   0 = disabled (no access to latch)
+                                   1 = enabled (access to latch)
+6     SET_TX_BREAK                 Set TX break.
+                                   0 = no break condition
+                                   1 = break condition
+5     SET_PARITY                   Set parity.
+                                   0 = parity not forced
+                                   1 = parity forced to 1 if even, 0 if
+                                       odd
+4     EVEN_PARITY                  Even parity.
+                                   0 = odd parity
+                                   1 = even parity
+3     PARITY_EN                    Parity enable.
+                                   0 = no parity
+                                   1 = parity
+2     STOP_BITS                    Stop bits.
+                                   0 = 1 stop bit
+                                   1 = 1.5 stop bits for WORD_LEN=0, 2
+                                       otherwise
+1:0   WORD_LEN                     Word length.
+                                   0 = 5 bits
+                                   1 = 6 bits
+                                   2 = 7 bits
+                                   3 = 8 bits
+*/
 #define XR16M752_LCR 0x3u
+
+/*
+MCR: Modem Control Register
+
+Bit   Field          Value         Description
+7     PRESCALER_SEL  0             Clock prescaler select. Only valid when
+                                   EFR[4] = 1. Unused.
+6     TCL_TLR_EN     0             TCL and TLR enable. Only valid when
+                                   EFR[4] = 1. Unused.
+5     XON_ANY        0             XON any. Only valid when EFR[4] = 1.
+                                   Unused.
+4     LOOPBACK_EN                  Loop TX back to RX when enabled.
+                                   0 = loopback disabled (normal)
+                                   1 = loopback enabled
+3     INT_OE                       OP2#/Interrupt output enable.
+2     FIFO_RDY                     OP1#/FIFO ready.
+1     RTS_OC                       RTS# output control.
+0     DTR_OC                       DTR# output control.
+*/
 #define XR16M752_MCR 0x4u
+
+/* We don't use these registers */
 #define XR16M752_LSR 0x5u
 #define XR16M752_MSR 0x6u
 #define XR16M752_SPR 0x7u
@@ -262,44 +246,6 @@ transparently.
 */
 #define EMIF16_UART0_BASE_ADDR 0x74000000
 #define EMIF16_UART1_BASE_ADDR 0x78000000
-
-static struct emif16_xr16m752_uart_config_t uart[2];
-static volatile uint8_t *const uart_regs[2] = {
-    (uint8_t*)EMIF16_UART0_BASE_ADDR,
-    (uint8_t*)EMIF16_UART1_BASE_ADDR
-};
-
-static void _fcs_emif_uart_write_config(uint8_t uart_idx);
-
-static void _fcs_emif_uart_write_config(uint8_t uart_idx) {
-    assert(uart_idx == 0 || uart_idx == 1);
-
-    /*
-    Configuring the UART involves the following steps:
-    - Set LCR[7]
-    - Write DLL, DLM and DLD
-    - Clear LCR[7] / write configured LCR
-    - Write IER, FCR, [LCR,] MCR
-
-    We could do this via DMA (4 PaRAM sets in a chained transfer) but since
-    each write takes < 150ns, we're looking at ~1350 cycles maximum to
-    configure by just writing each value to the appropriate EMIF location.
-
-    Obviously we couldn't re-configure the UART hundreds of times in a single
-    tick, but once or twice is probably fine.
-    */
-
-    volatile uint8_t *restrict uart_mem = uart_regs[uart_idx];
-
-    uart_mem[XR16M752_LCR] = 0x80u;
-    uart_mem[XR16M752_DLL] = uart[uart_idx].DLL;
-    uart_mem[XR16M752_DLM] = uart[uart_idx].DLM;
-    uart_mem[XR16M752_DLD] = uart[uart_idx].DLD;
-    uart_mem[XR16M752_LCR] = uart[uart_idx].LCR & 0x7Fu;
-    uart_mem[XR16M752_IER] = uart[uart_idx].IER;
-    uart_mem[XR16M752_FCR] = uart[uart_idx].FCR;
-    uart_mem[XR16M752_MCR] = uart[uart_idx].MCR;
-}
 
 void fcs_emif_uart_reset(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
@@ -438,25 +384,41 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     dld = (uint16_t)((divisor - (float)divisor_floor) * 16.0 + 0.5);
     assert(dld < 0x10u);
 
+    /*
+    Configuring the UART involves the following steps:
+    - Set LCR[7]
+    - Write DLL, DLM and DLD
+    - Clear LCR[7] / write configured LCR
+    - Write IER, FCR, [LCR,] MCR
+
+    We could do this via DMA (4 PaRAM sets in a chained transfer) but since
+    each write takes < 150ns, we're looking at ~1350 cycles maximum to
+    configure by just writing each value to the appropriate EMIF location.
+
+    Obviously we couldn't re-configure the UART hundreds of times in a single
+    tick, but once or twice is probably fine.
+    */
+
+    volatile uint8_t *const uart_regs[2] =
+        {(uint8_t*)EMIF16_UART0_BASE_ADDR, (uint8_t*)EMIF16_UART1_BASE_ADDR};
+    volatile uint8_t *restrict const uart_mem = uart_regs[uart_idx];
+
     /* Configure the divisor latch values */
-    uart[uart_idx].DLM = (divisor_floor >> 8) & 0xFFu;
-    uart[uart_idx].DLL = divisor_floor & 0xFFu;
-    uart[uart_idx].DLD = dld & 0x0Fu;
+    uart_mem[XR16M752_LCR] = 0x80u;
+    uart_mem[XR16M752_DLM] = (divisor_floor >> 8) & 0xFFu;
+    uart_mem[XR16M752_DLL] = divisor_floor & 0xFFu;
+    uart_mem[XR16M752_DLD] = dld & 0x0Fu;
 
     /*
-    See comments for `struct emif16_xr16m752_uart_config_t` above for register
-    details. Here, we want to configure the following:
+    Here, we want to configure the following:
     - RX interrupt on data
     - Loopback if debugging
     - 8 bits, no parity, 1 stop bit
     -> MCR = 0x18 for loopback, 0x08 without
     */
-    uart[uart_idx].IER = 0x01u; /* RX interrupt only */
-    uart[uart_idx].MCR = 0x08u; /* 0x18 for loopback + INT_OE */
-    uart[uart_idx].LCR = 0x03u; /* 8 bit, 1 stop bit, no parity */
-
-    /* Send configuration to the UART */
-    _fcs_emif_uart_write_config(uart_idx);
+    uart_mem[XR16M752_LCR] = 0x03u; /* 8 bit, 1 stop bit, no parity */
+    uart_mem[XR16M752_IER] = 0x01u; /* RX interrupt only */
+    uart_mem[XR16M752_MCR] = 0x08u; /* 0x18 for loopback + INT_OE */
 
     /*
     The GPIO peripheral has a few global config options, and registers for
@@ -666,7 +628,9 @@ void fcs_emif_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
 uint32_t fcs_emif_uart_check_error(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
-    volatile uint8_t *restrict uart_mem = uart_regs[uart_idx];
+    volatile uint8_t *const uart_regs[2] =
+        {(uint8_t*)EMIF16_UART0_BASE_ADDR, (uint8_t*)EMIF16_UART1_BASE_ADDR};
+    volatile uint8_t *restrict const uart_mem = uart_regs[uart_idx];
     uint8_t lsr = uart_mem[XR16M752_LSR];
 
     /*
@@ -712,6 +676,9 @@ uint32_t fcs_emif_uart_check_error(uint8_t uart_idx) {
 void fcs_emif_uart_start_rx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    volatile uint8_t *const uart_regs[2] =
+        {(uint8_t*)EMIF16_UART0_BASE_ADDR, (uint8_t*)EMIF16_UART1_BASE_ADDR};
 
     /*
     Track this so we can return how many bytes have been written to the RX
@@ -779,6 +746,9 @@ uint16_t buf_size) {
 void fcs_emif_uart_start_tx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    volatile uint8_t *const uart_regs[2] =
+        {(uint8_t*)EMIF16_UART0_BASE_ADDR, (uint8_t*)EMIF16_UART1_BASE_ADDR};
 
     /*
     Track buffer size so we can return number of bytes read from TX buffer

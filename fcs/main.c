@@ -714,6 +714,8 @@ static void _fcs_enable_edc(void) {
 }
 
 uint32_t fcs_main_init_core0(void) {
+	volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
+
     KICK_UNLOCK();
 
     /*
@@ -879,7 +881,6 @@ uint32_t fcs_main_init_core0(void) {
     GPIO22_UARTCTS0_MUX, GPIO19_TIMO1_MUX, GPIO18_TIMO0_MUX, GPIO17_TIMI1_MUX,
     and GPIO16_TIMI0_MUX high.
     */
-    volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
     cfg->CHIP_PIN_CONTROL_0 = 0x0CCF0000u;
 
     /*
@@ -909,6 +910,7 @@ uint32_t fcs_main_init_core1(void) {
     If we reach 100000000 cycles (0.1s or 1s depending on PLL), abort.
     */
     volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
 
     uint32_t start_t = TSCL;
     while (!semaphore->QSEM[FCS_SEMAPHORE_CORE0_BOOT] &&
