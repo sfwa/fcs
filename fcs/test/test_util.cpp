@@ -83,6 +83,39 @@ TEST(CRC8, TooShort) {
     EXPECT_DEATH({ uint8_t x[512]; fcs_crc8(x, 0, 0); }, "Assertion.*failed");
 }
 
+TEST(CRC16SBP, OneByte) {
+    uint16_t result;
+    uint8_t data = 'x';
+
+    result = fcs_crc16_sbp(&data, 1u, 0);
+    EXPECT_EQ(0xFF9F, result);
+}
+
+TEST(CRC16SBP, AllZeros) {
+    uint16_t result;
+    uint8_t data[] = "\x00\x00\x00\x00";
+
+    result = fcs_crc16_sbp(data, 1u, 0);
+    EXPECT_EQ(0x0000, result);
+}
+
+TEST(CRC16SBP, Message) {
+    uint16_t result;
+    uint8_t data[] = "123456789";
+
+    result = fcs_crc16_sbp(data, 9u, 0);
+    EXPECT_EQ(0x31C3u, result);
+}
+
+TEST(CRC16SBP, NoBuffer) {
+    EXPECT_DEATH({ fcs_crc16_sbp(NULL, 5, 0); }, "Assertion.*failed");
+}
+
+TEST(CRC16SBP, TooShort) {
+    EXPECT_DEATH(
+        { uint8_t x[512]; fcs_crc16_sbp(x, 0, 0); }, "Assertion.*failed");
+}
+
 TEST(CRC32, OneByte) {
     uint32_t result;
     uint8_t data = 'x';

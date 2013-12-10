@@ -40,6 +40,7 @@ ADD_EXECUTABLE(unittest
     ../util/cobsr.c
     ../util/base64.c
     ../util/crc8.c
+    ../util/crc16sbp.c
     ../util/crc32.c
     ../util/util.c
     test_util.cpp
@@ -75,10 +76,11 @@ ADD_LIBRARY(fcs SHARED
     ../util/cobsr.c
     ../util/base64.c
     ../util/crc8.c
+    ../util/crc16sbp.c
     ../util/crc32.c
     ../util/util.c
-    ../piksi/piksi.c
     ../nmpc/nmpc.c
+    ../piksi/piksi.c
     ../drivers/stream.c
     ../comms/comms.c
     ../config/config.c

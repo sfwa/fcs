@@ -56,12 +56,26 @@ uint8_t fcs_crc8(const uint8_t *restrict pdata, uint32_t nbytes,
 uint8_t crc);
 
 /*
+fcs_crc16 - calculate a so-called CRC16 over the given input data. This
+implementation is specifically designed for compatibility with the CRC16 used
+in the SwiftNav Binary Protocol for the Piksi GPS. According to their
+documentation, it's a CRC16-CCITT, but it's really not.
+
+pdata: pointer to data buffer.
+nbytes: number of bytes in data buffer.
+crc: starting value; must be 0xFFFFu for standards compliance.
+*/
+#pragma FUNC_IS_PURE(fcs_crc16_sbp);
+uint16_t fcs_crc16_sbp(const uint8_t *restrict pdata, uint32_t nbytes,
+uint16_t crc);
+
+/*
 fcs_crc32 - calculate a CRC32(B) over the given input data using the EDB88320
 polynomial (ANSI X3.66, ITU-T V.42, Ethernet, Gzip, PNG etc).
 
 pdata: pointer to data buffer.
 nbytes: number of bytes in data buffer.
-crc: starting value; must be 0xffffffffu for standards compliance.
+crc: starting value; must be 0xFFFFFFFFu for standards compliance.
 */
 #pragma FUNC_IS_PURE(fcs_crc32);
 uint32_t fcs_crc32(const uint8_t *restrict pdata, uint32_t nbytes,

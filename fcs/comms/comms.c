@@ -116,6 +116,11 @@ void fcs_comms_tick(void) {
     }
 }
 
+/*
+Read a full message from `dev`, starting with $ and ending with \n. Neither
+of those characters can appear in the message itself, so we don't need to do
+any message parsing at this level.
+*/
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
     assert(buf);
 

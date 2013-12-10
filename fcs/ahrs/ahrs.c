@@ -540,6 +540,11 @@ double *restrict covariance) {
 #endif
 }
 
+/*
+Read, deserialize and validate a full I/O board packet from `dev`. Since we
+get two of these every tick there's no point doing this incrementally; we just
+need to make sure we can deal with partial/corrupted packets.
+*/
 bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
 struct sensor_packet_t *dest) {
     assert(dest);
