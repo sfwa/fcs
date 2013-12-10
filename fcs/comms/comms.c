@@ -33,9 +33,6 @@ SOFTWARE.
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
 
-static uint32_t tick;
-static uint8_t comms_buf[256u];
-static size_t comms_buf_len;
 static struct fcs_packet_state_t comms_state_in;
 static bool comms_state_valid;
 static struct fcs_packet_config_t comms_config_in;
@@ -55,6 +52,11 @@ void fcs_comms_init(void) {
 }
 
 void fcs_comms_tick(void) {
+    static uint32_t tick;
+
+    uint8_t comms_buf[256u];
+    size_t comms_buf_len;
+
     /* Send a state update packet to the CPU every 20ms (50Hz) */
     if (tick % 20u == 0) {
         size_t packet_len, write_len;

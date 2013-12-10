@@ -86,44 +86,11 @@ The mapping isn't exactly 1:1, but basically tRD + tDY must be > 120ns, SETUP
 must be > 5ns, and STROBE must be > 60ns.
 
 Write timings are the same.
-*/
 
-/*
 See int-uart.c for a detailed description of the EDMA3 configuration. This
 file only includes descriptions of the differences in configuration between
 the internal and external UARTs.
 */
-static volatile CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-
-/* Pointer to global EMIF16 object */
-static volatile CSL_Emif16Regs* emif16 = (CSL_Emif16Regs*)CSL_EMIF16_REGS;
-
-/*
-Pointer to global GPIO peripheral. The GPIO peripheral has a few global config
-options, and registers for four GPIO banks. The GPIO bank number is the GPIO
-index divided by 32 and rounded down, while the position of the control bit is
-the GPIO index mod 32.
-
-SPRUGV1 appears to be incorrect in relation to the C6657, in that the upper
-16 bits of the GPIO control registers are marked as reserved. The C6657 CSL
-writes to them though, and TI support say (seemingly with some trepidation)
-that the CSL is more likely to be correct than the documentation.
-
-This is of course largely irrelevant to us as we only need GPIO0 and GPIO1.
-*/
-static volatile CSL_GpioRegs* gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
-
-/*
-Pointer to TIMER4 and TIMER5 peripherals. These are configured in 64-bit mode
-(the default), with continuous mode enabled. The configured period is equal to
-the (input clock frequency / baud rate) * 16.
-
-This means that the maximum TX throughput for a 230400 baud link is 14.4KB/s.
-*/
-static volatile CSL_TmrRegs* timer[2] = {
-    (CSL_TmrRegs*)CSL_TIMER_4_REGS,
-    (CSL_TmrRegs*)CSL_TIMER_5_REGS
-};
 
 /*
 GPINT0 and GPINT1 are used as RX events -- we configure the external UART to
@@ -133,8 +100,8 @@ For TX events, we set a timer that transfers each byte at an appropriate rate
 (depending on the configured baud rate of the UART). The LO signals of
 TIMER4 and TIMER5 are used.
 */
-static uint16_t rx_edma_event[2] = { 6u, 7u },
-                tx_edma_event[2] = { 22u, 24u };
+static const uint16_t rx_edma_event[2] = { 6u, 7u },
+                      tx_edma_event[2] = { 22u, 24u };
 
 static uint16_t rx_last_buf_size[2] = { 0, 0 },
                 tx_last_buf_size[2] = { 0, 0 };
@@ -297,13 +264,10 @@ transparently.
 #define EMIF16_UART1_BASE_ADDR 0x78000000
 
 static struct emif16_xr16m752_uart_config_t uart[2];
-static volatile uint8_t *uart_regs[2] = {
+static volatile uint8_t *const uart_regs[2] = {
     (uint8_t*)EMIF16_UART0_BASE_ADDR,
     (uint8_t*)EMIF16_UART1_BASE_ADDR
 };
-
-static volatile CSL_CgemRegs* cgem =
-    (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
 
 static void _fcs_emif_uart_write_config(uint8_t uart_idx);
 
@@ -365,6 +329,8 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     For EMIF16 we want to configure the MARs as non-cacheable,
     non-prefetchable -- so set them to 0.
     */
+    volatile CSL_CgemRegs *const cgem =
+        (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
     cgem->MAR[uart_idx == 0 ? 116 : 120] = 0;
 
     /*
@@ -414,6 +380,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     We're using ASIZE=0 (8-bit), TA=0, R_HOLD=11, R_STROBE=7, R_SETUP=0,
     write setup/strobe/hold the same.
     */
+    volatile CSL_Emif16Regs *const emif16 = (CSL_Emif16Regs*)CSL_EMIF16_REGS;
     emif16->A1CR = (0x7u << 4) + (0xAu << 7) + (0x7u << 17) + (0xAu << 20);
 
     /*
@@ -423,6 +390,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     emif16->PMCR = 0;
 
     /* EDMA3 reset */
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
@@ -491,6 +459,23 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     _fcs_emif_uart_write_config(uart_idx);
 
     /*
+    The GPIO peripheral has a few global config options, and registers for
+    four GPIO banks. The GPIO bank number is the GPIO index divided by 32 and
+    rounded down, while the position of the control bit is the GPIO index mod
+    32.
+
+    SPRUGV1 appears to be incorrect in relation to the C6657, in that the
+    upper 16 bits of the GPIO control registers are marked as reserved. The
+    C6657 CSL writes to them though, and TI support say (seemingly with some
+     trepidation) that the CSL is more likely to be correct than the
+     documentation.
+
+    This is of course largely irrelevant to us as we only need GPIO0 and
+    GPIO1.
+    */
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+
+    /*
     Enable interrupts on the GPIO bank -- set lowest bit (only one in that
     register)
     */
@@ -513,6 +498,17 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     */
     gpio->BANK_REGISTERS[0].DIR |= 0x3u;
     gpio->BANK_REGISTERS[0].SET_FAL_TRIG |= 0x3u;
+
+    /*
+    Pointer to TIMER4 and TIMER5 peripherals. These are configured in 64-bit
+    mode (the default), with continuous mode enabled. The configured period is
+    equal to the (input clock frequency / baud rate) * 16.
+
+    This means that the maximum TX throughput for a 230400 baud link is
+    14.4KB/s.
+    */
+    volatile CSL_TmrRegs *const timer[2] =
+        { (CSL_TmrRegs*)CSL_TIMER_4_REGS, (CSL_TmrRegs*)CSL_TIMER_5_REGS };
 
     /*
     For 64-bit timers in continuous mode, we need TCR ENAMODE = 0x2u and
@@ -727,6 +723,7 @@ uint16_t buf_size) {
     See implementation of fcs_int_uart_start_rx_edma (in int-uart.c) for a
     detailed description of the EDMA3 stuff.
     */
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
 
@@ -790,6 +787,7 @@ uint16_t buf_size) {
     tx_last_buf_size[uart_idx] = buf_size;
 
     /* Disable DMA events for this channel */
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
 
@@ -831,6 +829,8 @@ uint16_t buf_size) {
 uint16_t fcs_emif_uart_get_rx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
+
     if (rx_last_buf_size[uart_idx] == 0) {
         return 0;
     } else {
@@ -845,6 +845,8 @@ uint16_t fcs_emif_uart_get_rx_edma_count(uint8_t uart_idx) {
 
 uint16_t fcs_emif_uart_get_tx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
 
     if (tx_last_buf_size[uart_idx] == 0) {
         return 0;

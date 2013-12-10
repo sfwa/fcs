@@ -465,7 +465,7 @@ double *restrict covariance) {
     Use a semaphore to prevent the NMPC code accessing the state while we're
     updating it.
     */
-    volatile CSL_SemRegs *semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
     uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
     assert(sem_val == 1u);
 #endif

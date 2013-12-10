@@ -77,9 +77,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "comms/comms.h"
 #include "stats/stats.h"
 
-static volatile CSL_BootcfgRegs *cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
-static volatile CSL_SemRegs *semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-
 static void _fcs_core_pll_setup(void);
 static void _fcs_ddr3_pll_setup(void);
 static void _fcs_ddr3_emif_setup(void);
@@ -125,7 +122,8 @@ the boot config registers.
 static void _fcs_core_pll_setup(void) {
     assert(DNUM == 0);
 
-    volatile CSL_PllcRegs* pll = (CSL_PllcRegs*)CSL_PLL_CONTROLLER_REGS;
+    volatile CSL_PllcRegs *const pll = (CSL_PllcRegs*)CSL_PLL_CONTROLLER_REGS;
+    volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
 
     /* 1. Wait for Stabilization time (min 100 us) */
     /* This will either be 100us or 1ms depending on PLL bypass status. */
@@ -356,6 +354,8 @@ static void _fcs_core_pll_setup(void) {
 static void _fcs_ddr3_pll_setup(void) {
     assert(DNUM == 0);
 
+    volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
+
     /*
     1. In DDR3PLLCTL1, write ENSAT = 1 (for optimal PLL operation)
     Usage Note 9: For optimal PLL operation, the ENSAT bit in the PLL control
@@ -422,15 +422,17 @@ static void _fcs_ddr3_pll_setup(void) {
 static void _fcs_ddr3_emif_setup(void) {
     assert(DNUM == 0);
 
+    volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
+
     /* First, configure XMC MPAX to allow access to DDR3 config space */
-    volatile CSL_XmcRegs* xmc = (CSL_XmcRegs*)CSL_XMC_CONFIG_REGS;
+    volatile CSL_XmcRegs *const xmc = (CSL_XmcRegs*)CSL_XMC_CONFIG_REGS;
 
     /* Replacement addr + permissions (0xFFu = R/W/X for all) */
     xmc->XMPAX[2].XMPAXL = 0x100000FFu;
     /* Base addr + seg size (64KB) */
     xmc->XMPAX[2].XMPAXH = 0x2100000Bu;
 
-    volatile CSL_Emif4fRegs* ddr3 =
+    volatile CSL_Emif4fRegs *const ddr3 =
         (CSL_Emif4fRegs*)CSL_DDR3_EMIF_CONFIG_REGS;
 
     /*
@@ -610,7 +612,7 @@ http://www.esacademy.com/en/library/technical-articles-and-documents/\
 miscellaneous/software-based-memory-testing.html
 */
 static bool _fcs_ddr3_test(uint32_t nwords) {
-    volatile uint32_t *ddr3_mem = (volatile uint32_t*)0x80000000;
+    volatile uint32_t *const ddr3_mem = (volatile uint32_t*)0x80000000;
     uint32_t i, j, value;
 
     /*
@@ -689,7 +691,7 @@ static bool _fcs_ddr3_test(uint32_t nwords) {
 }
 
 static void _fcs_enable_edc(void) {
-    volatile CSL_CgemRegs* cgem =
+    volatile CSL_CgemRegs *const cgem =
         (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
 
     /* L1P EDC enable */
@@ -703,7 +705,7 @@ static void _fcs_enable_edc(void) {
     cgem->L2EDCEN |= 0x1Fu;
 
     /* MSMC EDC enable -- clear SEN (bit 31) and set ECM (bit 30). */
-    volatile CSL_MsmcRegs* msmc = (CSL_MsmcRegs*)CSL_MSMC_CONFIG_REGS;
+    volatile CSL_MsmcRegs *const msmc = (CSL_MsmcRegs*)CSL_MSMC_CONFIG_REGS;
     msmc->SMEDCC &= 0x7FFFFFFFu;
     msmc->SMEDCC |= 0x40000000u;
 
@@ -723,7 +725,7 @@ uint32_t fcs_main_init_core0(void) {
 
     For now just power up the MSMC.
     */
-    volatile CSL_PscRegs* psc = (CSL_PscRegs*)CSL_PSC_REGS;
+    volatile CSL_PscRegs *const psc = (CSL_PscRegs*)CSL_PSC_REGS;
 
     /* Skip if MSMC module (14) state is already ENABLE (3) */
     if ((psc->MDSTAT[14] & 0x1Fu) != 3u) {
@@ -797,7 +799,7 @@ uint32_t fcs_main_init_core0(void) {
                                        0 = not cacheable
                                        1 = cacheable
     */
-    volatile CSL_CgemRegs* cgem =
+    volatile CSL_CgemRegs *const cgem =
         (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
     cgem->MAR[12] = 0x1u;
     cgem->MAR[13] = 0x1u;
@@ -877,7 +879,7 @@ uint32_t fcs_main_init_core0(void) {
     GPIO22_UARTCTS0_MUX, GPIO19_TIMO1_MUX, GPIO18_TIMO0_MUX, GPIO17_TIMI1_MUX,
     and GPIO16_TIMI0_MUX high.
     */
-
+    volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
     cfg->CHIP_PIN_CONTROL_0 = 0x0CCF0000u;
 
     /*
@@ -889,7 +891,7 @@ uint32_t fcs_main_init_core0(void) {
     Clear bits 27, 26, 23 and 22 of DIR to set them as outputs, and then set
     the value to 0 to turn off the LEDs.
     */
-    volatile CSL_GpioRegs* gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
     gpio->BANK_REGISTERS[0].DIR &= 0xF33FFFFFu;
     gpio->BANK_REGISTERS[0].OUT_DATA = 0x0CC00000u;
 
@@ -906,6 +908,8 @@ uint32_t fcs_main_init_core1(void) {
     Query core 0's boot semaphore until it's released, then start ourselves.
     If we reach 100000000 cycles (0.1s or 1s depending on PLL), abort.
     */
+    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+
     uint32_t start_t = TSCL;
     while (!semaphore->QSEM[FCS_SEMAPHORE_CORE0_BOOT] &&
            TSCL - start_t < 100000000u);
@@ -925,6 +929,8 @@ void fcs_main_init_common(void) {
 
 #pragma FUNC_NEVER_RETURNS(main);
 int main(void) {
+    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+
     /* Perform common initialization */
     fcs_main_init_common();
 

@@ -54,13 +54,8 @@ it's somewhat simpler -- just set up a single PaRAM entry per write and don't
 accept further writes until it's complete.
 */
 
-static volatile CSL_TpccRegs* edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-
-/* GPIO registers */
-static volatile CSL_GpioRegs* gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
-
-static uint16_t rx_edma_event[2] = { 4u, 14u },
-                tx_edma_event[2] = { 5u, 15u };
+static const uint16_t rx_edma_event[2] = { 4u, 14u },
+                      tx_edma_event[2] = { 5u, 15u };
 
 /*
 Track the last set buffer size for RX and TX transfers, so we can work out
@@ -99,7 +94,7 @@ HOWEVER, the C66 CSL uses *dedicated* addresses for DLH and DLL, so we don't
 need to mess around with that -- they can be written at any time.
 */
 
-static volatile CSL_UartRegs *uart[2] = {
+static volatile CSL_UartRegs *const uart[2] = {
     (CSL_UartRegs*)CSL_UART_REGS,
     (CSL_UartRegs*)CSL_UART_B_REGS
 };
@@ -146,6 +141,8 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     Finally, clear out any pending events by setting the clear bits in
     ECR/ECRH.
     */
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
+
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
@@ -481,6 +478,7 @@ uint16_t buf_size) {
     Disable the channel by setting the clear bit in the appropriate register.
     For channels 0-31, this is EECR; for channels 32+, it's EECRH.
     */
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
                                 rx_edma_event[uart_idx], 1u);
 
@@ -722,6 +720,7 @@ uint16_t buf_size) {
     #pragma unused(dummy);
 
     /* Disable the DMA event for this channel */
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
                                 tx_edma_event[uart_idx], 1u);
 
@@ -765,6 +764,9 @@ uint16_t buf_size) {
 uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
 
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+
     uint16_t nbytes = 0;
     if (rx_last_buf_size[uart_idx] != 0) {
         /*
@@ -787,6 +789,9 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
 
 uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
     assert(uart_idx == 0 || uart_idx == 1);
+
+    volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
 
     uint16_t nbytes = 0;
     if (tx_last_buf_size[uart_idx] != 0) {
