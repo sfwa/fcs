@@ -431,144 +431,6 @@ size_t len) {
                 memcpy(state->next_waypoint_id, &buf[field_start], field_len);
                 result = FCS_CONVERSION_OK;
                 break;
-            case 2u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->lat, &buf[field_start], field_len);
-                break;
-            case 3u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->lon, &buf[field_start], field_len);
-                break;
-            case 4u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->alt, &buf[field_start], field_len);
-                break;
-            case 5u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->velocity[0], &buf[field_start], field_len);
-                break;
-            case 6u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->velocity[1u], &buf[field_start], field_len);
-                break;
-            case 7u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->velocity[2u], &buf[field_start], field_len);
-                break;
-            case 8u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->wind_velocity[0], &buf[field_start], field_len);
-                break;
-            case 9u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->wind_velocity[1u], &buf[field_start], field_len);
-                break;
-            case 10u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->wind_velocity[2u], &buf[field_start], field_len);
-                break;
-            case 11u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->yaw, &buf[field_start], field_len);
-                break;
-            case 12u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->pitch, &buf[field_start], field_len);
-                break;
-            case 13u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->roll, &buf[field_start], field_len);
-                break;
-            case 14u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->angular_velocity[0], &buf[field_start], field_len
-                );
-                break;
-            case 15u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->angular_velocity[1u], &buf[field_start], field_len
-                );
-                break;
-            case 16u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->angular_velocity[2u], &buf[field_start], field_len
-                );
-                break;
-            case 17u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->lat_lon_uncertainty, &buf[field_start], field_len
-                );
-                break;
-            case 18u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->alt_uncertainty, &buf[field_start], field_len);
-                break;
-            case 19u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->velocity_uncertainty[0], &buf[field_start],
-                    field_len
-                );
-                break;
-            case 20u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->velocity_uncertainty[1u], &buf[field_start],
-                    field_len
-                );
-                break;
-            case 21u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->velocity_uncertainty[2u], &buf[field_start],
-                    field_len
-                );
-                break;
-            case 22u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->wind_velocity_uncertainty[0], &buf[field_start],
-                    field_len
-                );
-                break;
-            case 23u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->wind_velocity_uncertainty[1u], &buf[field_start],
-                    field_len
-                );
-                break;
-            case 24u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->wind_velocity_uncertainty[2u], &buf[field_start],
-                    field_len
-                );
-                break;
-            case 25u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->yaw_uncertainty, &buf[field_start], field_len);
-                break;
-            case 26u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->pitch_uncertainty, &buf[field_start], field_len);
-                break;
-            case 27u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->roll_uncertainty, &buf[field_start], field_len);
-                break;
-            case 28u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->angular_velocity_uncertainty[0],
-                    &buf[field_start], field_len
-                );
-                break;
-            case 29u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->angular_velocity_uncertainty[1u],
-                    &buf[field_start], field_len
-                );
-                break;
-            case 30u:
-                result = fcs_double_from_ascii_fixed(
-                    &state->angular_velocity_uncertainty[2u],
-                    &buf[field_start], field_len
-                );
-                break;
             case 31u:
                 /* 'N' mode indicator means not valid */
                 if (field_len != 1u || buf[field_start] == 'N') {
@@ -585,7 +447,14 @@ size_t len) {
                 result = FCS_CONVERSION_OK;
                 break;
             default:
-                assert(false);
+                /*
+                Handle fields 2-30 -- just a bunch of double conversions, and
+                order is the same between the state structure and the message
+                */
+                assert(2u <= field && field <= 30u);
+                double *data_ptr = &state->lat;
+                result = fcs_double_from_ascii_fixed(
+                    &data_ptr[field - 2u], &buf[field_start], field_len);
                 break;
         }
 
@@ -794,34 +663,6 @@ size_t len) {
                 }
                 waypoint->waypoint_role = buf[field_start];
                 break;
-            case 2u:
-                result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_lat, &buf[field_start], field_len);
-                break;
-            case 3u:
-                result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_lon, &buf[field_start], field_len);
-                break;
-            case 4u:
-                result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_alt, &buf[field_start], field_len);
-                break;
-            case 5u:
-                result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_yaw, &buf[field_start], field_len);
-                break;
-            case 6u:
-                result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_pitch, &buf[field_start], field_len);
-                break;
-            case 7u:
-                result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_roll, &buf[field_start], field_len);
-                break;
-            case 8u:
-                result = fcs_double_from_ascii_fixed(
-                    &waypoint->target_airspeed, &buf[field_start], field_len);
-                break;
             case 9u:
                 if (field_len != 5u) {
                     goto invalid;
@@ -831,7 +672,15 @@ size_t len) {
                 result = FCS_CONVERSION_OK;
                 break;
             default:
-                assert(false);
+                /*
+                Handle fields 2-8 -- just a bunch of double conversions, and
+                order is the same between the waypoint structure and the
+                message
+                */
+                assert(2u <= field && field <= 8u);
+                double *data_ptr = &waypoint->target_lat;
+                result = fcs_double_from_ascii_fixed(
+                    &data_ptr[field - 2u], &buf[field_start], field_len);
                 break;
         }
 
@@ -1094,24 +943,15 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
                     goto invalid;
                 }
                 break;
-            case 1u:
-                result = fcs_double_from_ascii_fixed(
-                    &gcs->lat, &buf[field_start], field_len);
-                break;
-            case 2u:
-                result = fcs_double_from_ascii_fixed(
-                    &gcs->lon, &buf[field_start], field_len);
-                break;
-            case 3u:
-                result = fcs_double_from_ascii_fixed(
-                    &gcs->alt, &buf[field_start], field_len);
-                break;
-            case 4u:
-                result = fcs_double_from_ascii_fixed(
-                    &gcs->pressure, &buf[field_start], field_len);
-                break;
             default:
-                assert(false);
+                /*
+                Handle fields 1-4 -- just a bunch of double conversions, and
+                order is the same between the GCS structure and the message
+                */
+                assert(1u <= field && field <= 4u);
+                double *data_ptr = &gcs->lat;
+                result = fcs_double_from_ascii_fixed(
+                    &data_ptr[field - 1u], &buf[field_start], field_len);
                 break;
         }
 
