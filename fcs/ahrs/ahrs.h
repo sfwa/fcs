@@ -75,4 +75,7 @@ estimates
 */
 extern struct fcs_packet_state_t fcs_global_state;
 
+/* Mirror of the state structure */
+extern struct fcs_packet_state_t fcs_global_state_mirror;
+
 #endif

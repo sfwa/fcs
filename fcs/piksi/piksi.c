@@ -91,9 +91,10 @@ void fcs_piksi_tick(void) {
     state = _fcs_piksi_read_packet(FCS_STREAM_UART_EXT1, &piksi_packet);
 
     if (state == FCS_PIKSI_DONE) {
+        fcs_global_counters.piksi_packet_rx++;
+
         switch (piksi_packet.type) {
             case FCS_PIKSI_TRACKING_STATE:
-                fcs_global_counters.piksi_packet_rx++;
                 break;
             case FCS_PIKSI_SOLUTION:
                 fcs_global_piksi_solution.updated = true;
@@ -110,21 +111,18 @@ void fcs_piksi_tick(void) {
 
                 /* Update counters */
                 piksi_last_packet = tick;
-                fcs_global_counters.piksi_packet_rx++;
                 break;
             case FCS_PIKSI_DOPS:
-                fcs_global_counters.piksi_packet_rx++;
                 break;
             case FCS_PIKSI_OBSERVATIONS:
-                fcs_global_counters.piksi_packet_rx++;
                 break;
             case FCS_PIKSI_OBSERVATION_HDR:
-                fcs_global_counters.piksi_packet_rx++;
                 break;
             default:
-                fcs_global_counters.piksi_packet_rx_err++;
                 break;
         }
+    } else if (state == FCS_PIKSI_INVALID) {
+        fcs_global_counters.piksi_packet_rx_err++;
     }
 
     /* TODO: Restart Piksi if it's been too long since the last solution */

@@ -57,10 +57,11 @@ State (FCS->CPU): $PSFWAS
 - FAA mode indicator ('A' = autonomous, 'D' = differential,
   'E' = dead-reckoning, 'M' = manual input, 'S' = simulated,
   'N' = not valid) -- 1 char
-- flags (GPS SVs, GPS fix status, taken photo) -- 4 chars (say)
+- flags (GPS SVs, GPS fix status, taken photo) -- 7 chars
+- CRC32 -- 8 chars
 
-=> 159 bytes + 33 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   204 bytes total
+=> 170 bytes + 34 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   216 bytes total
 */
 struct fcs_packet_state_t {
     int32_t solution_time;
@@ -76,7 +77,8 @@ struct fcs_packet_state_t {
     double yaw_uncertainty, pitch_uncertainty, roll_uncertainty;
     double angular_velocity_uncertainty[3u];
     uint8_t mode_indicator;
-    uint8_t flags[4u];
+    uint8_t flags[7u];
+    uint32_t crc32;
 };
 
 #define FCS_STATE_MAX_LAT_LON_UNCERTAINTY 1000.0
@@ -90,41 +92,47 @@ Waypoint information (CPU->FCS, FCS->CPU): $PSFWAP
 - waypoint ID -- 4 chars
 - waypoint role ("H" for home, "R" for recovery, "M" for mission boundary,
   "C" for course, "I" for image) -- 1 char
+- flags -- 3 chars (say)
 - target lat (up to 7dp) -- 12 chars
 - target lon (up to 7dp) -- 12 chars
 - target alt (above ellipsoid, up to 2dp) -- 7 chars
 - target attitude (yaw/pitch/roll, up to 3dp) -- 19 chars
 - target airspeed (m/s, up to 2dp) -- 7 chars
-- flags -- 5 chars (say)
+- CRC32 -- 8 chars
 
-=> 67 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   87 bytes total
+=> 73 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   93 bytes total
 */
 struct fcs_packet_waypoint_t {
     uint8_t waypoint_id[4u];
     uint8_t waypoint_role;
+    uint8_t flags[3u];
     double target_lat, target_lon, target_alt;
     double target_yaw, target_pitch, target_roll;
     double target_airspeed;
-    uint8_t flags[5u];
+    uint32_t crc32;
 };
 
 /*
 GCS information (CPU->FCS): $PSFWAG
 - time of solution (ms) -- 9 chars
+- flags -- 4 chars
 - lat (up to 7dp) -- 12 chars
 - lon (up to 7dp) -- 12 chars
 - alt (m, up to 2dp) -- 7 chars
 - barometric pressure (mbar, up to 2dp) -- 7 chars
 - Piksi RTK data? -- ?? chars
+- CRC32 -- 8 chars
 
-=> 47 bytes + Piksi data + 6 separators + 7 bytes prefix + * +
-   2 bytes checksum + CRLF = 65 bytes total
+=> 59 bytes + Piksi data + 8 separators + 7 bytes prefix + * +
+   2 bytes checksum + CRLF = 79 bytes total
 */
 struct fcs_packet_gcs_t {
     int32_t solution_time;
+    uint8_t flags[4u];
     double lat, lon, alt;
     double pressure;
+    uint32_t crc32;
 };
 
 /*
@@ -140,6 +148,7 @@ struct fcs_packet_config_t {
     uint8_t param_name[24u];
     uint8_t param_value_len;
     uint8_t param_value[128u];
+    uint32_t crc32;
 };
 
 void fcs_comms_init(void);

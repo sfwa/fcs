@@ -179,6 +179,9 @@ static uint8_t ioboard_last_tick[2];
 /* Global FCS state structure */
 struct fcs_packet_state_t fcs_global_state;
 
+/* Mirror of the global FCS state structure */
+struct fcs_packet_state_t fcs_global_state_mirror;
+
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
 
@@ -232,13 +235,15 @@ void fcs_ahrs_init(void) {
     assert(ukf_config_get_measurement_dim() == 20);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
 
-    /* Open I/O board streams */
+    /*
+    Set I/O board serial baud rates. We don't actually open the streams here
+    -- we wait for the I/O board comms to time out and reset the links to
+    ensure we get a clean start.
+    */
     assert(
         fcs_stream_set_rate(FCS_STREAM_UART_INT0, 921600) == FCS_STREAM_OK);
     assert(
         fcs_stream_set_rate(FCS_STREAM_UART_INT1, 921600) == FCS_STREAM_OK);
-    assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
-    assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
 
     /* Set up global state */
     memset(&fcs_global_state, 0, sizeof(fcs_global_state));
@@ -336,11 +341,11 @@ void fcs_ahrs_tick(void) {
     }
 
     /*
-    TODO: Reset I/O board if time since last tick > 20ms and time since last
-    reset > 20ms. Also reset the UART and EDMA3 at that point.
+    TODO: Reset I/O board if time since last tick > 10ms and time since last
+    reset > 10ms. Also reset the UART and EDMA3 at that point.
     */
     if (fcs_stream_check_error(FCS_STREAM_UART_INT0) == FCS_STREAM_ERROR ||
-            ((t - ioboard_last_tick[0]) & 0xFFu) > 20u) {
+            ((t - ioboard_last_tick[0]) & 0xFFu) > 10u) {
         assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
 
         ioboard_last_tick[0] = t;
@@ -348,7 +353,7 @@ void fcs_ahrs_tick(void) {
     }
 
     if (fcs_stream_check_error(FCS_STREAM_UART_INT1) == FCS_STREAM_ERROR ||
-            ((t - ioboard_last_tick[1]) & 0xFFu) > 20u) {
+            ((t - ioboard_last_tick[1]) & 0xFFu) > 10u) {
         assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
 
         ioboard_last_tick[1] = t;
@@ -465,11 +470,9 @@ double *restrict covariance) {
     assert(sem_val == 1u);
 #endif
 
-    if (fcs_global_state.solution_time < INT32_MAX) {
-        fcs_global_state.solution_time++;
-    } else {
-        fcs_global_state.solution_time = 0;
-    }
+    /* Increment solution time with wrap-around at 30 bits (1073741.823s) */
+    fcs_global_state.solution_time++;
+    fcs_global_state.solution_time &= 0x3FFFFFFF;
 
     /* Convert lat/lon to degrees */
     fcs_global_state.lat = s->position[0] * (180.0/M_PI);
@@ -549,6 +552,10 @@ double *restrict covariance) {
 
     /* TODO: Update state mode indicator based on confidence in filter lock */
     fcs_global_state.mode_indicator = 'A';
+
+    /* Copy the state to the mirror */
+    memcpy(&fcs_global_state_mirror, &fcs_global_state,
+           sizeof(fcs_global_state));
 
 #ifdef __TI_COMPILER_VERSION__
     /* Release the semaphore */

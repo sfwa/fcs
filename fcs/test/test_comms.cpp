@@ -66,7 +66,7 @@ TEST(CommsSerializeState, InvalidSolutionTime) {
     memset(&y, 0, sizeof(y));
     y.solution_time = -1;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidLat) {
@@ -76,7 +76,7 @@ TEST(CommsSerializeState, InvalidLat) {
     memset(&y, 0, sizeof(y));
     y.lat = -95.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidLon) {
@@ -86,7 +86,7 @@ TEST(CommsSerializeState, InvalidLon) {
     memset(&y, 0, sizeof(y));
     y.lon = -190.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidAlt) {
@@ -96,7 +96,7 @@ TEST(CommsSerializeState, InvalidAlt) {
     memset(&y, 0, sizeof(y));
     y.alt = -1000.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidVelocityN) {
@@ -106,7 +106,7 @@ TEST(CommsSerializeState, InvalidVelocityN) {
     memset(&y, 0, sizeof(y));
     y.velocity[0] = 1000.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidVelocityE) {
@@ -116,7 +116,7 @@ TEST(CommsSerializeState, InvalidVelocityE) {
     memset(&y, 0, sizeof(y));
     y.velocity[1] = 1000.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidVelocityD) {
@@ -126,7 +126,7 @@ TEST(CommsSerializeState, InvalidVelocityD) {
     memset(&y, 0, sizeof(y));
     y.velocity[2] = 1000.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidWindN) {
@@ -136,7 +136,7 @@ TEST(CommsSerializeState, InvalidWindN) {
     memset(&y, 0, sizeof(y));
     y.wind_velocity[0] = 1000.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidWindE) {
@@ -146,7 +146,7 @@ TEST(CommsSerializeState, InvalidWindE) {
     memset(&y, 0, sizeof(y));
     y.wind_velocity[1] = 1000.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidWindD) {
@@ -156,7 +156,7 @@ TEST(CommsSerializeState, InvalidWindD) {
     memset(&y, 0, sizeof(y));
     y.wind_velocity[2] = 1000.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidYaw) {
@@ -166,7 +166,7 @@ TEST(CommsSerializeState, InvalidYaw) {
     memset(&y, 0, sizeof(y));
     y.yaw = 400.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidPitch) {
@@ -176,7 +176,7 @@ TEST(CommsSerializeState, InvalidPitch) {
     memset(&y, 0, sizeof(y));
     y.pitch = 100.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidRoll) {
@@ -186,7 +186,7 @@ TEST(CommsSerializeState, InvalidRoll) {
     memset(&y, 0, sizeof(y));
     y.roll = 200.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidAngularVelocityX) {
@@ -196,7 +196,7 @@ TEST(CommsSerializeState, InvalidAngularVelocityX) {
     memset(&y, 0, sizeof(y));
     y.angular_velocity[0] = 500.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidAngularVelocityY) {
@@ -206,7 +206,7 @@ TEST(CommsSerializeState, InvalidAngularVelocityY) {
     memset(&y, 0, sizeof(y));
     y.angular_velocity[1] = 500.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, InvalidAngularVelocityZ) {
@@ -216,7 +216,7 @@ TEST(CommsSerializeState, InvalidAngularVelocityZ) {
     memset(&y, 0, sizeof(y));
     y.angular_velocity[2] = 500.0;
     len = fcs_comms_serialize_state(x, &y);
-    EXPECT_EQ('N', x[len - 11]);
+    EXPECT_EQ('N', x[len - 23]);
 }
 
 TEST(CommsSerializeState, AllOK) {
@@ -241,7 +241,7 @@ TEST(CommsSerializeState, AllOK) {
         .roll_uncertainty = 3.456,
         .angular_velocity_uncertainty = { 0.0, 0.5, 1.0 },
         .mode_indicator = 'A',
-        .flags = { 't', 'e', 's', 't' }
+        .flags = { 't', 'e', 's', 't', '1', '2', '3' }
     };
     uint8_t result[256];
     size_t result_len;
@@ -257,7 +257,7 @@ TEST(CommsSerializeState, AllOK) {
         "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
         "45.68,80.12,-175.10,.00,.00,.00,"
         "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
-        "A,test*73\r\n",
+        "A,test123,BEC3EDED*18\r\n",
         (char*)result
     );
 }
@@ -269,7 +269,7 @@ TEST(CommsDeserializeState, AllOK) {
         "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
         "45.68,80.12,-175.10,.00,.00,.00,"
         "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
-        "A,test*73\r\n";
+        "A,test123,BEC3EDED*18\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
@@ -285,7 +285,7 @@ TEST(CommsDeserializeState, InvalidChecksum) {
         "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
         "45.68,80.12,-175.10,.00,.00,.00,"
         "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
-        "A,test*03\r\n";
+        "A,test123,BEC3EDED*00\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
@@ -299,7 +299,7 @@ TEST(CommsDeserializeState, InvalidTalker) {
         "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
         "45.68,80.12,-175.10,.00,.00,.00,"
         "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
-        "A,test*53\r\n";
+        "A,test123,BEC3EDED*53\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
@@ -313,7 +313,7 @@ TEST(CommsDeserializeState, InvalidFieldData) {
         "1.00,-2.00,3.00,-10.00,20.00,-30.00,"
         "45.68,80.12,-175.10,.00,.00,.00,"
         "100,.1,0,2,5,0,2,10,12,2,3,0,1,1,"
-        "A,test*32\r\n";
+        "A,test123,BEC3EDED*32\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_state(&state, input, sizeof(input) - 1);
@@ -324,27 +324,27 @@ TEST(CommsSerializeWaypoint, AllOK) {
     struct fcs_packet_waypoint_t waypoint = {
         .waypoint_id = { 't', 'e', 's', 't'},
         .waypoint_role = 'q',
+        .flags = { 't', 'e', 's' },
         .target_lat = -30.0987654321,
         .target_lon = 145.0123456789,
         .target_alt = 100.5,
         .target_yaw = 45.6789,
         .target_pitch = 80.1234,
         .target_roll = -175.0987,
-        .target_airspeed = 54.321,
-        .flags = { 't', 'e', 's', 't', '1' }
+        .target_airspeed = 54.321
     };
     uint8_t result[256];
     size_t result_len;
 
     result_len = fcs_comms_serialize_waypoint(result, &waypoint);
     ASSERT_TRUE(result_len > 0);
-    ASSERT_TRUE(result_len <= 87u);
+    ASSERT_TRUE(result_len <= 93u);
 
     result[result_len] = 0;
 
     EXPECT_STREQ(
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "45.68,80.12,-175.10,54.32,test1*5B\r\n",
+        "$PSFWAP,test,q,tes,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,7808F414*42\r\n",
         (char*)result
     );
 }
@@ -422,8 +422,8 @@ TEST(CommsSerializeWaypoint, InvalidAirspeed) {
 TEST(CommsDeserializeWaypoint, AllOK) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "45.68,80.12,-175.10,54.32,test1*5B\r\n";
+        "$PSFWAP,test,q,tes,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,7808F414*42\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -442,8 +442,8 @@ TEST(CommsDeserializeWaypoint, AllOK) {
 TEST(CommsDeserializeWaypoint, InvalidChecksum) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "45.68,80.12,-175.10,54.32,test1*5A\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,FFAC0890*00\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -454,8 +454,8 @@ TEST(CommsDeserializeWaypoint, InvalidChecksum) {
 TEST(CommsDeserializeWaypoint, InvalidTalker) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAS,test,q,-30.0987654,145.0123457,100.50,"
-        "45.68,80.12,-175.10,54.32,test1*58\r\n";
+        "$PSFWAS,test,q,xyz,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,6C29D7A6*52\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -466,8 +466,8 @@ TEST(CommsDeserializeWaypoint, InvalidTalker) {
 TEST(CommsDeserializeWaypoint, InvalidFieldData) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "45.q8,80.12,-175.10,54.32,test1*1C\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,145.0123457,100.50,"
+        "45.q8,80.12,-175.10,54.32,DD3C2C49*60\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -478,8 +478,8 @@ TEST(CommsDeserializeWaypoint, InvalidFieldData) {
 TEST(CommsDeserializeWaypoint, InvalidLat) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-92.0987654,145.0123457,100.50,"
-        "45.68,80.12,-175.10,54.32,test1*53\r\n";
+        "$PSFWAP,test,q,xyz,-92.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,6C29D7A6*59\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -490,8 +490,8 @@ TEST(CommsDeserializeWaypoint, InvalidLat) {
 TEST(CommsDeserializeWaypoint, InvalidLon) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,185.0123457,100.50,"
-        "45.68,80.12,-175.10,54.32,test1*57\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,185.0123457,100.50,"
+        "45.68,80.12,-175.10,54.32,DD3C2C49*2B\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -502,8 +502,8 @@ TEST(CommsDeserializeWaypoint, InvalidLon) {
 TEST(CommsDeserializeWaypoint, InvalidAlt) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100000.50,"
-        "45.68,80.12,-175.10,54.32,test1*6B\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,145.0123457,100000.50,"
+        "45.68,80.12,-175.10,54.32,F9DA84BA*6E\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -514,8 +514,8 @@ TEST(CommsDeserializeWaypoint, InvalidAlt) {
 TEST(CommsDeserializeWaypoint, InvalidYaw) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "-45.68,80.12,-175.10,54.32,test1*76\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,145.0123457,100.50,"
+        "-45.68,80.12,-175.10,54.32,45209290*07\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -526,8 +526,8 @@ TEST(CommsDeserializeWaypoint, InvalidYaw) {
 TEST(CommsDeserializeWaypoint, InvalidPitch) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "45.68,90.12,-175.10,54.32,test1*5A\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,145.0123457,100.50,"
+        "45.68,90.12,-175.10,54.32,9ACB33D6*21\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -538,8 +538,8 @@ TEST(CommsDeserializeWaypoint, InvalidPitch) {
 TEST(CommsDeserializeWaypoint, InvalidRoll) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "45.68,80.12,-185.10,54.32,test1*54\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-185.10,54.32,8D3897E1*29\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -550,8 +550,8 @@ TEST(CommsDeserializeWaypoint, InvalidRoll) {
 TEST(CommsDeserializeWaypoint, InvalidAirspeed) {
     struct fcs_packet_waypoint_t waypoint;
     uint8_t input[] =
-        "$PSFWAP,test,q,-30.0987654,145.0123457,100.50,"
-        "45.68,80.12,-175.10,-54.32,test1*76\r\n";
+        "$PSFWAP,test,q,xyz,-30.0987654,145.0123457,100.50,"
+        "45.68,80.12,-175.10,-54.32,D2E7E8A7*09\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_waypoint(&waypoint, input,
@@ -562,8 +562,8 @@ TEST(CommsDeserializeWaypoint, InvalidAirspeed) {
 TEST(CommsDeserializeGCS, AllOK) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
-        "1034.68*15\r\n";
+        "$PSFWAG,12345678,test,-30.0987654,145.0123457,100.50,"
+        "1034.68,BD739552*0A\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -579,8 +579,8 @@ TEST(CommsDeserializeGCS, AllOK) {
 TEST(CommsDeserializeGCS, InvalidChecksum) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
-        "1034.68*16\r\n";
+        "$PSFWAG,12345678,test,-30.0987654,145.0123457,100.50,"
+        "1034.68,BD739552*00\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -590,8 +590,8 @@ TEST(CommsDeserializeGCS, InvalidChecksum) {
 TEST(CommsDeserializeGCS, InvalidTalker) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAg,12345678,-30.0987654,145.0123457,100.50,"
-        "1034.68*35\r\n";
+        "$PSFWAg,12345678,test,-30.0987654,145.0123457,100.50,"
+        "1034.68,BD739552*35\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -601,8 +601,8 @@ TEST(CommsDeserializeGCS, InvalidTalker) {
 TEST(CommsDeserializeGCS, InvalidSolutionTime) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAG,-50,-30.0987654,145.0123457,100.50,"
-        "1034.68*35\r\n";
+        "$PSFWAG,-50,test,-30.0987654,145.0123457,100.50,"
+        "1034.68,BD739552*35\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -612,8 +612,8 @@ TEST(CommsDeserializeGCS, InvalidSolutionTime) {
 TEST(CommsDeserializeGCS, InvalidLat) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAG,12345678,130.0987654,145.0123457,100.50,"
-        "1034.68*09\r\n";
+        "$PSFWAG,12345678,test,130.0987654,145.0123457,100.50,"
+        "1034.68,764B452A*0A\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -623,8 +623,8 @@ TEST(CommsDeserializeGCS, InvalidLat) {
 TEST(CommsDeserializeGCS, InvalidLon) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAG,12345678,-30.0987654,245.0123457,100.50,"
-        "1034.68*16\r\n";
+        "$PSFWAG,12345678,test,-30.0987654,245.0123457,100.50,"
+        "1034.68,EE7B891*16\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -634,8 +634,8 @@ TEST(CommsDeserializeGCS, InvalidLon) {
 TEST(CommsDeserializeGCS, InvalidAlt) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAG,12345678,-30.0987654,145.0123457,-600,"
-        "1034.68*14\r\n";
+        "$PSFWAG,12345678,test,-30.0987654,145.0123457,-600,"
+        "1034.68,F5C38FE*14\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -645,8 +645,8 @@ TEST(CommsDeserializeGCS, InvalidAlt) {
 TEST(CommsDeserializeGCS, InvalidPressure) {
     struct fcs_packet_gcs_t gcs;
     uint8_t input[] =
-        "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
-        "50.00*18\r\n";
+        "$PSFWAG,12345678,test,-30.0987654,145.0123457,100.50,"
+        "50.00,7481820D*7A\r\n";
     enum fcs_deserialization_result_t status;
 
     status = fcs_comms_deserialize_gcs(&gcs, input, sizeof(input) - 1);
@@ -657,19 +657,19 @@ TEST(CommsIO, ReadPacket) {
     bool result;
     size_t len;
     uint8_t buf[256];
-    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
-                  "1034.68*15\r\n";
+    uint8_t s[] = "$PSFWAG,12345678,test,-30.0987654,145.0123457,100.50,"
+                  "1034.68,BD739552*15\r\n";
 
     /* Reset stream state */
     fcs_stream_open(FCS_STREAM_UART_INT0);
 
     /* Write a full packet */
-    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
-    ASSERT_EQ(60, len);
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 74);
+    ASSERT_EQ(74, len);
 
     /* Read back and confirm results */
     len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
-    ASSERT_EQ(60, len);
+    ASSERT_EQ(74, len);
 
     buf[len] = 0;
     ASSERT_STREQ((char*)s, (char*)buf);
@@ -679,8 +679,8 @@ TEST(CommsIO, ReadPacketPartial) {
     bool result;
     size_t len;
     uint8_t buf[256];
-    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
-                  "1034.68*15\r\n";
+    uint8_t s[] = "$PSFWAG,12345678,test,-30.0987654,145.0123457,100.50,"
+                  "1034.68,BD739552*15\r\n";
 
     /* Reset stream state */
     fcs_stream_open(FCS_STREAM_UART_INT0);
@@ -694,12 +694,12 @@ TEST(CommsIO, ReadPacketPartial) {
     ASSERT_EQ(0, len);
 
     /* Write the remainder */
-    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, &s[30], 30);
-    ASSERT_EQ(30, len);
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, &s[30], 44);
+    ASSERT_EQ(44, len);
 
     /* Read the full packet */
     len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
-    ASSERT_EQ(60, len);
+    ASSERT_EQ(74, len);
 
     buf[len] = 0;
     ASSERT_STREQ((char*)s, (char*)buf);
@@ -709,8 +709,8 @@ TEST(CommsIO, ReadPacketAfterGarbage) {
     bool result;
     size_t len;
     uint8_t buf[256];
-    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
-                  "1034.68*15\r\n";
+    uint8_t s[] = "$PSFWAG,12345678,test,-30.0987654,145.0123457,100.50,"
+                  "1034.68,BD739552*15\r\n";
     uint8_t garbage[] = "garbage\r\n";
 
     /* Reset stream state */
@@ -721,12 +721,12 @@ TEST(CommsIO, ReadPacketAfterGarbage) {
     ASSERT_EQ(9, len);
 
     /* Write a full packet */
-    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
-    ASSERT_EQ(60, len);
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 74);
+    ASSERT_EQ(74, len);
 
     /* Read back and confirm results */
     len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
-    ASSERT_EQ(60, len);
+    ASSERT_EQ(74, len);
 
     buf[len] = 0;
     ASSERT_STREQ((char*)s, (char*)buf);
@@ -736,23 +736,23 @@ TEST(CommsIO, ReadPacketAfterPacket) {
     bool result;
     size_t len;
     uint8_t buf[256];
-    uint8_t s[] = "$PSFWAG,12345678,-30.0987654,145.0123457,100.50,"
-                  "1034.68*15\r\n";
+    uint8_t s[] = "$PSFWAG,12345678,test,-30.0987654,145.0123457,100.50,"
+                  "1034.68,BD739552*15\r\n";
 
     /* Reset stream state */
     fcs_stream_open(FCS_STREAM_UART_INT0);
 
     /* Write a full packet */
-    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
-    ASSERT_EQ(60, len);
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 74);
+    ASSERT_EQ(74, len);
 
     /* Write another full packet */
-    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 60);
-    ASSERT_EQ(60, len);
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_EXT0, s, 74);
+    ASSERT_EQ(74, len);
 
     /* Read first packet back and confirm results */
     len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
-    ASSERT_EQ(60, len);
+    ASSERT_EQ(74, len);
 
     buf[len] = 0;
     ASSERT_STREQ((char*)s, (char*)buf);
@@ -761,7 +761,7 @@ TEST(CommsIO, ReadPacketAfterPacket) {
 
     /* Read second packet back and confirm results */
     len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, buf);
-    ASSERT_EQ(60, len);
+    ASSERT_EQ(74, len);
 
     buf[len] = 0;
     ASSERT_STREQ((char*)s, (char*)buf);

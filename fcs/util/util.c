@@ -356,11 +356,12 @@ invalid:
     return FCS_CONVERSION_ERROR;
 }
 
+/* Hex digit map used for the below functions */
+static uint8_t hex_digits[] = "0123456789ABCDEF";
+
 /* fcs_ascii_hex_from_uint8 -- convert a uint8_t value to two uppercase hex
 digits */
 size_t fcs_ascii_hex_from_uint8(uint8_t *restrict result, uint8_t value) {
-    static uint8_t hex_digits[] = "0123456789ABCDEF";
-
     assert(result);
 
     result[0] = hex_digits[(value & 0xF0u) >> 4];
@@ -400,5 +401,50 @@ uint8_t *restrict value, size_t len) {
 
 invalid:
     *result = 0xFFu;
+    return FCS_CONVERSION_ERROR;
+}
+
+/* fcs_ascii_hex_from_uint32 -- convert a uint32_t value to two uppercase hex
+digits */
+size_t fcs_ascii_hex_from_uint32(uint8_t *restrict result, uint32_t value) {
+    assert(result);
+
+    uint8_t i, shift;
+    #pragma MUST_ITERATE(8, 8)
+    for (i = 0, shift = 28u; i < 8u; i++, shift -= 4u) {
+        result[i] = hex_digits[(value >> shift) & 0xFu];
+    }
+
+    return 8u;
+}
+
+/* fcs_uint32_from_ascii_hex -- convert two uppercase hex digits to a uint32.
+The len parameter must be 8. */
+enum fcs_conversion_result_t fcs_uint32_from_ascii_hex(uint32_t *result,
+uint8_t *restrict value, size_t len) {
+    assert(result);
+    assert(value);
+    assert(len == 8u);
+
+    uint32_t output = 0;
+    uint8_t i;
+    #pragma MUST_ITERATE(8, 8)
+    for (i = 0; i < 8u; i++) {
+        output <<= 4u;
+
+        if ('0' <= value[i] && value[i] <= '9') {
+            output += value[i] - '0';
+        } else if ('A' <= value[i] && value[i] <= 'F') {
+            output += value[i] - 'A' + 10u;
+        } else {
+            goto invalid;
+        }
+    }
+
+    *result = output;
+    return FCS_CONVERSION_OK;
+
+invalid:
+    *result = 0xFFFFFFFFu;
     return FCS_CONVERSION_ERROR;
 }

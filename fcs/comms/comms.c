@@ -358,8 +358,17 @@ const struct fcs_packet_state_t *restrict state) {
         buf[index++] = ',';
     }
 
-    memcpy(&buf[index], state->flags, 4u);
-    index += 4u;
+    memcpy(&buf[index], state->flags, 7u);
+    index += 7u;
+    buf[index++] = ',';
+
+    /*
+    Calculate a CRC32 over the entire message. Note that the CRC32 in the
+    serialized packet is the CRC32 of the serialized message, not the CRC32 of
+    the state structure.
+    */
+    uint32_t crc = fcs_crc32(buf, index, 0xFFFFFFFFu);
+    index += fcs_ascii_hex_from_uint32(&buf[index], crc);
 
     /* Exclude initial $ from the checksum calculation */
     uint8_t checksum = fcs_text_checksum(&buf[1u], index - 1u);
@@ -395,7 +404,7 @@ size_t len) {
     Stop once we've processed all the fields, hit the end of the buffer, or
     hit the checksum marker ('*').
     */
-    for (field = 0; field < 33u && idx < len && buf[idx] != '*'; field++) {
+    for (field = 0; field < 34u && idx < len && buf[idx] != '*'; field++) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
@@ -444,12 +453,29 @@ size_t len) {
                 state->mode_indicator = buf[field_start];
                 break;
             case 32u:
-                if (field_len != 4u) {
+                if (field_len != 7u) {
                     goto invalid;
                 }
 
                 memcpy(state->flags, &buf[field_start], field_len);
                 result = FCS_CONVERSION_OK;
+                break;
+            case 33u:
+                if (field_len != 8u) {
+                    goto invalid;
+                }
+
+                /*
+                Read the CRC in the message, and calculate the actual CRC
+                */
+                uint32_t expected_crc, actual_crc;
+                result = fcs_uint32_from_ascii_hex(
+                    &expected_crc, &buf[field_start], field_len);
+                actual_crc = fcs_crc32(buf, field_start, 0xFFFFFFFFu);
+                /* Fail if mismatched */
+                if (actual_crc != expected_crc) {
+                    goto invalid;
+                }
                 break;
             default:
                 /*
@@ -472,13 +498,8 @@ size_t len) {
     Check that the full message was parsed, and that the checksum and CRLF
     markers are in the expected places
     */
-    if (field != 33u || idx != len - 4u || buf[idx - 1u] != '*' ||
+    if (field != 34u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
-        goto invalid;
-    }
-
-    /* Check data validity */
-    if (fcs_comms_validate_state(state) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
@@ -486,6 +507,11 @@ size_t len) {
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
+        goto invalid;
+    }
+
+    /* Check data validity */
+    if (fcs_comms_validate_state(state) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
@@ -560,6 +586,10 @@ const struct fcs_packet_waypoint_t *restrict waypoint) {
     buf[index++] = waypoint->waypoint_role;
     buf[index++] = ',';
 
+    memcpy(&buf[index], waypoint->flags, 3u);
+    index += 3u;
+    buf[index++] = ',';
+
     index += fcs_ascii_fixed_from_double(&buf[index], waypoint->target_lat,
                                          2u, 7u);
     buf[index++] = ',';
@@ -588,8 +618,13 @@ const struct fcs_packet_waypoint_t *restrict waypoint) {
                                          waypoint->target_airspeed, 3u, 2u);
     buf[index++] = ',';
 
-    memcpy(&buf[index], waypoint->flags, 5u);
-    index += 5u;
+    /*
+    Calculate a CRC32 over the entire message. Note that the CRC32 in the
+    serialized packet is the CRC32 of the serialized message, not the CRC32 of
+    the underlying data.
+    */
+    uint32_t crc = fcs_crc32(buf, index, 0xFFFFFFFFu);
+    index += fcs_ascii_hex_from_uint32(&buf[index], crc);
 
     /* Exclude initial $ from the checksum calculation */
     uint8_t checksum = fcs_text_checksum(&buf[1u], index - 1u);
@@ -625,7 +660,7 @@ size_t len) {
     Stop once we've processed all the fields, hit the end of the buffer, or
     hit the checksum marker ('*').
     */
-    for (field = 0; field < 10u && idx < len && buf[idx] != '*'; field++) {
+    for (field = 0; field < 11u && idx < len && buf[idx] != '*'; field++) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
@@ -668,24 +703,41 @@ size_t len) {
                 }
                 waypoint->waypoint_role = buf[field_start];
                 break;
-            case 9u:
-                if (field_len != 5u) {
+            case 2u:
+                if (field_len != 3u) {
                     goto invalid;
                 }
 
                 memcpy(waypoint->flags, &buf[field_start], field_len);
                 result = FCS_CONVERSION_OK;
                 break;
+            case 10u:
+                if (field_len != 8u) {
+                    goto invalid;
+                }
+
+                /*
+                Read the CRC in the message, and calculate the actual CRC
+                */
+                uint32_t expected_crc, actual_crc;
+                result = fcs_uint32_from_ascii_hex(
+                    &expected_crc, &buf[field_start], field_len);
+                actual_crc = fcs_crc32(buf, field_start, 0xFFFFFFFFu);
+                /* Fail if mismatched */
+                if (actual_crc != expected_crc) {
+                    goto invalid;
+                }
+                break;
             default:
                 /*
-                Handle fields 2-8 -- just a bunch of double conversions, and
+                Handle fields 3-9 -- just a bunch of double conversions, and
                 order is the same between the waypoint structure and the
                 message
                 */
-                assert(2u <= field && field <= 8u);
+                assert(3u <= field && field <= 9u);
                 double *data_ptr = &waypoint->target_lat;
                 result = fcs_double_from_ascii_fixed(
-                    &data_ptr[field - 2u], &buf[field_start], field_len);
+                    &data_ptr[field - 3u], &buf[field_start], field_len);
                 break;
         }
 
@@ -698,13 +750,8 @@ size_t len) {
     Check that the full message was parsed, and that the checksum and CRLF
     markers are in the expected places
     */
-    if (field != 10u || idx != len - 4u || buf[idx - 1u] != '*' ||
+    if (field != 11u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
-        goto invalid;
-    }
-
-    /* Check data validity */
-    if (fcs_comms_validate_waypoint(waypoint) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
@@ -712,6 +759,11 @@ size_t len) {
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
+        goto invalid;
+    }
+
+    /* Check data validity */
+    if (fcs_comms_validate_waypoint(waypoint) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
@@ -762,6 +814,14 @@ const struct fcs_packet_config_t *restrict config) {
     index += len;
     buf[index++] = ',';
 
+    /*
+    Calculate a CRC32 over the entire message. Note that the CRC32 in the
+    serialized packet is the CRC32 of the serialized message, not the CRC32 of
+    the underlying data.
+    */
+    uint32_t crc = fcs_crc32(buf, index, 0xFFFFFFFFu);
+    index += fcs_ascii_hex_from_uint32(&buf[index], crc);
+
     /* Exclude initial $ from the checksum calculation */
     uint8_t checksum = fcs_text_checksum(&buf[1], index - 1u);
     buf[index++] = '*';
@@ -796,7 +856,7 @@ size_t len) {
     Stop once we've processed all the fields, hit the end of the buffer, or
     hit the checksum marker ('*').
     */
-    for (field = 0; field < 2u && idx < len && buf[idx] != '*'; field++) {
+    for (field = 0; field < 3u && idx < len && buf[idx] != '*'; field++) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
@@ -845,6 +905,22 @@ size_t len) {
                     config->param_value, 128u, &buf[field_start], field_len);
                 result = FCS_CONVERSION_OK;
                 break;
+            case 2u:
+                if (field_len != 8u) {
+                    goto invalid;
+                }
+
+                /*
+                Read the CRC in the message, and calculate the actual CRC
+                */
+                uint32_t expected_crc, actual_crc;
+                result = fcs_uint32_from_ascii_hex(
+                    &expected_crc, &buf[field_start], field_len);
+                actual_crc = fcs_crc32(buf, field_start, 0xFFFFFFFFu);
+                /* Fail if mismatched */
+                if (actual_crc != expected_crc) {
+                    goto invalid;
+                }
             default:
                 assert(false);
                 break;
@@ -859,13 +935,8 @@ size_t len) {
     Check that the full message was parsed, and that the checksum and CRLF
     markers are in the expected places
     */
-    if (field != 2u || idx != len - 4u || buf[idx - 1u] != '*' ||
+    if (field != 3u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
-        goto invalid;
-    }
-
-    /* Check data validity */
-    if (fcs_comms_validate_config(config) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
@@ -873,6 +944,11 @@ size_t len) {
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
+        goto invalid;
+    }
+
+    /* Check data validity */
+    if (fcs_comms_validate_config(config) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
@@ -912,7 +988,7 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
 
     /* Loop over the buffer and update the checksum. Every time a comma is
     encountered, process the field corresponding to the preceding values */
-    for (field = 0; field < 5u && idx < len && buf[idx] != '*'; field++) {
+    for (field = 0; field < 7u && idx < len && buf[idx] != '*'; field++) {
         size_t field_start = idx;
         for (; idx < len; idx++) {
             if (buf[idx] == '*') {
@@ -948,15 +1024,40 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
                     goto invalid;
                 }
                 break;
+            case 1u:
+                if (field_len != 4u) {
+                    goto invalid;
+                }
+
+                memcpy(gcs->flags, &buf[field_start], field_len);
+                result = FCS_CONVERSION_OK;
+                break;
+            case 6u:
+                if (field_len != 8u) {
+                    goto invalid;
+                }
+
+                /*
+                Read the CRC in the message, and calculate the actual CRC
+                */
+                uint32_t expected_crc, actual_crc;
+                result = fcs_uint32_from_ascii_hex(
+                    &expected_crc, &buf[field_start], field_len);
+                actual_crc = fcs_crc32(buf, field_start, 0xFFFFFFFFu);
+                /* Fail if mismatched */
+                if (actual_crc != expected_crc) {
+                    goto invalid;
+                }
+                break;
             default:
                 /*
-                Handle fields 1-4 -- just a bunch of double conversions, and
+                Handle fields 2-5 -- just a bunch of double conversions, and
                 order is the same between the GCS structure and the message
                 */
-                assert(1u <= field && field <= 4u);
+                assert(2u <= field && field <= 5u);
                 double *data_ptr = &gcs->lat;
                 result = fcs_double_from_ascii_fixed(
-                    &data_ptr[field - 1u], &buf[field_start], field_len);
+                    &data_ptr[field - 2u], &buf[field_start], field_len);
                 break;
         }
 
@@ -969,13 +1070,8 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
     Check that the full message was parsed, and that the checksum and CRLF
     markers are in the expected places
     */
-    if (field != 5u || idx != len - 4u || buf[idx - 1u] != '*' ||
+    if (field != 7u || idx != len - 4u || buf[idx - 1u] != '*' ||
             buf[idx + 2u] != '\r' || buf[idx + 3u] != '\n') {
-        goto invalid;
-    }
-
-    /* Check data validity */
-    if (fcs_comms_validate_gcs(gcs) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
@@ -983,6 +1079,11 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {
     uint8_t message_checksum;
     result = fcs_uint8_from_ascii_hex(&message_checksum, &buf[idx], 2u);
     if (result != FCS_CONVERSION_OK || message_checksum != checksum) {
+        goto invalid;
+    }
+
+    /* Check data validity */
+    if (fcs_comms_validate_gcs(gcs) != FCS_VALIDATION_OK) {
         goto invalid;
     }
 
