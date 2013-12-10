@@ -39,6 +39,7 @@ SOFTWARE.
 #include "../ukf/cukf.h"
 #include "../drivers/stream.h"
 #include "../stats/stats.h"
+#include "../piksi/piksi.h"
 #include "ahrs.h"
 
 #define AHRS_DELTA 0.001
@@ -374,15 +375,30 @@ void fcs_ahrs_tick(void) {
     if (_fcs_ahrs_process_magnetometers(v, ioboard)) {
         ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_gps(p, v, ioboard)) {
-        ukf_sensor_set_gps_position(p[0], p[1], p[2]);
-        ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
-    }
     if (_fcs_ahrs_process_pitots(v, ioboard)) {
         ukf_sensor_set_pitot_tas(v[0]);
     }
     if (_fcs_ahrs_process_barometers(v, ioboard)) {
         ukf_sensor_set_barometer_amsl(v[0]);
+    }
+
+    /* Only read I/O board GPS if we don't have a Piksi solution this frame */
+    if (fcs_global_piksi_solution.updated) {
+        fcs_global_piksi_solution.updated = false;
+
+        ukf_sensor_set_gps_position(fcs_global_piksi_solution.lat,
+                                    fcs_global_piksi_solution.lon,
+                                    fcs_global_piksi_solution.alt);
+        ukf_sensor_set_gps_velocity(fcs_global_piksi_solution.velocity[0],
+                                    fcs_global_piksi_solution.velocity[1],
+                                    fcs_global_piksi_solution.velocity[2]);
+
+        /* TODO: update sensor covariance for GPS based on Piksi status */
+    } else if (_fcs_ahrs_process_gps(p, v, ioboard)) {
+        ukf_sensor_set_gps_position(p[0], p[1], p[2]);
+        ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
+
+        /* TODO: update sensor covariance for GPS based on DOP */
     }
 
     /* TODO: Read control set values from NMPC */

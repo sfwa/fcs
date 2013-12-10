@@ -68,7 +68,7 @@ struct fcs_piksi_packet_t {
 static uint32_t tick, piksi_last_packet;
 static struct fcs_piksi_packet_t piksi_packet;
 
-static bool piksi_solution_valid;
+struct fcs_piksi_solution_t fcs_global_piksi_solution;
 
 enum fcs_piksi_packet_parse_state_t _fcs_piksi_read_packet(
 enum fcs_stream_device_t dev, struct fcs_piksi_packet_t *packet);
@@ -78,6 +78,11 @@ void fcs_piksi_init(void) {
     assert(
         fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 115200u) == FCS_STREAM_OK);
     assert(fcs_stream_open(FCS_STREAM_UART_EXT1) == FCS_STREAM_OK);
+
+    /* Make sure the solution isn't full of temptingly nearly-valid zeros */
+    memset(&fcs_global_piksi_solution, 0xFFu,
+           sizeof(fcs_global_piksi_solution));
+    fcs_global_piksi_solution.updated = false;
 }
 
 void fcs_piksi_tick(void) {
@@ -91,8 +96,19 @@ void fcs_piksi_tick(void) {
                 fcs_global_counters.piksi_packet_rx++;
                 break;
             case FCS_PIKSI_SOLUTION:
+                fcs_global_piksi_solution.updated = true;
+
                 /* TODO: extract solution */
-                piksi_solution_valid = true;
+                fcs_global_piksi_solution.lat = 0.0;
+                fcs_global_piksi_solution.lon = 0.0;
+                fcs_global_piksi_solution.alt = 0.0;
+                fcs_global_piksi_solution.velocity[0] = 0.0;
+                fcs_global_piksi_solution.velocity[1] = 0.0;
+                fcs_global_piksi_solution.velocity[2] = 0.0;
+                fcs_global_piksi_solution.h_covariance = 1.0;
+                fcs_global_piksi_solution.v_covariance = 100.0;
+
+                /* Update counters */
                 piksi_last_packet = tick;
                 fcs_global_counters.piksi_packet_rx++;
                 break;

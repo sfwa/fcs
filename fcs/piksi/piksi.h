@@ -23,7 +23,18 @@ SOFTWARE.
 #ifndef _FCS_PIKSI_H
 #define _FCS_PIKSI_H
 
+struct fcs_piksi_solution_t {
+    bool updated;         /* Set on each update, if valid; cleared by AHRS */
+    double lat, lon, alt; /* Radians for lat, lon; metres above WGS84
+                             ellipsoid for alt */
+    double velocity[3];   /* N, E, D in m/s */
+    double h_covariance,  /* Fix covariance in lat/lon units (rad^2) */
+           v_covariance;  /* Fix covariance in alt units (m^2) */
+};
+
 void fcs_piksi_init(void);
 void fcs_piksi_tick(void);
+
+extern struct fcs_piksi_solution_t fcs_global_piksi_solution;
 
 #endif
