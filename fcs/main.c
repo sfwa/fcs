@@ -980,7 +980,16 @@ int main(void) {
         fcs_nmpc_init();
     }
 
+    /*
+    Wait until an even number of cycles to avoid excess consumption on the
+    first tick
+    */
     uint32_t frame = TSCL / cycles_per_tick;
+    start_t = frame * cycles_per_tick;
+    frame++;
+
+    while (TSCL - start_t < cycles_per_tick);
+
     while (1) {
         if (core == FCS_CORE_COMMS) {
             fcs_comms_tick();

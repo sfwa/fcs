@@ -655,7 +655,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     TIMHRS and TIMLORS need to be 1 to take the timer out of reset.
     */
     timer[uart_idx]->TCR = 0x00800080u;
-    timer[uart_idx]->TGCR = 0x2u;
+    timer[uart_idx]->TGCR = 0x3u;
 
     /* The timer should now be running, and triggering events */
 }

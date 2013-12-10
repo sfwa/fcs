@@ -179,8 +179,6 @@ enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev) {
 
     rx_read_idx[dev] = 0;
     rx_write_idx[dev] = 0;
-    tx_read_idx[dev] = 0;
-    tx_write_idx[dev] = 0;
 
     fcs_global_counters.stream_reset[dev]++;
 

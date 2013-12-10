@@ -296,7 +296,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 
     Not used -- set to 0, or 0x10u for loop mode if debugging.
     */
-    uart[uart_idx]->MCR = 0;
+    uart[uart_idx]->MCR = 0x10u;
 
     /*
     IER: Interrupt Enable Register (section 3.3 in SPRUGP1)
