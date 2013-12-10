@@ -970,6 +970,81 @@ TEST(UInt8FromASCIIHex, WrongLength) {
     );
 }
 
+TEST(ASCIIHexFromUInt32, FullRange) {
+    uint64_t i;
+    uint8_t result[9];
+    size_t result_len;
+
+    char *endptr;
+    uint64_t check_result;
+
+    /*
+    Increment by a prime number smaller than one byte to test a significant
+    proportion of the possible input values.
+    */
+    for (i = 0; i <= 0xFFFFFFFFu; i += 67u) {
+        result_len = fcs_ascii_hex_from_uint32(result, i);
+
+        result[8] = 0;
+        check_result = strtol((char*)result, &endptr, 16u);
+
+        EXPECT_EQ(8u, result_len);
+        EXPECT_EQ(i, check_result);
+    }
+}
+
+TEST(ASCIIHexFromUInt32, NoBuffer) {
+    EXPECT_DEATH(
+        { fcs_ascii_hex_from_uint32(NULL, 1); }, "Assertion.*failed");
+}
+
+TEST(UInt32FromASCIIHex, FullRange) {
+    uint64_t i;
+    uint32_t result;
+    uint8_t value[8];
+    enum fcs_conversion_result_t status;
+
+    /*
+    Increment by a prime number smaller than one byte to test a significant
+    proportion of the possible input values.
+    */
+    for (i = 0; i <= 0xFFFFFFFFu; i += 67u) {
+        fcs_ascii_hex_from_uint32(
+            value, i & 0xFFFFFFFFu);
+        status = fcs_uint32_from_ascii_hex(&result, value, 8u);
+
+        EXPECT_EQ(FCS_CONVERSION_OK, status);
+        EXPECT_EQ(i, result);
+    }
+}
+
+TEST(UInt32FromASCIIHex, NoBuffer) {
+    EXPECT_DEATH(
+        { fcs_uint32_from_ascii_hex(NULL, NULL, 8); }, "Assertion.*failed");
+
+    EXPECT_DEATH(
+        { uint32_t x; uint8_t y[8]; fcs_uint32_from_ascii_hex(&x, NULL, 8); },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        { uint32_t x; uint8_t y[8]; fcs_uint32_from_ascii_hex(NULL, y, 8); },
+        "Assertion.*failed"
+    );
+}
+
+TEST(UInt32FromASCIIHex, WrongLength) {
+    EXPECT_DEATH(
+        { uint32_t x; uint8_t y[8]; fcs_uint32_from_ascii_hex(&x, y, 1); },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        { uint32_t x; uint8_t y[8]; fcs_uint32_from_ascii_hex(&x, y, 9); },
+        "Assertion.*failed"
+    );
+}
+
 TEST(Base64FromData, Valid) {
     ptrdiff_t result;
     uint8_t base64[256u],
