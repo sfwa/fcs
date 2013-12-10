@@ -83,7 +83,7 @@ static volatile CSL_SemRegs *semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
 static void _fcs_core_pll_setup(void);
 static void _fcs_ddr3_pll_setup(void);
 static void _fcs_ddr3_emif_setup(void);
-static bool _fcs_ddr3_test(uint32_t start_idx, uint32_t nwords);
+static bool _fcs_ddr3_test(uint32_t nwords);
 static void _fcs_enable_edc(void);
 
 int main(void);
@@ -604,34 +604,83 @@ static void _fcs_ddr3_emif_setup(void) {
     _fcs_delay_cycles(5000000); /* 5ms delay */
 }
 
-static bool _fcs_ddr3_test(uint32_t start_idx, uint32_t nwords) {
+/*
+Check DDR3 data bus, address bus and memory integrity. Uses techniques from
+http://www.esacademy.com/en/library/technical-articles-and-documents/\
+miscellaneous/software-based-memory-testing.html
+*/
+static bool _fcs_ddr3_test(uint32_t nwords) {
     volatile uint32_t *ddr3_mem = (volatile uint32_t*)0x80000000;
-    uint32_t i, value;
+    uint32_t i, j, value;
 
-    /* Write a pattern */
-    for (i = start_idx; i < start_idx + nwords; i++) {
-        ddr3_mem[i] = i + 0xAAAAAAAAu;
-    }
+    /*
+    The DDR3 address range is non-cacheable by default, so no need to disable
+    that here.
+    */
 
-    /* Read and check the pattern */
-    for (i = start_idx; i < start_idx + nwords; i++) {
-        value = ddr3_mem[i];
-
-        if (value != i + 0xAAAAAAAAu) {
+    /* Walking 1s test to check data bus -- all at the start address */
+    for (value = 1u; value != 0; value <<= 1u) {
+        ddr3_mem[0] = value;
+        if (ddr3_mem[0] != value) {
             return false;
         }
     }
 
-    /* Write a pattern for complementary values */
-    for (i = start_idx; i < start_idx + nwords; i++) {
-        ddr3_mem[i] = ~(i + 0xAAAAAAAAu);
+    /* Address bus test -- walking 1s over the set of addresses */
+    for (i = 1u; (i & (nwords - 1u)) != 0; i <<= 1u) {
+        ddr3_mem[i] = 0xAAAAAAAAu;
     }
 
-    /* Read and check the pattern */
-    for (i = start_idx; i < start_idx + nwords; i++) {
-        value = ddr3_mem[i];
+    /* Check for high address bits */
+    ddr3_mem[0] = 0x55555555u;
+    for (i = 1u; (i & (nwords - 1u)) != 0; i <<= 1u) {
+        if (ddr3_mem[i] != 0xAAAAAAAAu) {
+            return false;
+        }
+    }
 
-        if (value != ~(i + 0xAAAAAAAAu)) {
+    /* Check for low/shorted address bits */
+    ddr3_mem[0] = 0xAAAAAAAAu;
+    for (j = 1u; (j & (nwords - 1u)) != 0; j <<= 1u) {
+        ddr3_mem[j] = 0x55555555u;
+        if (ddr3_mem[0] != 0xAAAAAAAAu) {
+            return false;
+        }
+        for (i = 1u; (i & (nwords - 1u)) != 0; i <<= 1u) {
+            if (ddr3_mem[i] != 0xAAAAAAAAu && j != i) {
+                return false;
+            }
+        }
+        ddr3_mem[j] = 0xAAAAAAAAu;
+    }
+
+    /*
+    Check data integrity -- try to stress the data bus by writing
+    complementary patterns
+    */
+    for (i = 0; i < nwords; i++) {
+        ddr3_mem[i] = (i & 1u) ? 0x55555555u : 0xAAAAAAAAu;
+    }
+    for (i = 0; i < nwords; i++) {
+        if (ddr3_mem[i] != ((i & 1u) ? 0x55555555u : 0xAAAAAAAAu)) {
+            return false;
+        }
+        ddr3_mem[i] = (i & 1u) ? 0xAAAAAAAAu : 0x55555555u;
+    }
+    for (i = 0; i < nwords; i++) {
+        if (ddr3_mem[i] != ((i & 1u) ? 0xAAAAAAAAu : 0x55555555u)) {
+            return false;
+        }
+        ddr3_mem[i] = (i & 1u) ? 0xFFFFFFFFu : 0x00000000u;
+    }
+    for (i = 0; i < nwords; i++) {
+        if (ddr3_mem[i] != ((i & 1u) ? 0xFFFFFFFFu : 0x00000000u)) {
+            return false;
+        }
+        ddr3_mem[i] = (i & 1u) ? 0x00000000u : 0xFFFFFFFFu;
+    }
+    for (i = 0; i < nwords; i++) {
+        if (ddr3_mem[i] != ((i & 1u) ? 0x00000000u : 0xFFFFFFFFu)) {
             return false;
         }
     }
@@ -717,7 +766,8 @@ uint32_t fcs_main_init_core0(void) {
         _fcs_ddr3_emif_setup();
 
         /* And wait for the DDR3 test to pass... */
-    } while (!_fcs_ddr3_test(0, 1024) && tries < 10u);
+    } while (!_fcs_ddr3_test(1048576) && tries < 10u);
+    /* TODO: skip/reduce extent of memory test on restart */
 
     assert(tries < 10u);
 
