@@ -32,6 +32,12 @@ ExternalProject_Add(ukf
   INSTALL_COMMAND ""
 )
 
+# Add TRICAL library
+ExternalProject_Add(TRICAL
+  GIT_REPOSITORY https://github.com/sfwa/TRICAL.git
+  INSTALL_COMMAND ""
+)
+
 INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
 
 # Add test executable target
@@ -52,9 +58,10 @@ ADD_EXECUTABLE(unittest
     ../ahrs/ahrs.c
     test_ahrs.cpp)
 
-# Create dependency of test on googletest
+# Create dependency of test on googletest, ukf and TRICAL
 ADD_DEPENDENCIES(unittest googletest)
 ADD_DEPENDENCIES(unittest ukf)
+ADD_DEPENDENCIES(unittest TRICAL)
 
 # Specify test's link libraries
 ExternalProject_Get_Property(googletest binary_dir)
@@ -67,6 +74,11 @@ TARGET_LINK_LIBRARIES(unittest
 ExternalProject_Get_Property(ukf binary_dir)
 TARGET_LINK_LIBRARIES(unittest
     ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsukf.a)
+
+# Find TRICAL library build location
+ExternalProject_Get_Property(TRICAL binary_dir)
+TARGET_LINK_LIBRARIES(unittest
+    ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}TRICALstatic.a)
 
 ADD_TEST(unittest unittest)
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
@@ -88,6 +100,12 @@ ADD_LIBRARY(fcs SHARED
     ../ahrs/ahrs.c)
 
 ADD_DEPENDENCIES(fcs ukf)
+ADD_DEPENDENCIES(fcs TRICAL)
 
+ExternalProject_Get_Property(ukf binary_dir)
 TARGET_LINK_LIBRARIES(fcs
     ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsukf.a)
+
+ExternalProject_Get_Property(TRICAL binary_dir)
+TARGET_LINK_LIBRARIES(fcs
+    ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}TRICALstatic.a)

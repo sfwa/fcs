@@ -30,14 +30,13 @@ Configuration data types for the AHRS
 struct fcs_ahrs_sensor_geometry_t {
     float accel_orientation[4];
     float gyro_orientation[4];
+    float mag_orientation[4];
     float accel_position[3];
 };
 
 struct fcs_ahrs_sensor_calibration_t {
     int16_t accel_bias[3];
     float accel_scale[3];
-    float mag_bias[3];
-    float mag_scale[9];
     float gyro_scale[3];
     int16_t pitot_bias;
     float pitot_scale;

@@ -592,9 +592,9 @@ TEST(AHRSMath, ProcessMagDataPackets0) {
 
     result = _fcs_ahrs_process_magnetometers(output, packets);
     EXPECT_TRUE(result);
-    EXPECT_FLOAT_EQ(123.0 / MAG_SENSITIVITY, output[0]);
-    EXPECT_FLOAT_EQ(234.0 / MAG_SENSITIVITY, output[1]);
-    EXPECT_FLOAT_EQ(345.0 / MAG_SENSITIVITY, output[2]);
+    EXPECT_NEAR(123.0 / MAG_SENSITIVITY, output[0], 0.03);
+    EXPECT_NEAR(234.0 / MAG_SENSITIVITY, output[1], 0.03);
+    EXPECT_NEAR(345.0 / MAG_SENSITIVITY, output[2], 0.03);
 }
 
 TEST(AHRSMath, ProcessMagDataPackets1) {
@@ -614,9 +614,9 @@ TEST(AHRSMath, ProcessMagDataPackets1) {
 
     result = _fcs_ahrs_process_magnetometers(output, packets);
     EXPECT_TRUE(result);
-    EXPECT_FLOAT_EQ(456.0 / MAG_SENSITIVITY, output[0]);
-    EXPECT_FLOAT_EQ(567.0 / MAG_SENSITIVITY, output[1]);
-    EXPECT_FLOAT_EQ(678.0 / MAG_SENSITIVITY, output[2]);
+    EXPECT_NEAR(456.0 / MAG_SENSITIVITY, output[0], 0.01);
+    EXPECT_NEAR(567.0 / MAG_SENSITIVITY, output[1], 0.01);
+    EXPECT_NEAR(678.0 / MAG_SENSITIVITY, output[2], 0.01);
 }
 
 TEST(AHRSMath, ProcessMagDataPacketsBoth) {
@@ -639,9 +639,9 @@ TEST(AHRSMath, ProcessMagDataPacketsBoth) {
 
     result = _fcs_ahrs_process_magnetometers(output, packets);
     EXPECT_TRUE(result);
-    EXPECT_FLOAT_EQ(289.5 / MAG_SENSITIVITY, output[0]);
-    EXPECT_FLOAT_EQ(400.5 / MAG_SENSITIVITY, output[1]);
-    EXPECT_FLOAT_EQ(511.5 / MAG_SENSITIVITY, output[2]);
+    EXPECT_NEAR(289.5 / MAG_SENSITIVITY, output[0], 0.02);
+    EXPECT_NEAR(400.5 / MAG_SENSITIVITY, output[1], 0.02);
+    EXPECT_NEAR(511.5 / MAG_SENSITIVITY, output[2], 0.02);
 
     /* TODO: check bias and calibration support */
 }
