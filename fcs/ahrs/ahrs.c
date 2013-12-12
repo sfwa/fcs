@@ -290,8 +290,17 @@ void fcs_ahrs_init(void) {
     struct fcs_ahrs_wmm_field_t field;
 
     /* TODO: read these from config or something */
-    memset(&covariance, 0, sizeof(covariance));
-    memset(&field, 0, sizeof(field));
+    field.mag_field[0] = 0.4;
+    field.mag_field[1] = 0.0;
+    field.mag_field[2] = 0.0;
+
+    covariance.accel_covariance = 81.0;
+    covariance.gyro_covariance = 0.5 * (M_PI / 180.0);
+    covariance.mag_covariance = 1.5;
+    covariance.gps_position_covariance_h = 1e-11;
+    covariance.gps_position_covariance_v = 225.0;
+    covariance.pitot_covariance = 100.0;
+    covariance.barometer_amsl_covariance = 4.0;
 
     struct ukf_ioboard_params_t params = {
         /*
@@ -334,6 +343,12 @@ void fcs_ahrs_init(void) {
     params.barometer_amsl_covariance = covariance.barometer_amsl_covariance;
 
     ukf_set_params(&params);
+
+    /* Update the TRICAL instance parameters based on the UKF configuration */
+    TRICAL_norm_set(&magnetometer_calibration[0],
+                    vector3_norm_f(field.mag_field));
+    TRICAL_noise_set(&magnetometer_calibration[0],
+                     (float)sqrt(covariance.mag_covariance));
 
 #ifdef __TI_COMPILER_VERSION__
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;

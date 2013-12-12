@@ -51,6 +51,20 @@ SOFTWARE.
 #define _nassert(x)
 #endif
 
+static inline double vector3_norm_d(const double *restrict v1) {
+    assert(v1);
+    _nassert((size_t)v1 % 8 == 0);
+
+    return sqrt(v1[X]*v1[X] + v1[Y]*v1[Y] + v1[Z]*v1[Z]);
+}
+
+static inline float vector3_norm_f(const float *restrict v1) {
+    assert(v1);
+    _nassert((size_t)v1 % 8 == 0);
+
+    return (float)sqrt(v1[X]*v1[X] + v1[Y]*v1[Y] + v1[Z]*v1[Z]);
+}
+
 static inline void vector3_cross_d(double *restrict result,
 const double *restrict v1,
 const double *restrict v2) {
