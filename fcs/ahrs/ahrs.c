@@ -299,6 +299,8 @@ void fcs_ahrs_init(void) {
     covariance.mag_covariance = 1.5;
     covariance.gps_position_covariance_h = 1e-11;
     covariance.gps_position_covariance_v = 225.0;
+    covariance.gps_velocity_covariance_h = 9.0;
+    covariance.gps_velocity_covariance_v = 49.0;
     covariance.pitot_covariance = 100.0;
     covariance.barometer_amsl_covariance = 4.0;
 
