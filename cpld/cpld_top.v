@@ -138,6 +138,7 @@ assign dsp_i2c_1v8_sda = 1'bz;
 assign cpu_gpio[23:0] = 24'bz;
 assign dsp_usb_reset_INV = 1'b0;
 assign dsp_ext_uart_en = 1'b1;
+assign cpu_bootmode = 6'b000101; /*6'b101001 for eMMC, 6'b000101 for MicroSD*/
 
 wire osc_clk, osc_clk_1600us, dsp_enable, cpu_enable, io1_enable, io2_enable,
      dsp_bootmode_enable, pg_ddr3, pg_1v8, sys_enable, cpu_bank_enable,
@@ -267,18 +268,6 @@ always @(*) begin
 		ext_uart1_tx = 1'b0;
 	end
 end
-
-/*
-CPU sequencer -- handle power on/off for the CPU board
-*/
-// exynos4412_sequencer cpu_seq(
-//     .sysclk(osc_clk_1600us),
-//     .enable(cpu_enable & sys_enable),
-//     .cpu_pmic_pwron(cpu_pmic_pwron),
-//     .cpu_pmic_reset_INV(cpu_pmic_reset_INV),
-//     .cpu_bank_en(cpu_bank_enable),
-//     .cpu_bootmode(cpu_bootmode)
-// );
 
 endmodule
 
