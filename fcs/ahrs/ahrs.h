@@ -61,8 +61,8 @@ struct fcs_ahrs_wmm_field_t {
 };
 
 struct fcs_ahrs_dynamics_model_t {
-    float process_noise[24];
-    uint8_t model; /* 0, 1 or 2 */
+    double process_noise[24];
+    uint8_t model;
 };
 
 void fcs_ahrs_init(void);

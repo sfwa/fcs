@@ -683,8 +683,8 @@ TEST(AHRSMath, ProcessGPSDataPackets0) {
 
     result = _fcs_ahrs_process_gps(position, velocity, packets);
     EXPECT_TRUE(result);
-    EXPECT_FLOAT_EQ(0.1, position[0]);
-    EXPECT_FLOAT_EQ(0.2, position[1]);
+    EXPECT_FLOAT_EQ(0.1 * M_PI / 180.0, position[0]);
+    EXPECT_FLOAT_EQ(0.2 * M_PI / 180.0, position[1]);
     EXPECT_FLOAT_EQ(30.0, position[2]);
     EXPECT_FLOAT_EQ(123.0 * 1e-2, velocity[0]);
     EXPECT_FLOAT_EQ(234.0 * 1e-2, velocity[1]);
@@ -712,8 +712,8 @@ TEST(AHRSMath, ProcessGPSDataPackets1) {
 
     result = _fcs_ahrs_process_gps(position, velocity, packets);
     EXPECT_TRUE(result);
-    EXPECT_FLOAT_EQ(0.2, position[0]);
-    EXPECT_FLOAT_EQ(0.3, position[1]);
+    EXPECT_FLOAT_EQ(0.2 * M_PI / 180.0, position[0]);
+    EXPECT_FLOAT_EQ(0.3 * M_PI / 180.0, position[1]);
     EXPECT_FLOAT_EQ(40.0, position[2]);
     EXPECT_FLOAT_EQ(456.0 * 1e-2, velocity[0]);
     EXPECT_FLOAT_EQ(567.0 * 1e-2, velocity[1]);
@@ -747,8 +747,8 @@ TEST(AHRSMath, ProcessGPSDataPacketsBoth) {
 
     result = _fcs_ahrs_process_gps(position, velocity, packets);
     EXPECT_TRUE(result);
-    EXPECT_FLOAT_EQ(0.15, position[0]);
-    EXPECT_FLOAT_EQ(0.25, position[1]);
+    EXPECT_FLOAT_EQ(0.15 * M_PI / 180.0, position[0]);
+    EXPECT_FLOAT_EQ(0.25 * M_PI / 180.0, position[1]);
     EXPECT_FLOAT_EQ(35.0, position[2]);
     EXPECT_FLOAT_EQ(289.5 * 1e-2, velocity[0]);
     EXPECT_FLOAT_EQ(400.5 * 1e-2, velocity[1]);
@@ -941,7 +941,7 @@ TEST(AHRSOutput, UpdateGlobalState) {
     EXPECT_DOUBLE_EQ(36.0, fcs_global_state.angular_velocity[1]);
     EXPECT_DOUBLE_EQ(-54.0, fcs_global_state.angular_velocity[2]);
     /* TODO: check these results against theory and practical UKF output */
-    EXPECT_NEAR(3.080, fcs_global_state.lat_lon_uncertainty, 1e-3);
+    EXPECT_NEAR(176.789, fcs_global_state.lat_lon_uncertainty, 1e-3);
     EXPECT_NEAR(0.339, fcs_global_state.alt_uncertainty, 1e-3);
     EXPECT_NEAR(0.392, fcs_global_state.velocity_uncertainty[0], 1e-3);
     EXPECT_NEAR(0.438, fcs_global_state.velocity_uncertainty[1], 1e-3);

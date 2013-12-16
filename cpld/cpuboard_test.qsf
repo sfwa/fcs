@@ -1,17 +1,17 @@
 # -------------------------------------------------------------------------- #
 #
 # Copyright (C) 1991-2013 Altera Corporation
-# Your use of Altera Corporation's design tools, logic functions 
-# and other software and tools, and its AMPP partner logic 
-# functions, and any output files from any of the foregoing 
-# (including device programming or simulation files), and any 
-# associated documentation or information are expressly subject 
-# to the terms and conditions of the Altera Program License 
-# Subscription Agreement, Altera MegaCore Function License 
-# Agreement, or other applicable license agreement, including, 
-# without limitation, that your use is for the sole purpose of 
-# programming logic devices manufactured by Altera and sold by 
-# Altera or its authorized distributors.  Please refer to the 
+# Your use of Altera Corporation's design tools, logic functions
+# and other software and tools, and its AMPP partner logic
+# functions, and any output files from any of the foregoing
+# (including device programming or simulation files), and any
+# associated documentation or information are expressly subject
+# to the terms and conditions of the Altera Program License
+# Subscription Agreement, Altera MegaCore Function License
+# Agreement, or other applicable license agreement, including,
+# without limitation, that your use is for the sole purpose of
+# programming logic devices manufactured by Altera and sold by
+# Altera or its authorized distributors.  Please refer to the
 # applicable agreement for further details.
 #
 # -------------------------------------------------------------------------- #
@@ -153,8 +153,8 @@ set_location_assignment PIN_A7 -to dsp_gpio[0]
 set_location_assignment PIN_B11 -to dsp_ext_uart_tx
 set_location_assignment PIN_B16 -to dsp_ext_uart_rx
 set_location_assignment PIN_J1 -to dsp_ext_uart_en
-set_location_assignment PIN_B14 -to dsp_ext_uart1_int_INV
-set_location_assignment PIN_B13 -to dsp_ext_uart0_int_INV
+set_location_assignment PIN_B14 -to dsp_ext_uart1_int
+set_location_assignment PIN_B13 -to dsp_ext_uart0_int
 set_location_assignment PIN_R2 -to dsp_ext_spi_en
 set_location_assignment PIN_D15 -to dsp_coresel1
 set_location_assignment PIN_B17 -to dsp_coresel0

@@ -327,7 +327,14 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     write setup/strobe/hold the same.
     */
     volatile CSL_Emif16Regs *const emif16 = (CSL_Emif16Regs*)CSL_EMIF16_REGS;
-    emif16->A1CR = (0x7u << 4) + (0xAu << 7) + (0x7u << 17) + (0xAu << 20);
+    if (uart_idx == 0) {
+        emif16->A1CR = (0x7u << 4u) + (0xAu << 7u) + (0x7u << 17u) +
+                       (0xAu << 20u);
+    } else {
+        emif16->A2CR = (0x7u << 4u) + (0xAu << 7u) + (0x7u << 17u) +
+                       (0xAu << 20u);
+    }
+
 
     /*
     PMCR is the Page Mode Control Register. We're not using NOR flash, so set
@@ -337,20 +344,14 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
 
     /* EDMA3 reset */
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-    edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = 0xFFFFFFFFu;
-    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
+    edma3->TPCC_EECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_EECR = 1u << tx_edma_event[uart_idx];
+    edma3->TPCC_SECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_SECR = 1u << tx_edma_event[uart_idx];
+    edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_ECR = 1u << tx_edma_event[uart_idx];
+    edma3->TPCC_EMCR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_EMCR = 1u << tx_edma_event[uart_idx];
 
     /*
     Calculate baud rate divisor. The XR16M752 has a 14.7456MHz clock input,
@@ -387,7 +388,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     /*
     Configuring the UART involves the following steps:
     - Set LCR[7]
-    - Write DLL, DLM and DLD
+    - Write DLL, DLM [and optionally DLD, if bit 4 of EFR is high]
     - Clear LCR[7] / write configured LCR
     - Write IER, FCR, [LCR,] MCR
 
@@ -403,11 +404,14 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
         {(uint8_t*)EMIF16_UART0_BASE_ADDR, (uint8_t*)EMIF16_UART1_BASE_ADDR};
     volatile uint8_t *restrict const uart_mem = uart_regs[uart_idx];
 
-    /* Configure the divisor latch values */
+    /*
+    Configure the divisor latch values. Ignore DLD so we don't need to write
+    EFR; the input clock frequency is such that for common baud rates there
+    isn't a fractional component anyway.
+    */
     uart_mem[XR16M752_LCR] = 0x80u;
     uart_mem[XR16M752_DLM] = (divisor_floor >> 8) & 0xFFu;
     uart_mem[XR16M752_DLL] = divisor_floor & 0xFFu;
-    uart_mem[XR16M752_DLD] = dld & 0x0Fu;
 
     /*
     Here, we want to configure the following:
@@ -418,7 +422,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     */
     uart_mem[XR16M752_LCR] = 0x03u; /* 8 bit, 1 stop bit, no parity */
     uart_mem[XR16M752_IER] = 0x01u; /* RX interrupt only */
-    uart_mem[XR16M752_MCR] = 0x08u; /* 0x18 for loopback + INT_OE */
+    uart_mem[XR16M752_MCR] = 0x18u; /* 0x18 for loopback + INT_OE */
 
     /*
     The GPIO peripheral has a few global config options, and registers for
@@ -456,10 +460,10 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     as quick to set both.
 
     We want to trigger on the negative-going edge, since the UART interrupts
-    are active low.
+    are active high.
     */
     gpio->BANK_REGISTERS[0].DIR |= 0x3u;
-    gpio->BANK_REGISTERS[0].SET_FAL_TRIG |= 0x3u;
+    gpio->BANK_REGISTERS[0].SET_RIS_TRIG |= 0x3u;
 
     /*
     Pointer to TIMER4 and TIMER5 peripherals. These are configured in 64-bit

@@ -141,37 +141,30 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     ECR/ECRH.
     */
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-
-    edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_EMCR = 0xFFFFFFFFu;
-    edma3->TPCC_EMCRH = 0xFFFFFFFFu;
+    edma3->TPCC_EECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_EECR = 1u << tx_edma_event[uart_idx];
+    edma3->TPCC_SECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_SECR = 1u << tx_edma_event[uart_idx];
+    edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_ECR = 1u << tx_edma_event[uart_idx];
+    edma3->TPCC_EMCR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_EMCR = 1u << tx_edma_event[uart_idx];
 
     /*
     The UART baud rate generator is derived from SYSCLK7 via PLLOUT->PLLDIV7.
     SYSCLK7 is always 1/6th the rate of SYSCLK1.
 
     Set the baud rate divisor:
-        DLH:DLL = SYSCLK7_FREQ_HZ / (UART_BAUD * 13)
+        DLH:DLL = SYSCLK7_FREQ_HZ / (UART_BAUD * 16)
 
     so with a 100MHz clock and e.g. a desired baud rate of 921600 we'd set
-        DLH:DLL = 166666667 / (921600 * 13) = 13.9
+        DLH:DLL = 166666667 / (921600 * 16) = 11.3
 
     which would result in an actual baud rate of
-        ACTUAL_UART_BAUD = SYSCLK7_FREQ_HZ / (DLH:DLL * 14)
-        915750 = 166666667 / (14 * 13)
+        ACTUAL_UART_BAUD = SYSCLK7_FREQ_HZ / (DLH:DLL * 11)
+        946970 = 166666667 / (11 * 16)
 
-    for an error of 0.63%.
+    for an error of 2.8%.
     */
     assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
@@ -187,7 +180,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     0     OSM_SEL                      0 = 16x oversampling
                                        1 = 13x oversampling
 
-    Set to 0 for 13x oversampling (better for 230400, 921600 etc).
+    Set to 0 for 16x oversampling.
     */
     uart[uart_idx]->MDR = 0;
 

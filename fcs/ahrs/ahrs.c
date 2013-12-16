@@ -352,6 +352,23 @@ void fcs_ahrs_init(void) {
 
     ukf_set_params(&params);
 
+    /* Set the UKF model */
+    struct fcs_ahrs_dynamics_model_t model = {
+        {
+            1e-15, 1e-15, 1e-5, /* lat, lon, alt */
+            7e-5, 7e-5, 7e-5, /* velocity N, E, D */
+            2e-4, 2e-4, 2e-4, /* acceleration x, y, z */
+            1e-9, 1e-9, 1e-9, /* attitude roll, pitch, yaw */
+            3e-3, 3e-3, 3e-3, /* angular velocity roll, pitch, yaw */
+            1e-3, 1e-3, 1e-3, /* angular acceleration roll, pitch, yaw */
+            1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
+            1.5e-12, 1.5e-12, 1.5e-12 /* gyro bias x, y, z */
+        },
+        UKF_MODEL_X8
+    };
+    ukf_set_process_noise(model.process_noise);
+    ukf_choose_dynamics(model.model);
+
     /* Update the TRICAL instance parameters based on the UKF configuration */
     TRICAL_init(&magnetometer_calibration[0]);
     TRICAL_norm_set(&magnetometer_calibration[0],
@@ -608,9 +625,13 @@ double *restrict covariance) {
     that error will follow a Gaussian distribution
     */
 
-    /* Ignore changes in lon with varying lat -- small angles and all that */
+    /*
+    Ignore changes in lon with varying lat -- small angles and all that.
+
+    Formula for m per degree latitude is approx (2 * pi / 360) * r
+    */
     state.lat_lon_uncertainty = 1.96 *
-        sqrt(max(covariance[0], covariance[1])) * (40008000.0 / 360.0);
+        sqrt(max(covariance[0], covariance[1])) * 6378000.0;
     state.alt_uncertainty = 1.96 * sqrt(covariance[2]);
 
     state.velocity_uncertainty[0] = 1.96 * sqrt(covariance[3]);
@@ -933,7 +954,7 @@ const struct sensor_packet_t *restrict packets) {
 
 bool _fcs_ahrs_process_gps(double *restrict p_output,
 float *restrict v_output, const struct sensor_packet_t *restrict packets) {
-    double deg_mul = 1e-7;
+    double deg_mul = 1e-7 * (M_PI/180.0);
     float cm_mul = 1e-2f;
     bool read = false;
 
@@ -963,7 +984,7 @@ float *restrict v_output, const struct sensor_packet_t *restrict packets) {
             v_output[1] += (float)packets[1].gps.velocity.e;
             v_output[2] += (float)packets[1].gps.velocity.d;
 
-            deg_mul = 0.5e-7;
+            deg_mul = 0.5e-7 * (M_PI/180.0);
             cm_mul = 0.5e-2f;
         } else {
             p_output[0] = (double)packets[1].gps.position.lat;

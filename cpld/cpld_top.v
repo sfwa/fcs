@@ -85,8 +85,8 @@ module cpld_top(
 	output dsp_coresel1,
 	inout reg[19:0] dsp_gpio,
 	input dsp_ext_uart_tx,
-	input dsp_ext_uart0_int_INV,
-	input dsp_ext_uart1_int_INV,
+	input dsp_ext_uart0_int,
+	input dsp_ext_uart1_int,
 	output dsp_usb_reset_INV,
 	input dsp_usb_irq_INV,
 	output reg dsp_usb_dack,
@@ -236,7 +236,7 @@ always @(*) begin
 		ioboard_2_reset_out = 1'b0;
 		ioboard_1_reset_out = 1'b0;
 	end else if (dsp_bank_enable) begin
-		dsp_gpio = { 18'bz, dsp_ext_uart1_int_INV, dsp_ext_uart0_int_INV };
+		dsp_gpio = { 18'bz, dsp_ext_uart1_int, dsp_ext_uart0_int };
 		ioboard_2_reset_out = dsp_gpio[3];
 		ioboard_1_reset_out = dsp_gpio[2];
 	end else begin
