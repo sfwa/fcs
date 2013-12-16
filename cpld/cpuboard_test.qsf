@@ -155,6 +155,7 @@ set_location_assignment PIN_B16 -to dsp_ext_uart_rx
 set_location_assignment PIN_J1 -to dsp_ext_uart_en
 set_location_assignment PIN_B14 -to dsp_ext_uart1_int
 set_location_assignment PIN_B13 -to dsp_ext_uart0_int
+set_location_assignment PIN_B15 -to dsp_ext_uart_reset
 set_location_assignment PIN_R2 -to dsp_ext_spi_en
 set_location_assignment PIN_D15 -to dsp_coresel1
 set_location_assignment PIN_B17 -to dsp_coresel0
@@ -265,8 +266,9 @@ set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_vid_oe_INV
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_booted
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_coresel0
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_coresel1
-set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart0_int_INV
-set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart1_int_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart0_int
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart1_int
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart_reset
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart_rx
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_ext_uart_tx
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_gpio[0]

@@ -87,6 +87,7 @@ module cpld_top(
 	input dsp_ext_uart_tx,
 	input dsp_ext_uart0_int,
 	input dsp_ext_uart1_int,
+	output dsp_ext_uart_reset,
 	output dsp_usb_reset_INV,
 	input dsp_usb_irq_INV,
 	output reg dsp_usb_dack,
@@ -137,6 +138,7 @@ assign dsp_i2c_1v8_scl = 1'bz;
 assign dsp_i2c_1v8_sda = 1'bz;
 assign cpu_gpio[23:0] = 24'bz;
 assign dsp_usb_reset_INV = 1'b1;
+assign dsp_ext_uart_reset = ~dsp_bank_enable;
 assign dsp_ext_uart_en = 1'b1;
 assign cpu_bootmode = 6'b000101; /*6'b101001 for eMMC, 6'b000101 for MicroSD*/
 
