@@ -65,6 +65,7 @@ TEST(CommsSerializeState, InvalidSolutionTime) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.solution_time = -1;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -75,6 +76,7 @@ TEST(CommsSerializeState, InvalidLat) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.lat = -95.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -85,6 +87,7 @@ TEST(CommsSerializeState, InvalidLon) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.lon = -190.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -95,6 +98,7 @@ TEST(CommsSerializeState, InvalidAlt) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.alt = -1000.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -105,6 +109,7 @@ TEST(CommsSerializeState, InvalidVelocityN) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.velocity[0] = 1000.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -115,6 +120,7 @@ TEST(CommsSerializeState, InvalidVelocityE) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.velocity[1] = 1000.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -125,6 +131,7 @@ TEST(CommsSerializeState, InvalidVelocityD) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.velocity[2] = 1000.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -135,6 +142,7 @@ TEST(CommsSerializeState, InvalidWindN) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.wind_velocity[0] = 1000.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -145,6 +153,7 @@ TEST(CommsSerializeState, InvalidWindE) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.wind_velocity[1] = 1000.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -155,6 +164,7 @@ TEST(CommsSerializeState, InvalidWindD) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.wind_velocity[2] = 1000.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -165,6 +175,7 @@ TEST(CommsSerializeState, InvalidYaw) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.yaw = 400.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -175,6 +186,7 @@ TEST(CommsSerializeState, InvalidPitch) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.pitch = 100.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -185,6 +197,7 @@ TEST(CommsSerializeState, InvalidRoll) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.roll = 200.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -195,6 +208,7 @@ TEST(CommsSerializeState, InvalidAngularVelocityX) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.angular_velocity[0] = 500.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -205,6 +219,7 @@ TEST(CommsSerializeState, InvalidAngularVelocityY) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.angular_velocity[1] = 500.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }
@@ -215,6 +230,7 @@ TEST(CommsSerializeState, InvalidAngularVelocityZ) {
     size_t len;
     memset(&y, 0, sizeof(y));
     y.angular_velocity[2] = 500.0;
+    y.mode_indicator = 'N';
     len = fcs_comms_serialize_state(x, &y);
     EXPECT_EQ('N', x[len - 23]);
 }

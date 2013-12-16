@@ -175,7 +175,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     */
     assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
-    float divisor = 166666666.67f / (float)(uart_baud[uart_idx] * 13);
+    float divisor = 166666666.67f / (float)(uart_baud[uart_idx] * 16);
     uint16_t divisor_int = (uint16_t)(divisor + 0.5f);
     uart[uart_idx]->DLL = divisor_int & 0xFFu;
     uart[uart_idx]->DLH = (divisor_int >> 8) & 0xFFu;
@@ -189,7 +189,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 
     Set to 0 for 13x oversampling (better for 230400, 921600 etc).
     */
-    uart[uart_idx]->MDR = 0x01u;
+    uart[uart_idx]->MDR = 0;
 
     /*
     FCR: FIFO Control Register (section 3.5 in SPRUGP1)
@@ -218,11 +218,9 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     First, set FCR to 0x01 to enable.
     Then, set 0x0F for 1-byte FIFO trigger level, RX/TX FIFO clear, and FIFO
     enable.
-    Then, set 0x09 for 1-byte FIFO trigger level and FIFO enable.
     */
     uart[uart_idx]->FCR = 0x01u;
     uart[uart_idx]->FCR = 0x0Fu;
-    uart[uart_idx]->FCR = 0x09u;
 
     /*
     LCR: Line Control Register (section 3.6 in SPRUGP1)
@@ -292,7 +290,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 
     Not used -- set to 0, or 0x10u for loop mode if debugging.
     */
-    uart[uart_idx]->MCR = 0x10u;
+    uart[uart_idx]->MCR = 0;
 
     /*
     IER: Interrupt Enable Register (section 3.3 in SPRUGP1)
@@ -314,7 +312,9 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     */
     uart[uart_idx]->IER = 0;
 
+    /* Read out the LSR and RBR to reset status */
     uint8_t dummy = uart[uart_idx]->LSR;
+    dummy = uart[uart_idx]->RBR;
     #pragma unused(dummy);
 }
 
@@ -330,8 +330,6 @@ uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
 
     volatile CSL_UartRegs *const uart[2] =
         { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
-
-    uint8_t lsr = uart[uart_idx]->LSR;
 
     /*
     LSR: Line Status Register (section 3.8 in SPRUGP1)
@@ -374,7 +372,29 @@ uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
     */
 
     /* Error if RXFIFOE, BI, FE or OE was set */
-    return lsr & 0x9Au;
+    uint8_t lsr = uart[uart_idx]->LSR & 0x9Au;
+    if (lsr) {
+    	/* Clear the RX FIFO: DMAMODE + RXCLR + FIFOEN */
+    	uart[uart_idx]->FCR = 0x9u;
+
+        /* Reset the EDMA status for this channel */
+        volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
+        edma3->TPCC_SECR = 1u << rx_edma_event[uart_idx];
+        edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
+        edma3->TPCC_EMCR = 1u << rx_edma_event[uart_idx];
+
+        /* Read out RBR and LSR to reset error status */
+        uint8_t dummy = uart[uart_idx]->RBR;
+        dummy = uart[uart_idx]->LSR;
+        #pragma unused(dummy);
+
+        /* Clear the RX FIFO again: DMAMODE + RXCLR + FIFOEN */
+        uart[uart_idx]->FCR = 0x9u;
+
+        return lsr;
+    } else {
+        return 0;
+    }
 }
 
 /*
@@ -474,18 +494,22 @@ uint16_t buf_size) {
     volatile CSL_UartRegs *const uart[2] =
         { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
 
-    /* Disable the UART RX */
-    uart[uart_idx]->PWREMU_MGMT &= 0xFFFFDFFFu;
-    uint8_t dummy = uart[uart_idx]->LSR;
-    #pragma unused(dummy);
-
     /*
     Disable the channel by setting the clear bit in the appropriate register.
     For channels 0-31, this is EECR; for channels 32+, it's EECRH.
     */
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-    edma3->TPCC_EECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_SECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
+
+    /* Read out the LSR and RBR to reset status */
+    uint8_t dummy = uart[uart_idx]->LSR;
+    dummy = uart[uart_idx]->RBR;
+    #pragma unused(dummy);
+
+    /* Clear the RX FIFO: DMAMODE + RXCLR + FIFOEN */
+    uart[uart_idx]->FCR = 0x9u;
 
     /*
     8 channels per register; determine the DMAQNUM register index based
@@ -503,7 +527,10 @@ uint16_t buf_size) {
     uint8_t dma_register_bit = (rx_edma_event[uart_idx] -
                                 (dma_register_idx << 3)) << 2;
 
-    /* Update the DMAQNUMn register register */
+    /*
+    Update the DMAQNUMn register register -- we're actually setting it to 0,
+    so this call does nothing
+    */
     CSL_FINSR(edma3->TPCC_DMAQNUM[dma_register_idx], dma_register_bit + 2,
               dma_register_bit, 0);
 
@@ -687,14 +714,11 @@ uint16_t buf_size) {
     Enable the channel by setting the enable bit in the appropriate register.
     For channels 0-31, this is EESR; for channels 32+, it's EESRH.
     */
-    edma3->TPCC_SECR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(rx_edma_event[uart_idx],
-                               rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = 1u << rx_edma_event[uart_idx];
+    edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
     edma3->TPCC_EMCR = 0xFFFFFFFFu;
     edma3->TPCC_EMCRH = 0xFFFFFFFFu;
-    edma3->TPCC_EESR = CSL_FMKR(rx_edma_event[uart_idx],
-                                rx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EESR = 1u << rx_edma_event[uart_idx];
 
     /* Enable the UART RX */
     uart[uart_idx]->PWREMU_MGMT |= 0x2000u;
@@ -727,6 +751,9 @@ uint16_t buf_size) {
     uint8_t dummy = uart[uart_idx]->LSR;
     #pragma unused(dummy);
 
+    /* Clear the TX FIFO: DMAMODE + TXCLR + FIFOEN */
+    uart[uart_idx]->FCR = 0xDu;
+
     /* Disable the DMA event for this channel */
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     edma3->TPCC_EECR = CSL_FMKR(tx_edma_event[uart_idx],
@@ -756,14 +783,11 @@ uint16_t buf_size) {
     #undef primary
 
     /* Reset DMA event status for the channel and enable the transfer */
-    edma3->TPCC_SECR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
-    edma3->TPCC_ECR = CSL_FMKR(tx_edma_event[uart_idx],
-                               tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_SECR = 1u << tx_edma_event[uart_idx];
+    edma3->TPCC_ECR = 1u << tx_edma_event[uart_idx];
     edma3->TPCC_EMCR = 0xFFFFFFFFu;
     edma3->TPCC_EMCRH = 0xFFFFFFFFu;
-    edma3->TPCC_EESR = CSL_FMKR(tx_edma_event[uart_idx],
-                                tx_edma_event[uart_idx], 1u);
+    edma3->TPCC_EESR = 1u << tx_edma_event[uart_idx];
 
     /* Take the UART TX out of reset to send the first event */
     uart[uart_idx]->PWREMU_MGMT |= 0x4000u;

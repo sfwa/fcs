@@ -266,15 +266,19 @@ TEST(StreamTX, MultipleWrites) {
     len = fcs_stream_write(FCS_STREAM_UART_INT0, s, sizeof(s));
     EXPECT_EQ(8, len);
 
+    /* Read back and confirm */
+    len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 255);
+    EXPECT_EQ(8, len);
+    EXPECT_STREQ("testing", (char*)buf);
+
     /* Write another test string */
     len = fcs_stream_write(FCS_STREAM_UART_INT0, s, sizeof(s));
     EXPECT_EQ(8, len);
 
     /* Read back and confirm */
     len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 255);
-    buf[7] = 'x';
-    EXPECT_EQ(16, len);
-    EXPECT_STREQ("testingxtesting", (char*)buf);
+    EXPECT_EQ(8, len);
+    EXPECT_STREQ("testing", (char*)buf);
 }
 
 TEST(StreamTX, WriteBufferFull) {
@@ -294,9 +298,9 @@ TEST(StreamTX, WriteBufferFull) {
 
     /* Write a second which overflows */
     len = fcs_stream_write(FCS_STREAM_UART_INT0, s, 129);
-    EXPECT_EQ(126, len);
+    EXPECT_EQ(0, len);
 
     /* Read back and confirm */
     len = _fcs_stream_read_from_tx_buffer(FCS_STREAM_UART_INT0, buf, 256);
-    EXPECT_EQ(254, len);
+    EXPECT_EQ(128, len);
 }

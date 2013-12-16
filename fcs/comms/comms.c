@@ -166,6 +166,9 @@ size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_packet_state_t *restrict state) {
     assert(buf);
     assert(state);
+    /* If the state is not valid, the mode indicator should be 'N' */
+    assert(fcs_comms_validate_state(state) == FCS_VALIDATION_OK ||
+           state->mode_indicator == 'N');
 
     size_t index = 0;
 
@@ -184,78 +187,90 @@ const struct fcs_packet_state_t *restrict state) {
     uncertainty is below a certain threshold in order to output the data at
     all.
     */
-    if (state->lat_lon_uncertainty < FCS_STATE_MAX_LAT_LON_UNCERTAINTY) {
+    if (state->lat_lon_uncertainty < FCS_STATE_MAX_LAT_LON_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->lat, 2u, 7u);
     }
     buf[index++] = ',';
 
-    if (state->lat_lon_uncertainty < FCS_STATE_MAX_LAT_LON_UNCERTAINTY) {
+    if (state->lat_lon_uncertainty < FCS_STATE_MAX_LAT_LON_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->lon, 3u, 7u);
     }
     buf[index++] = ',';
 
-    if (state->alt_uncertainty < FCS_STATE_MAX_ALT_UNCERTAINTY) {
+    if (state->alt_uncertainty < FCS_STATE_MAX_ALT_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->alt, 4u, 2u);
     }
     buf[index++] = ',';
 
     if (state->velocity_uncertainty[0] <
-            FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->velocity[0], 3u, 2u);
     }
     buf[index++] = ',';
 
     if (state->velocity_uncertainty[1u] <
-            FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->velocity[1u], 3u, 2u);
     }
     buf[index++] = ',';
 
     if (state->velocity_uncertainty[2u] <
-            FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->velocity[2u], 3u, 2u);
     }
     buf[index++] = ',';
 
     if (state->wind_velocity_uncertainty[0] <
-            FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->wind_velocity[0], 2u, 2u);
     }
     buf[index++] = ',';
 
     if (state->wind_velocity_uncertainty[1u] <
-            FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->wind_velocity[1u], 2u, 2u);
     }
     buf[index++] = ',';
 
     if (state->wind_velocity_uncertainty[2u] <
-            FCS_STATE_MAX_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->wind_velocity[2u], 2u, 2u);
     }
     buf[index++] = ',';
 
-    if (state->yaw_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
+    if (state->yaw_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(&buf[index], state->yaw, 3u, 2u);
     }
     buf[index++] = ',';
 
-    if (state->pitch_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
+    if (state->pitch_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->pitch, 2u, 2u);
     }
     buf[index++] = ',';
 
-    if (state->roll_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY) {
+    if (state->roll_uncertainty < FCS_STATE_MAX_ATTITUDE_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->roll, 3u, 2u);
     }
@@ -267,21 +282,24 @@ const struct fcs_packet_state_t *restrict state) {
     body z axis (yaw)
     */
     if (state->angular_velocity_uncertainty[0] <
-            FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->angular_velocity[0], 3u, 2u);
     }
     buf[index++] = ',';
 
     if (state->angular_velocity_uncertainty[1u] <
-            FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->angular_velocity[1u], 3u, 2u);
     }
     buf[index++] = ',';
 
     if (state->angular_velocity_uncertainty[2u] <
-            FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY) {
+            FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY &&
+            state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
             &buf[index], state->angular_velocity[2u], 3u, 2u);
     }
@@ -348,17 +366,8 @@ const struct fcs_packet_state_t *restrict state) {
         &buf[index], state->angular_velocity_uncertainty[2u], 2u, 0);
     buf[index++] = ',';
 
-    /*
-    Normally output the state mode indicator, unless the state isn't valid --
-    then output 'N'
-    */
-    if (fcs_comms_validate_state(state) == FCS_VALIDATION_OK) {
-        buf[index++] = state->mode_indicator;
-        buf[index++] = ',';
-    } else {
-        buf[index++] = 'N';
-        buf[index++] = ',';
-    }
+    buf[index++] = state->mode_indicator;
+    buf[index++] = ',';
 
     memcpy(&buf[index], state->flags, 7u);
     index += 7u;

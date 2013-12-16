@@ -36,7 +36,13 @@ struct fcs_stats_counter_t {
 
     /* Piksi packet counters */
     uint64_t piksi_packet_rx;
-    uint16_t piksi_packet_rx_err;
+    uint64_t piksi_packet_rx_err;
+
+    /* TRICAL counters */
+    uint64_t trical_resets[2];
+
+    /* UKF counters */
+    uint64_t ukf_resets;
 
     /* Stream byte, reset and error counters */
     uint64_t stream_rx_byte[5];

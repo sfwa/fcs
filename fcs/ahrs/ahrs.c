@@ -258,6 +258,12 @@ void fcs_ahrs_init(void) {
 
     /* Set up global state */
     memset(&fcs_global_state, 0, sizeof(fcs_global_state));
+    fcs_global_state.mode_indicator = 'N';
+
+    memset(&fcs_global_state_mirror, 0, sizeof(fcs_global_state_mirror));
+    fcs_global_state_mirror.mode_indicator = 'N';
+
+    fcs_global_counters.ukf_resets++;
 
     /* Set default geometry and calibration */
     _fcs_ahrs_ioboard_reset_calibration(&ioboard_calibration[0]);
@@ -347,9 +353,16 @@ void fcs_ahrs_init(void) {
     ukf_set_params(&params);
 
     /* Update the TRICAL instance parameters based on the UKF configuration */
+    TRICAL_init(&magnetometer_calibration[0]);
     TRICAL_norm_set(&magnetometer_calibration[0],
                     vector3_norm_f(field.mag_field));
     TRICAL_noise_set(&magnetometer_calibration[0],
+                     (float)sqrt(covariance.mag_covariance));
+
+    TRICAL_init(&magnetometer_calibration[1]);
+    TRICAL_norm_set(&magnetometer_calibration[1],
+                    vector3_norm_f(field.mag_field));
+    TRICAL_noise_set(&magnetometer_calibration[1],
                      (float)sqrt(covariance.mag_covariance));
 
 #ifdef __TI_COMPILER_VERSION__
@@ -378,8 +391,8 @@ void fcs_ahrs_tick(void) {
     }
 
     /*
-    Handle I/O board comms errors. Errors in UARTs should trigger an immediate
-    reset of the relevant stream, but the I/O board itself should not reset.
+    Handle I/O board comms errors. Log and clear any UART errors, but the I/O
+    board itself should not reset in that circumstance.
 
     If the time since last I/O board tick/reset is too high, both the I/O
     board and the stream should be reset.
@@ -388,10 +401,10 @@ void fcs_ahrs_tick(void) {
     that will increase the likelihood of the failsafe system activating.
     */
     if (fcs_stream_check_error(FCS_STREAM_UART_INT0) == FCS_STREAM_ERROR) {
-        assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
+        fcs_global_counters.ioboard_packet_rx_err[0]++;
     }
     if (fcs_stream_check_error(FCS_STREAM_UART_INT1) == FCS_STREAM_ERROR) {
-        assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
+        fcs_global_counters.ioboard_packet_rx_err[1]++;
     }
 
 #ifdef __TI_COMPILER_VERSION__
@@ -411,6 +424,8 @@ void fcs_ahrs_tick(void) {
         /* Assert IOBOARD_1_RESET_OUT on GPIO 2 */
         gpio->BANK_REGISTERS[0].OUT_DATA |= 1u << 2u;
 #endif
+
+        assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
     } else if (ioboard_timeout[0] > INT16_MIN) {
         ioboard_timeout[0]--;
 
@@ -425,7 +440,7 @@ void fcs_ahrs_tick(void) {
     not timed out itself, reset board 1. This avoids the case where both
     boards are reset at the same time.
     */
-    if (!ioboard_timeout[1] <= 0 &&
+    if (ioboard_timeout[1] <= 0 &&
             0 < ioboard_timeout[0] &&
             ioboard_timeout[0] < FCS_IOBOARD_RESTART_WINDOW) {
         ioboard_timeout[1] = FCS_IOBOARD_RESET_TIMEOUT;
@@ -435,6 +450,8 @@ void fcs_ahrs_tick(void) {
         /* Assert IOBOARD_2_RESET_OUT on GPIO 3 */
         gpio->BANK_REGISTERS[0].OUT_DATA |= 1u << 3u;
 #endif
+
+        assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
     } else if (ioboard_timeout[1] > INT16_MIN) {
         ioboard_timeout[1]--;
 
@@ -544,36 +561,24 @@ void fcs_ahrs_tick(void) {
 
 void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
 double *restrict covariance) {
-#ifdef __TI_COMPILER_VERSION__
-    /*
-    Use a semaphore to prevent the NMPC code accessing the state while we're
-    updating it.
-    */
-    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
-    assert(sem_val == 1u);
-#endif
+    struct fcs_packet_state_t state;
 
     /* Increment solution time with wrap-around at 30 bits (1073741.823s) */
-    fcs_global_state.solution_time++;
-    fcs_global_state.solution_time &= 0x3FFFFFFF;
+    state.solution_time = fcs_global_state.solution_time + 1u;
+    state.solution_time &= 0x3FFFFFFF;
 
     /* Convert lat/lon to degrees */
-    fcs_global_state.lat = s->position[0] * (180.0/M_PI);
-    fcs_global_state.lon = s->position[1] * (180.0/M_PI);
-    fcs_global_state.alt = s->position[2];
+    state.lat = s->position[0] * (180.0/M_PI);
+    state.lon = s->position[1] * (180.0/M_PI);
+    state.alt = s->position[2];
 
-    memcpy(fcs_global_state.velocity, s->velocity, 3 * sizeof(double));
-    memcpy(fcs_global_state.wind_velocity, s->wind_velocity,
-           3 * sizeof(double));
+    memcpy(state.velocity, s->velocity, 3 * sizeof(double));
+    memcpy(state.wind_velocity, s->wind_velocity, 3 * sizeof(double));
 
     /* Convert angular velocity to degrees/s */
-    fcs_global_state.angular_velocity[0] = s->angular_velocity[0] *
-                                           (180.0/M_PI);
-    fcs_global_state.angular_velocity[1] = s->angular_velocity[1] *
-                                           (180.0/M_PI);
-    fcs_global_state.angular_velocity[2] = s->angular_velocity[2] *
-                                           (180.0/M_PI);
+    state.angular_velocity[0] = s->angular_velocity[0] * (180.0/M_PI);
+    state.angular_velocity[1] = s->angular_velocity[1] * (180.0/M_PI);
+    state.angular_velocity[2] = s->angular_velocity[2] * (180.0/M_PI);
 
     /* Convert state.attitude to yaw/pitch/roll, in degrees */
     double yaw, pitch, roll;
@@ -593,9 +598,9 @@ double *restrict covariance) {
     assert(-90.0 <= pitch && pitch <= 90.0);
     assert(-180.0 <= roll && roll <= 180.0);
 
-    fcs_global_state.yaw = yaw;
-    fcs_global_state.pitch = pitch;
-    fcs_global_state.roll = roll;
+    state.yaw = yaw;
+    state.pitch = pitch;
+    state.roll = roll;
 
     /*
     Work out 95th percentile confidence intervals for each of the output
@@ -604,42 +609,60 @@ double *restrict covariance) {
     */
 
     /* Ignore changes in lon with varying lat -- small angles and all that */
-    fcs_global_state.lat_lon_uncertainty = 1.96 *
+    state.lat_lon_uncertainty = 1.96 *
         sqrt(max(covariance[0], covariance[1])) * (40008000.0 / 360.0);
-    fcs_global_state.alt_uncertainty = 1.96 * sqrt(covariance[2]);
+    state.alt_uncertainty = 1.96 * sqrt(covariance[2]);
 
-    fcs_global_state.velocity_uncertainty[0] = 1.96 * sqrt(covariance[3]);
-    fcs_global_state.velocity_uncertainty[1] = 1.96 * sqrt(covariance[4]);
-    fcs_global_state.velocity_uncertainty[2] = 1.96 * sqrt(covariance[5]);
+    state.velocity_uncertainty[0] = 1.96 * sqrt(covariance[3]);
+    state.velocity_uncertainty[1] = 1.96 * sqrt(covariance[4]);
+    state.velocity_uncertainty[2] = 1.96 * sqrt(covariance[5]);
 
-    fcs_global_state.wind_velocity_uncertainty[0] = 1.96 *
-                                                    sqrt(covariance[18]);
-    fcs_global_state.wind_velocity_uncertainty[1] = 1.96 *
-                                                    sqrt(covariance[19]);
-    fcs_global_state.wind_velocity_uncertainty[2] = 1.96 *
-                                                    sqrt(covariance[20]);
+    state.wind_velocity_uncertainty[0] = 1.96 * sqrt(covariance[18]);
+    state.wind_velocity_uncertainty[1] = 1.96 * sqrt(covariance[19]);
+    state.wind_velocity_uncertainty[2] = 1.96 * sqrt(covariance[20]);
 
     /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
-    fcs_global_state.roll_uncertainty = 1.96 *
-        sqrt(covariance[9]) * (180.0/M_PI);
-    fcs_global_state.pitch_uncertainty = 1.96 *
-        sqrt(covariance[10]) * (180.0/M_PI);
-    fcs_global_state.yaw_uncertainty= 1.96 *
-        sqrt(covariance[11]) * (180.0/M_PI);
+    state.roll_uncertainty = 1.96 * sqrt(covariance[9]) * (180.0/M_PI);
+    state.pitch_uncertainty = 1.96 * sqrt(covariance[10]) * (180.0/M_PI);
+    state.yaw_uncertainty = 1.96 * sqrt(covariance[11]) * (180.0/M_PI);
 
-    fcs_global_state.angular_velocity_uncertainty[0] = 1.96 *
-        sqrt(covariance[12]) * (180.0/M_PI);
-    fcs_global_state.angular_velocity_uncertainty[1] = 1.96 *
-        sqrt(covariance[13]) * (180.0/M_PI);
-    fcs_global_state.angular_velocity_uncertainty[2] = 1.96 *
-        sqrt(covariance[14]) * (180.0/M_PI);
+    state.angular_velocity_uncertainty[0] =
+        1.96 * sqrt(covariance[12]) * (180.0/M_PI);
+    state.angular_velocity_uncertainty[1] =
+        1.96 * sqrt(covariance[13]) * (180.0/M_PI);
+    state.angular_velocity_uncertainty[2] =
+        1.96 * sqrt(covariance[14]) * (180.0/M_PI);
 
-    /* TODO: Update state mode indicator based on confidence in filter lock */
-    fcs_global_state.mode_indicator = 'A';
+    /* Check that the state is valid */
+    enum fcs_validation_result_t valid;
+    valid = fcs_comms_validate_state(&state);
 
-    /* Copy the state to the mirror */
-    memcpy(&fcs_global_state_mirror, &fcs_global_state,
-           sizeof(fcs_global_state));
+    if (valid != FCS_VALIDATION_OK) {
+        /*
+        TODO:
+        The state is invalid. Reset the UKF's state vector and covariance
+        matrix.
+        */
+
+        state.mode_indicator = 'N';
+        fcs_global_counters.ukf_resets++;
+    } else {
+        state.mode_indicator = 'A';
+    }
+
+#ifdef __TI_COMPILER_VERSION__
+    /*
+    Use a semaphore to prevent the NMPC code accessing the state while we're
+    updating it.
+    */
+    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
+    assert(sem_val == 1u);
+#endif
+
+    /* Copy the state to the global state and its mirror */
+    memcpy(&fcs_global_state, &state, sizeof(state));
+    memcpy(&fcs_global_state_mirror, &state, sizeof(state));
 
 #ifdef __TI_COMPILER_VERSION__
     /* Release the semaphore */
@@ -760,6 +783,13 @@ invalid:
     return false;
 }
 
+/*
+Apply scale and bias calibration to the accelerometer measurements, then apply
+the rotation configured in the I/O board geometry. If multiple measurements
+are available, they are averaged after scaling.
+
+Return true if any values were read, and false otherwise.
+*/
 bool _fcs_ahrs_process_accelerometers(float *restrict output,
 const struct sensor_packet_t *restrict packets) {
     float rv[3], v[3];
@@ -802,6 +832,15 @@ const struct sensor_packet_t *restrict packets) {
     return read;
 }
 
+/*
+Apply the rotation configured in the I/O board geometry, then apply scale
+calibration to the gyro measurements. If multiple measurements are available,
+they are averaged after scaling.
+
+Gyro bias estimation and compensation is handled by the AHRS UKF itself.
+
+Return true if any values were read, and false otherwise.
+*/
 bool _fcs_ahrs_process_gyroscopes(float *restrict output,
 const struct sensor_packet_t *restrict packets) {
     float rv[3], v[3];
@@ -841,6 +880,13 @@ const struct sensor_packet_t *restrict packets) {
     return read;
 }
 
+/*
+Apply the rotation configured in the I/O board geemoetry, then run TRICAL
+calibration on the resulting measurement. Take the mean of the calibrated
+measurements if there are multiple values available.
+
+Return true if any values were read, and false otherwise.
+*/
 bool _fcs_ahrs_process_magnetometers(float *restrict output,
 const struct sensor_packet_t *restrict packets) {
     float rv[3], v[3];
@@ -863,7 +909,14 @@ const struct sensor_packet_t *restrict packets) {
         TRICAL_estimate_update(&magnetometer_calibration[i], rv);
         TRICAL_measurement_calibrate(&magnetometer_calibration[i], rv, v);
 
-        if (!read) {
+        if (isnan(v[0]) || isnan(v[1]) || isnan(v[2])) {
+            /*
+            TRICAL has blown up -- reset this instance and ignore the current
+            reading.
+            */
+            TRICAL_reset(&magnetometer_calibration[i]);
+            fcs_global_counters.trical_resets[i]++;
+        } else if (!read) {
             output[0] = v[0];
             output[1] = v[1];
             output[2] = v[2];
@@ -925,6 +978,7 @@ float *restrict v_output, const struct sensor_packet_t *restrict packets) {
         }
     }
 
+    /* Scale the inputs based on the I/O board GPS units */
     p_output[0] *= deg_mul;
     p_output[1] *= deg_mul;
     p_output[2] *= (double)cm_mul;
@@ -936,6 +990,12 @@ float *restrict v_output, const struct sensor_packet_t *restrict packets) {
     return read;
 }
 
+/*
+Apply bias and scale calibration to pitot data from the I/O boards, then
+take the mean of the results if there are multiple values available.
+
+Return true if any values were read, and false otherwise.
+*/
 bool _fcs_ahrs_process_pitots(float *restrict output,
 const struct sensor_packet_t *restrict packets) {
     bool read = false;
@@ -964,6 +1024,13 @@ const struct sensor_packet_t *restrict packets) {
     return read;
 }
 
+/*
+Apply bias and scale calibration to the barometric pressure data from the
+I/O boards, then take the mean of the results if there are multiple values
+available.
+
+Return true if any values were read, and false otherwise.
+*/
 bool _fcs_ahrs_process_barometers(float *restrict output,
 const struct sensor_packet_t *restrict packets) {
     bool read = false;
@@ -992,6 +1059,11 @@ const struct sensor_packet_t *restrict packets) {
     return read;
 }
 
+/*
+Reset the I/O board geometry configuration. The default configuration has
+all sensors located at the centre of mass, and pointing along the +x
+axis (forwards).
+*/
 void _fcs_ahrs_ioboard_reset_geometry(
 struct fcs_ahrs_sensor_geometry_t *restrict geometry) {
     memset(geometry->accel_orientation, 0,
@@ -1010,6 +1082,10 @@ struct fcs_ahrs_sensor_geometry_t *restrict geometry) {
            sizeof(geometry->accel_position));
 }
 
+/*
+Reset the I/O board sensor calibration, including the TRICAL state for
+the magnetometers
+*/
 void _fcs_ahrs_ioboard_reset_calibration(
 struct fcs_ahrs_sensor_calibration_t *restrict calibration) {
     memset(calibration->accel_bias, 0, sizeof(int16_t) * 3);
@@ -1027,10 +1103,16 @@ struct fcs_ahrs_sensor_calibration_t *restrict calibration) {
     calibration->barometer_bias = 0;
     calibration->barometer_scale = 0.02;
 
-    TRICAL_init(&magnetometer_calibration[0]);
-    TRICAL_init(&magnetometer_calibration[1]);
+    TRICAL_reset(&magnetometer_calibration[0]);
+    fcs_global_counters.trical_resets[0]++;
+
+    TRICAL_reset(&magnetometer_calibration[1]);
+    fcs_global_counters.trical_resets[1]++;
 }
 
+/*
+Serialize a control packet containing `control_values` into `buf`.
+*/
 uint32_t _fcs_ahrs_format_control_packet(uint8_t *buf, uint8_t tick,
 const double *restrict control_values) {
     assert(buf);

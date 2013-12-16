@@ -65,6 +65,7 @@ const uint8_t *restrict val, size_t len) {
             rx_write_idx[buffer_idx] % FCS_STREAM_BUFFER_SIZE] = val[i];
         assert(
             !_fcs_stream_check_overrun((enum fcs_stream_device_t)buffer_idx));
+        rx_write_idx[buffer_idx] = rx_write_idx[buffer_idx] & 0xFFu;
     }
 
     return i;
@@ -77,12 +78,13 @@ uint8_t *restrict val, size_t len) {
 
     size_t i;
     #pragma MUST_ITERATE(1,256)
-    for (i = 0; i < len && tx_write_idx[buffer_idx] - tx_read_idx[buffer_idx];
+    for (i = 0; i < len && tx_write_idx[buffer_idx] != tx_read_idx[buffer_idx];
             tx_read_idx[buffer_idx]++, i++) {
         val[i] = tx_buffers[buffer_idx][
             tx_read_idx[buffer_idx] % FCS_STREAM_BUFFER_SIZE];
         assert(
             !_fcs_stream_check_overrun((enum fcs_stream_device_t)buffer_idx));
+        tx_read_idx[buffer_idx] = tx_read_idx[buffer_idx] & 0xFFu;
     }
 
     return i;
@@ -102,22 +104,19 @@ int32_t _fcs_stream_check_overrun(enum fcs_stream_device_t dev) {
         index. This may mean that we don't actually get
         */
         rx_write_idx[dev] = fcs_int_uart_get_rx_edma_count(dev_idx);
-        rx_read_idx[dev] = rx_read_idx[dev] & 0xFFu;
-
         tx_read_idx[dev] = fcs_int_uart_get_tx_edma_count(dev_idx);
-        tx_write_idx[dev] = tx_write_idx[dev] & 0xFFu;
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
         uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
 
         rx_write_idx[dev] = fcs_emif_uart_get_rx_edma_count(dev_idx);
-        rx_read_idx[dev] = rx_read_idx[dev] & 0xFFu;
-
         tx_read_idx[dev] = fcs_emif_uart_get_tx_edma_count(dev_idx);
-        tx_write_idx[dev] = tx_write_idx[dev] & 0xFFu;
     } else {
         assert(false);
     }
 #endif
+
+    rx_read_idx[dev] = rx_read_idx[dev] & 0xFFu;
+    tx_write_idx[dev] = tx_write_idx[dev] & 0xFFu;
 
     /*
     If the write index gets more than 255 values ahead of the read index,
@@ -378,6 +377,8 @@ buffer.
 Returns the number of bytes actually written, in the range [0, nbytes].
 Assuming the caller is writing at a rate lower than the maximum send rate of
 the device, the return value will always be equal to "nbytes".
+
+TODO: support write buffering
 */
 uint32_t fcs_stream_write(enum fcs_stream_device_t dev,
 const uint8_t *restrict buf, uint32_t nbytes) {
@@ -385,40 +386,22 @@ const uint8_t *restrict buf, uint32_t nbytes) {
     assert(nbytes && nbytes < 256u);
     assert(buf);
 
-    /*
-    TODO: this is slightly more complex than it needs to be because it'd be
-    good to support batched writes without waiting for the previous to
-    complete. However, that makes the EDMA3 setup much more complicated, so
-    it's not implemented at the moment -- but this bit of the code does the
-    right thing in terms of buffer overflows.
-    */
-
     /* Reset the stream and abort if there's an overrun. */
     if (_fcs_stream_check_overrun(dev)) {
         return 0;
     }
 
-#ifdef __TI_COMPILER_VERSION__
     /*
     If the previous write hasn't finished, just return zero to indicate no
     bytes have been written for the current request.
     */
-    if (tx_write_idx[dev] - tx_read_idx[dev]) {
+    if (tx_write_idx[dev] != tx_read_idx[dev]) {
         return 0;
     }
-    tx_write_idx[dev] = tx_read_idx[dev] = 0;
-#endif
 
-    uint16_t tx_start_idx = tx_write_idx[dev] & 0xFFu;
-    size_t i;
-    /*
-    254 because there needs to be a 1-byte separation in the circular buffer
-    read/write pointers to detect overflow
-    */
-    for (i = 0; i < nbytes && tx_write_idx[dev] - tx_read_idx[dev] < 254u;
-            tx_write_idx[dev]++, i++) {
-        tx_buffers[dev][tx_write_idx[dev] & 0xFFu] = buf[i];
-    }
+    memcpy(&tx_buffers[dev][0], buf, nbytes);
+    tx_write_idx[dev] = nbytes;
+    tx_read_idx[dev] = 0;
 
     fcs_global_counters.stream_tx_byte[dev] += nbytes;
 
@@ -426,16 +409,14 @@ const uint8_t *restrict buf, uint32_t nbytes) {
     /* Trigger a DMA transfer / copy the number of bytes to the PaRAM */
     if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
         uint8_t dev_idx = dev == FCS_STREAM_UART_INT0 ? 0 : 1;
-        fcs_int_uart_start_tx_edma(
-            dev_idx, &tx_buffers[dev][tx_start_idx], nbytes);
+        fcs_int_uart_start_tx_edma(dev_idx, &tx_buffers[dev][0], nbytes);
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
         uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
-        fcs_emif_uart_start_tx_edma(
-            dev_idx, &tx_buffers[dev][tx_start_idx], nbytes);
+        fcs_emif_uart_start_tx_edma(dev_idx, &tx_buffers[dev][0], nbytes);
     } else {
         assert(false);
     }
 #endif
 
-    return i;
+    return nbytes;
 }

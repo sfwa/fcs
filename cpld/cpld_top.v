@@ -136,7 +136,7 @@ module cpld_top(
 assign dsp_i2c_1v8_scl = 1'bz;
 assign dsp_i2c_1v8_sda = 1'bz;
 assign cpu_gpio[23:0] = 24'bz;
-assign dsp_usb_reset_INV = 1'b0;
+assign dsp_usb_reset_INV = 1'b1;
 assign dsp_ext_uart_en = 1'b1;
 assign cpu_bootmode = 6'b000101; /*6'b101001 for eMMC, 6'b000101 for MicroSD*/
 

@@ -38,26 +38,18 @@ Reads bottom-to-top. Write config registers, wait a while, trigger a
 calibration, then wait a bit longer
 */
 wire[511:0] data_out = {
-    32'h00000000, 4'd0,
-    32'h610233f2, 4'd0,
-    32'h600233f2, 4'd0,
-    32'h610233f2, 4'd0,
-    32'h00000000, 4'd0,
-    32'h00000000, 4'd0,
-    32'h00000000, 4'd0,
+    32'h61023bf2, 4'd0,
+    32'h60023bf2, 4'd0,
+    32'h61023bf2, 4'd0,
     32'h00000000, 4'd0,
     32'hb7870061, 4'd0,
     32'h54200080, 8'd0
 };
 
 wire[511:0] le_out  = {
-    32'h00000000, 4'd0,
     32'hffffffff, 4'd0,
     32'hffffffff, 4'd0,
     32'hffffffff, 4'd0,
-    32'h00000000, 4'd0,
-    32'h00000000, 4'd0,
-    32'h00000000, 4'd0,
     32'h00000000, 4'd0,
     32'hffffffff, 4'd0,
     32'hffffffff, 8'd0
