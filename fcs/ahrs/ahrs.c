@@ -251,9 +251,9 @@ void fcs_ahrs_init(void) {
     ensure we get a clean start.
     */
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 921600) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 1500000u) == FCS_STREAM_OK);
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 921600) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 1500000u) == FCS_STREAM_OK);
     ioboard_timeout[0] = ioboard_timeout[1] = 0;
 
     /* Set up global state */
