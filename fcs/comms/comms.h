@@ -151,6 +151,81 @@ struct fcs_packet_config_t {
     uint32_t crc32;
 };
 
+/*
+Binary log packet (all multi-byte values are LE):
+1 byte type
+2 bytes reserved (0)
+2 bytes frame index
+... (sensor readings)
+2 bytes CRC16
+
+Sensor reading:
+1 byte reading header
+1 byte reading type
+
+Reading header:
+7:4 = reserved (0s)
+3:0 = length in bytes
+
+Reading type:
+7:5 = sensor ID (0-3, 4+ reserved)
+4:0 = sensor type (0 = accel, 1 = gyro, 2 = mag, 3 = pitot, 4 = pressure/temp,
+                   5 = rangefinder, 6 = current/voltage, 7 = gps position,
+                   8 = gps velocity, 9 = gps info, 10 - 31 reserved)
+
+
+Max usage:
+1 type
+1 reserved (0)
+2 index
+8 accel 1 x, y, z
+8 accel 2 x, y, z
+8 gyro 1 x, y, z
+8 gyro 2 x, y, z
+6 pressure/temp 1
+6 pressure/temp 2
+4 pitot 1
+4 pitot 2
+4 range 1
+4 range 2
+8 magnetometer 1 x, y, z
+8 magnetometer 2 x, y, z
+14 gps pos 1 lat, lon, alt
+8 gps velocity 1 n, e, d
+4 gps fix mode, num SVs, error
+2 bytes CRC16
+
+Total: 108 + COBS-R + NUL + NUL = 111
+
+(Also need to report i/v 1 and i/v 2, but maybe average these?)
+*/
+struct fcs_packet_log_t {
+    uint8_t buf[256u];
+    size_t len;
+};
+
+enum fcs_sensor_type_t {
+    FCS_SENSOR_TYPE_ACCELEROMETER,
+    FCS_SENSOR_TYPE_GYROSCOPE,
+    FCS_SENSOR_TYPE_MAGNETOMETER,
+    FCS_SENSOR_TYPE_PITOT,
+    FCS_SENSOR_TYPE_PRESSURE_TEMP,
+    FCS_SENSOR_TYPE_RANGEFINDER,
+    FCS_SENSOR_TYPE_IV,
+    FCS_SENSOR_TYPE_GPS_POSITION,
+    FCS_SENSOR_TYPE_GPS_VELOCITY,
+    FCS_SENSOR_TYPE_GPS_INFO,
+    FCS_SENSOR_TYPE_MESSAGE,
+    FCS_SENSOR_TYPE_LAST
+};
+
+#define FCS_SENSOR_ID_MAX 3u
+#define FCS_SENSOR_LEN_MAX 15u
+
+/* TODO: if there are other binary/log packet types, this should be an enum */
+#define FCS_PACKET_LOG_TYPE 1u
+
+/* Init functions for comms module */
 void fcs_comms_init(void);
 void fcs_comms_tick(void);
 
@@ -205,5 +280,27 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len);
 
 enum fcs_validation_result_t fcs_comms_validate_gcs(
 const struct fcs_packet_gcs_t *restrict gcs);
+
+/* Binary log packets -- used to send raw sensor and state data at 1000Hz */
+
+/* Initialize a log packet with a packet index of `frame_id` */
+void fcs_comms_init_log(struct fcs_packet_log_t *log_rec, uint16_t frame_id);
+
+/*
+Serialize and add COBS-R + framing to log packet, and copy the result to
+`out_buf`. Returns the length of the serialized data.
+
+Modifies `log_rec` to include a CRC16SBP.
+*/
+size_t fcs_comms_serialize_log(uint8_t *restrict out_buf, size_t out_buf_len,
+struct fcs_packet_log_t *log_rec);
+
+/*
+Add a sensor value entry to a log packet. Returns true if the sensor value
+could be added, or false if it couldn't.
+*/
+bool fcs_comms_add_log_sensor_value(struct fcs_packet_log_t *log_rec,
+enum fcs_sensor_type_t sensor_type, uint8_t sensor_id,
+const uint8_t *restrict sensor_val, size_t sensor_val_len);
 
 #endif

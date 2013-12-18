@@ -52,6 +52,11 @@ ADD_EXECUTABLE(unittest
     ../util/util.c
     test_util.cpp
     ../comms/comms.c
+    ../comms/config.c
+    ../comms/gcs.c
+    ../comms/log.c
+    ../comms/state.c
+    ../comms/waypoint.c
     test_comms.cpp
     ../drivers/stream.c
     test_stream.cpp

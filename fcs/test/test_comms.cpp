@@ -782,3 +782,164 @@ TEST(CommsIO, ReadPacketAfterPacket) {
     buf[len] = 0;
     ASSERT_STREQ((char*)s, (char*)buf);
 }
+
+TEST(CommsLog, InitPacket) {
+    struct fcs_packet_log_t packet;
+    fcs_comms_init_log(&packet, 1234u);
+    EXPECT_EQ(FCS_PACKET_LOG_TYPE, packet.buf[0]);
+    EXPECT_EQ(0, packet.buf[1u]);
+    EXPECT_EQ(0, packet.buf[2u]);
+    EXPECT_EQ(1234u, (packet.buf[4u] << 8u) + packet.buf[3u]);
+    EXPECT_EQ(5u, packet.len);
+}
+
+TEST(CommsLog, InitPacketMissing) {
+    EXPECT_DEATH({ fcs_comms_init_log(NULL, 1234u); }, "Assertion.*failed");
+}
+
+TEST(CommsLog, AddSensorSingle) {
+    struct fcs_packet_log_t packet;
+    fcs_comms_init_log(&packet, 1u);
+
+    int16_t value = 1234;
+    bool result;
+    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
+                                            1u, (uint8_t*)&value,
+                                            sizeof(value));
+    EXPECT_EQ(true, result);
+    EXPECT_EQ(0x02u, packet.buf[5u]);
+    EXPECT_EQ(0x23u, packet.buf[6u]);
+    EXPECT_EQ(1234, (int16_t)((packet.buf[8u] << 8u) + packet.buf[7u]));
+}
+
+TEST(CommsLog, AddSensorMultiple) {
+    struct fcs_packet_log_t packet;
+    fcs_comms_init_log(&packet, 1u);
+
+    int16_t value1 = 1234, value2[3] = { 0, 1, -1 };
+    bool result;
+    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
+                                            1u, (uint8_t*)&value1,
+                                            sizeof(value1));
+    ASSERT_EQ(true, result);
+
+    result = fcs_comms_add_log_sensor_value(&packet,
+                                            FCS_SENSOR_TYPE_ACCELEROMETER,
+                                            0, (uint8_t*)&value2,
+                                            sizeof(value2));
+    ASSERT_EQ(true, result);
+
+    EXPECT_EQ(0x02u, packet.buf[5u]);
+    EXPECT_EQ(0x23u, packet.buf[6u]);
+    EXPECT_EQ(1234, (int16_t)((packet.buf[8u] << 8u) + packet.buf[7u]));
+
+    EXPECT_EQ(0x06u, packet.buf[9u]);
+    EXPECT_EQ(0, packet.buf[10u]);
+    EXPECT_EQ(0, (int16_t)((packet.buf[12u] << 8u) + packet.buf[11u]));
+    EXPECT_EQ(1, (int16_t)((packet.buf[14u] << 8u) + packet.buf[13u]));
+    EXPECT_EQ(-1, (int16_t)((packet.buf[16u] << 8u) + packet.buf[15u]));
+}
+
+TEST(CommsLog, AddSensorTooMany) {
+    struct fcs_packet_log_t packet;
+    fcs_comms_init_log(&packet, 1u);
+
+    int16_t value[7];
+    bool result;
+    uint8_t i;
+
+    for (i = 0; i < 15; i++) {
+        result = fcs_comms_add_log_sensor_value(&packet,
+                                            FCS_SENSOR_TYPE_PITOT, 1u,
+                                            (uint8_t*)&value, sizeof(value));
+        EXPECT_EQ(true, result);
+    }
+
+    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
+                                            1u, (uint8_t*)&value,
+                                            sizeof(value));
+    EXPECT_EQ(false, result);
+}
+
+TEST(CommsLog, AddSensorInvalidType) {
+    EXPECT_DEATH({
+        struct fcs_packet_log_t packet;
+        fcs_comms_init_log(&packet, 1u);
+
+        int16_t value = 1234;
+        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_LAST, 0,
+                                       (uint8_t*)&value, sizeof(value));
+    }, "Assertion.*failed");
+}
+
+TEST(CommsLog, AddSensorTooLong) {
+    EXPECT_DEATH({
+        struct fcs_packet_log_t packet;
+        fcs_comms_init_log(&packet, 1u);
+
+        int16_t value[30];
+        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 0,
+                                       (uint8_t*)&value, sizeof(value));
+    }, "Assertion.*failed");
+}
+
+TEST(CommsLog, AddSensorInvalidID) {
+    EXPECT_DEATH({
+        struct fcs_packet_log_t packet;
+        fcs_comms_init_log(&packet, 1u);
+
+        int16_t value = 1234;
+        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 15,
+                                       (uint8_t*)&value, sizeof(value));
+    }, "Assertion.*failed");
+}
+
+TEST(CommsLog, AddSensorNoLength) {
+    EXPECT_DEATH({
+        struct fcs_packet_log_t packet;
+        fcs_comms_init_log(&packet, 1u);
+
+        int16_t value = 1234;
+        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 0,
+                                       (uint8_t*)&value, 0);
+    }, "Assertion.*failed");
+}
+
+TEST(CommsLog, AddSensorNoData) {
+    EXPECT_DEATH({
+        struct fcs_packet_log_t packet;
+        fcs_comms_init_log(&packet, 1u);
+
+        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 0,
+                                      NULL, 2u);
+    }, "Assertion.*failed");
+}
+
+TEST(CommsLog, SerializePacket) {
+    struct fcs_packet_log_t packet;
+    fcs_comms_init_log(&packet, 1u);
+
+    int16_t value1 = 1234, value2[3] = { 0, 1, -1 };
+    bool result;
+    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
+                                            1u, (uint8_t*)&value1,
+                                            sizeof(value1));
+    ASSERT_EQ(true, result);
+
+    result = fcs_comms_add_log_sensor_value(&packet,
+                                            FCS_SENSOR_TYPE_ACCELEROMETER,
+                                            0, (uint8_t*)&value2,
+                                            sizeof(value2));
+    ASSERT_EQ(true, result);
+
+    uint8_t out_buf[256u];
+    size_t len;
+    len = fcs_comms_serialize_log(out_buf, sizeof(out_buf), &packet);
+    EXPECT_EQ(21u, len);
+    EXPECT_EQ(0, out_buf[0]);
+    EXPECT_EQ(0, out_buf[len + 1u]);
+    EXPECT_STREQ(
+        "\x2\x1\x1\x2\x1\x6\x2#\xD2\x4\x6\x1\x1\x2\x1\xD3\xFF\xFF\xA8",
+        (char*)&out_buf[1u]);
+}
+
