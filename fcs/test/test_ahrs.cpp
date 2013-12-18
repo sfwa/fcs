@@ -48,17 +48,18 @@ double *restrict covariance);
 bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
 struct sensor_packet_t *dest);
 bool _fcs_ahrs_process_accelerometers(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_gyroscopes(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_magnetometers(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_gps(double *restrict p_output,
-float *restrict v_output, const struct sensor_packet_t *restrict packets);
+float *restrict v_output, const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_pitots(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_barometers(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 void _fcs_ahrs_ioboard_reset_geometry(
 struct fcs_ahrs_sensor_geometry_t *restrict geometry);
 void _fcs_ahrs_ioboard_reset_calibration(
@@ -393,14 +394,17 @@ TEST(AHRSMath, ProcessAccelDataPacketsNone) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* No data available -- should return false */
     memset(output, 0, sizeof(output));
     packets[0].sensor_update_flags = 0;
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_accelerometers(output, packets);
+    result = _fcs_ahrs_process_accelerometers(output, packets, &log_packet);
     EXPECT_FALSE(result);
+    EXPECT_EQ(5u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessAccelDataPackets0) {
@@ -409,6 +413,8 @@ TEST(AHRSMath, ProcessAccelDataPackets0) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 0 has data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -418,11 +424,12 @@ TEST(AHRSMath, ProcessAccelDataPackets0) {
 
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_accelerometers(output, packets);
+    result = _fcs_ahrs_process_accelerometers(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(1234.0 / ACCEL_SENSITIVITY, output[0]);
     EXPECT_FLOAT_EQ(5678.0 / ACCEL_SENSITIVITY, output[1]);
     EXPECT_FLOAT_EQ(9012.0 / ACCEL_SENSITIVITY, output[2]);
+    EXPECT_EQ(13u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessAccelDataPackets1) {
@@ -431,6 +438,8 @@ TEST(AHRSMath, ProcessAccelDataPackets1) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 1 has data available */
     packets[0].sensor_update_flags = 0;
@@ -440,11 +449,12 @@ TEST(AHRSMath, ProcessAccelDataPackets1) {
     packets[1].accel.y = 5678;
     packets[1].accel.z = 9012;
 
-    result = _fcs_ahrs_process_accelerometers(output, packets);
+    result = _fcs_ahrs_process_accelerometers(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(1234.0 / ACCEL_SENSITIVITY, output[0]);
     EXPECT_FLOAT_EQ(5678.0 / ACCEL_SENSITIVITY, output[1]);
     EXPECT_FLOAT_EQ(9012.0 / ACCEL_SENSITIVITY, output[2]);
+    EXPECT_EQ(13u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessAccelDataPacketsBoth) {
@@ -453,6 +463,8 @@ TEST(AHRSMath, ProcessAccelDataPacketsBoth) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Both packets have data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -465,11 +477,12 @@ TEST(AHRSMath, ProcessAccelDataPacketsBoth) {
     packets[1].accel.y = 5678;
     packets[1].accel.z = 9012;
 
-    result = _fcs_ahrs_process_accelerometers(output, packets);
+    result = _fcs_ahrs_process_accelerometers(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(5123.0 / ACCEL_SENSITIVITY, output[0]);
     EXPECT_FLOAT_EQ(5678.0 / ACCEL_SENSITIVITY, output[1]);
     EXPECT_FLOAT_EQ(5123.0 / ACCEL_SENSITIVITY, output[2]);
+    EXPECT_EQ(21u, log_packet.len);
 
     /* TODO: check orientation / bias support */
 }
@@ -480,13 +493,16 @@ TEST(AHRSMath, ProcessGyroDataPacketsNone) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* No data available -- should return false */
     packets[0].sensor_update_flags = 0;
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_gyroscopes(output, packets);
+    result = _fcs_ahrs_process_gyroscopes(output, packets, &log_packet);
     EXPECT_FALSE(result);
+    EXPECT_EQ(5u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessGyroDataPackets0) {
@@ -495,6 +511,8 @@ TEST(AHRSMath, ProcessGyroDataPackets0) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 0 has data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -504,11 +522,12 @@ TEST(AHRSMath, ProcessGyroDataPackets0) {
 
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_gyroscopes(output, packets);
+    result = _fcs_ahrs_process_gyroscopes(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(1.0 / GYRO_SENSITIVITY, output[0]);
     EXPECT_FLOAT_EQ(2.0 / GYRO_SENSITIVITY, output[1]);
     EXPECT_FLOAT_EQ(3.0 / GYRO_SENSITIVITY, output[2]);
+    EXPECT_EQ(13u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessGyroDataPackets1) {
@@ -517,6 +536,8 @@ TEST(AHRSMath, ProcessGyroDataPackets1) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 1 has data available */
     packets[0].sensor_update_flags = 0;
@@ -526,11 +547,12 @@ TEST(AHRSMath, ProcessGyroDataPackets1) {
     packets[1].gyro.y = 5;
     packets[1].gyro.z = 6;
 
-    result = _fcs_ahrs_process_gyroscopes(output, packets);
+    result = _fcs_ahrs_process_gyroscopes(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(4.0 / GYRO_SENSITIVITY, output[0]);
     EXPECT_FLOAT_EQ(5.0 / GYRO_SENSITIVITY, output[1]);
     EXPECT_FLOAT_EQ(6.0 / GYRO_SENSITIVITY, output[2]);
+    EXPECT_EQ(13u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessGyroDataPacketsBoth) {
@@ -539,6 +561,8 @@ TEST(AHRSMath, ProcessGyroDataPacketsBoth) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Both packets have data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -551,11 +575,12 @@ TEST(AHRSMath, ProcessGyroDataPacketsBoth) {
     packets[1].gyro.y = 5;
     packets[1].gyro.z = 6;
 
-    result = _fcs_ahrs_process_gyroscopes(output, packets);
+    result = _fcs_ahrs_process_gyroscopes(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(2.5 / GYRO_SENSITIVITY, output[0]);
     EXPECT_FLOAT_EQ(3.5 / GYRO_SENSITIVITY, output[1]);
     EXPECT_FLOAT_EQ(4.5 / GYRO_SENSITIVITY, output[2]);
+    EXPECT_EQ(21u, log_packet.len);
 
     /* TODO: check orientation support */
 }
@@ -566,13 +591,16 @@ TEST(AHRSMath, ProcessMagDataPacketsNone) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* No data available -- should return false */
     packets[0].sensor_update_flags = 0;
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_magnetometers(output, packets);
+    result = _fcs_ahrs_process_magnetometers(output, packets, &log_packet);
     EXPECT_FALSE(result);
+    EXPECT_EQ(5u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessMagDataPackets0) {
@@ -581,6 +609,8 @@ TEST(AHRSMath, ProcessMagDataPackets0) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 0 has data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -590,11 +620,12 @@ TEST(AHRSMath, ProcessMagDataPackets0) {
 
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_magnetometers(output, packets);
+    result = _fcs_ahrs_process_magnetometers(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_NEAR(123.0 / MAG_SENSITIVITY, output[0], 2e-3);
     EXPECT_NEAR(234.0 / MAG_SENSITIVITY, output[1], 2e-3);
     EXPECT_NEAR(345.0 / MAG_SENSITIVITY, output[2], 2e-3);
+    EXPECT_EQ(13u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessMagDataPackets1) {
@@ -603,6 +634,8 @@ TEST(AHRSMath, ProcessMagDataPackets1) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 1 has data available */
     packets[0].sensor_update_flags = 0;
@@ -612,11 +645,12 @@ TEST(AHRSMath, ProcessMagDataPackets1) {
     packets[1].mag.y = 567;
     packets[1].mag.z = 678;
 
-    result = _fcs_ahrs_process_magnetometers(output, packets);
+    result = _fcs_ahrs_process_magnetometers(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_NEAR(456.0 / MAG_SENSITIVITY, output[0], 5e-3);
     EXPECT_NEAR(567.0 / MAG_SENSITIVITY, output[1], 5e-3);
     EXPECT_NEAR(678.0 / MAG_SENSITIVITY, output[2], 5e-3);
+    EXPECT_EQ(13u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessMagDataPacketsBoth) {
@@ -625,6 +659,8 @@ TEST(AHRSMath, ProcessMagDataPacketsBoth) {
     bool result;
     struct sensor_packet_t packets[2];
     float output[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Both packets have data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -637,11 +673,12 @@ TEST(AHRSMath, ProcessMagDataPacketsBoth) {
     packets[1].mag.y = 567;
     packets[1].mag.z = 678;
 
-    result = _fcs_ahrs_process_magnetometers(output, packets);
+    result = _fcs_ahrs_process_magnetometers(output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_NEAR(289.5 / MAG_SENSITIVITY, output[0], 3e-3);
     EXPECT_NEAR(400.5 / MAG_SENSITIVITY, output[1], 3e-3);
     EXPECT_NEAR(511.5 / MAG_SENSITIVITY, output[2], 3e-3);
+    EXPECT_EQ(21u, log_packet.len);
 
     /* TODO: check bias and calibration support */
 }
@@ -653,13 +690,16 @@ TEST(AHRSMath, ProcessGPSDataPacketsNone) {
     struct sensor_packet_t packets[2];
     float velocity[3];
     double position[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* No data available -- should return false */
     packets[0].sensor_update_flags = 0;
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_gps(position, velocity, packets);
+    result = _fcs_ahrs_process_gps(position, velocity, packets, &log_packet);
     EXPECT_FALSE(result);
+    EXPECT_EQ(5u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessGPSDataPackets0) {
@@ -669,6 +709,8 @@ TEST(AHRSMath, ProcessGPSDataPackets0) {
     struct sensor_packet_t packets[2];
     float velocity[3];
     double position[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 0 has data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -681,7 +723,7 @@ TEST(AHRSMath, ProcessGPSDataPackets0) {
 
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_gps(position, velocity, packets);
+    result = _fcs_ahrs_process_gps(position, velocity, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(0.1 * M_PI / 180.0, position[0]);
     EXPECT_FLOAT_EQ(0.2 * M_PI / 180.0, position[1]);
@@ -689,6 +731,7 @@ TEST(AHRSMath, ProcessGPSDataPackets0) {
     EXPECT_FLOAT_EQ(123.0 * 1e-2, velocity[0]);
     EXPECT_FLOAT_EQ(234.0 * 1e-2, velocity[1]);
     EXPECT_FLOAT_EQ(345.0 * 1e-2, velocity[2]);
+    EXPECT_EQ(27u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessGPSDataPackets1) {
@@ -698,6 +741,8 @@ TEST(AHRSMath, ProcessGPSDataPackets1) {
     struct sensor_packet_t packets[2];
     float velocity[3];
     double position[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 1 has data available */
     packets[0].sensor_update_flags = 0;
@@ -710,7 +755,7 @@ TEST(AHRSMath, ProcessGPSDataPackets1) {
     packets[1].gps.velocity.e = 567;
     packets[1].gps.velocity.d = 678;
 
-    result = _fcs_ahrs_process_gps(position, velocity, packets);
+    result = _fcs_ahrs_process_gps(position, velocity, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(0.2 * M_PI / 180.0, position[0]);
     EXPECT_FLOAT_EQ(0.3 * M_PI / 180.0, position[1]);
@@ -718,6 +763,7 @@ TEST(AHRSMath, ProcessGPSDataPackets1) {
     EXPECT_FLOAT_EQ(456.0 * 1e-2, velocity[0]);
     EXPECT_FLOAT_EQ(567.0 * 1e-2, velocity[1]);
     EXPECT_FLOAT_EQ(678.0 * 1e-2, velocity[2]);
+    EXPECT_EQ(27u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessGPSDataPacketsBoth) {
@@ -727,6 +773,8 @@ TEST(AHRSMath, ProcessGPSDataPacketsBoth) {
     struct sensor_packet_t packets[2];
     float velocity[3];
     double position[3];
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Both packets have data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -745,7 +793,7 @@ TEST(AHRSMath, ProcessGPSDataPacketsBoth) {
     packets[1].gps.velocity.e = 567;
     packets[1].gps.velocity.d = 678;
 
-    result = _fcs_ahrs_process_gps(position, velocity, packets);
+    result = _fcs_ahrs_process_gps(position, velocity, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(0.15 * M_PI / 180.0, position[0]);
     EXPECT_FLOAT_EQ(0.25 * M_PI / 180.0, position[1]);
@@ -753,6 +801,7 @@ TEST(AHRSMath, ProcessGPSDataPacketsBoth) {
     EXPECT_FLOAT_EQ(289.5 * 1e-2, velocity[0]);
     EXPECT_FLOAT_EQ(400.5 * 1e-2, velocity[1]);
     EXPECT_FLOAT_EQ(511.5 * 1e-2, velocity[2]);
+    EXPECT_EQ(49u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessPitotDataPacketsNone) {
@@ -761,13 +810,16 @@ TEST(AHRSMath, ProcessPitotDataPacketsNone) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* No data available -- should return false */
     packets[0].sensor_update_flags = 0;
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_pitots(&output, packets);
+    result = _fcs_ahrs_process_pitots(&output, packets, &log_packet);
     EXPECT_FALSE(result);
+    EXPECT_EQ(5u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessPitotDataPackets0) {
@@ -776,6 +828,8 @@ TEST(AHRSMath, ProcessPitotDataPackets0) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 0 has data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -783,9 +837,10 @@ TEST(AHRSMath, ProcessPitotDataPackets0) {
 
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_pitots(&output, packets);
+    result = _fcs_ahrs_process_pitots(&output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(123.0 / 65535.0, output);
+    EXPECT_EQ(9u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessPitotDataPackets1) {
@@ -794,6 +849,8 @@ TEST(AHRSMath, ProcessPitotDataPackets1) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 1 has data available */
     packets[0].sensor_update_flags = 0;
@@ -801,9 +858,10 @@ TEST(AHRSMath, ProcessPitotDataPackets1) {
     packets[1].sensor_update_flags = 0xFFu;
     packets[1].pitot = 456;
 
-    result = _fcs_ahrs_process_pitots(&output, packets);
+    result = _fcs_ahrs_process_pitots(&output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(456.0 / 65535.0, output);
+    EXPECT_EQ(9u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessPitotDataPacketsBoth) {
@@ -812,6 +870,8 @@ TEST(AHRSMath, ProcessPitotDataPacketsBoth) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Both packets have data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -820,9 +880,10 @@ TEST(AHRSMath, ProcessPitotDataPacketsBoth) {
     packets[1].sensor_update_flags = 0xFFu;
     packets[1].pitot = 456;
 
-    result = _fcs_ahrs_process_pitots(&output, packets);
+    result = _fcs_ahrs_process_pitots(&output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(289.5 / 65535.0, output);
+    EXPECT_EQ(13u, log_packet.len);
 
     /* TODO: check bias support */
 }
@@ -833,13 +894,16 @@ TEST(AHRSMath, ProcessBarometerDataPacketsNone) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* No data available -- should return false */
     packets[0].sensor_update_flags = 0;
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_barometers(&output, packets);
+    result = _fcs_ahrs_process_barometers(&output, packets, &log_packet);
     EXPECT_FALSE(result);
+    EXPECT_EQ(5u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessBarometerDataPackets0) {
@@ -848,6 +912,8 @@ TEST(AHRSMath, ProcessBarometerDataPackets0) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 0 has data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -855,9 +921,10 @@ TEST(AHRSMath, ProcessBarometerDataPackets0) {
 
     packets[1].sensor_update_flags = 0;
 
-    result = _fcs_ahrs_process_barometers(&output, packets);
+    result = _fcs_ahrs_process_barometers(&output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(123.0 * 0.02, output);
+    EXPECT_EQ(11u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessBarometerDataPackets1) {
@@ -866,6 +933,8 @@ TEST(AHRSMath, ProcessBarometerDataPackets1) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Packet 1 has data available */
     packets[0].sensor_update_flags = 0;
@@ -873,9 +942,10 @@ TEST(AHRSMath, ProcessBarometerDataPackets1) {
     packets[1].sensor_update_flags = 0xFFu;
     packets[1].pressure = 456;
 
-    result = _fcs_ahrs_process_barometers(&output, packets);
+    result = _fcs_ahrs_process_barometers(&output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(456.0 * 0.02, output);
+    EXPECT_EQ(11u, log_packet.len);
 }
 
 TEST(AHRSMath, ProcessBarometerDataPacketsBoth) {
@@ -884,6 +954,8 @@ TEST(AHRSMath, ProcessBarometerDataPacketsBoth) {
     bool result;
     struct sensor_packet_t packets[2];
     float output;
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, 1u);
 
     /* Both packets have data available */
     packets[0].sensor_update_flags = 0xFFu;
@@ -892,9 +964,10 @@ TEST(AHRSMath, ProcessBarometerDataPacketsBoth) {
     packets[1].sensor_update_flags = 0xFFu;
     packets[1].pressure = 456;
 
-    result = _fcs_ahrs_process_barometers(&output, packets);
+    result = _fcs_ahrs_process_barometers(&output, packets, &log_packet);
     EXPECT_TRUE(result);
     EXPECT_FLOAT_EQ(289.5 * 0.02, output);
+    EXPECT_EQ(17u, log_packet.len);
 
     /* TODO: check bias support */
 }

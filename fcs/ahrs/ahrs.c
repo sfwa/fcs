@@ -173,14 +173,20 @@ static TRICAL_instance_t magnetometer_calibration[2];
 /*
 Track the "actual" control position -- NMPC outputs desired position but
 we limit the rate at which that can change to the relevant control_rate
-value
+value.
+
+The control_scale value is the magnitude of the maximum control input.
 */
 static double control_rate[4];
 static double control_pos[4];
+static double control_scale[4];
 
 /* Latest I/O board state packets */
 static struct sensor_packet_t ioboard[2];
 static int16_t ioboard_timeout[2];
+
+/* Log packet tick count -- used by the CPU to detect missing log packets */
+static uint16_t log_tick;
 
 #define FCS_IOBOARD_RESET_TIMEOUT 50
 #define FCS_IOBOARD_PACKET_TIMEOUT 5
@@ -220,17 +226,18 @@ double *restrict covariance);
 bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
 struct sensor_packet_t *dest);
 bool _fcs_ahrs_process_accelerometers(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_gyroscopes(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_magnetometers(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_gps(double *restrict p_output,
-float *restrict v_output, const struct sensor_packet_t *restrict packets);
+float *restrict v_output, const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_pitots(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 bool _fcs_ahrs_process_barometers(float *restrict output,
-const struct sensor_packet_t *restrict packets);
+const struct sensor_packet_t *restrict packets, struct fcs_packet_log_t *log);
 void _fcs_ahrs_ioboard_reset_geometry(
 struct fcs_ahrs_sensor_geometry_t *restrict geometry);
 void _fcs_ahrs_ioboard_reset_calibration(
@@ -251,10 +258,11 @@ void fcs_ahrs_init(void) {
     ensure we get a clean start.
     */
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 1500000u) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 3000000u) == FCS_STREAM_OK);
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 1500000u) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 3000000u) == FCS_STREAM_OK);
     ioboard_timeout[0] = ioboard_timeout[1] = 0;
+    log_tick = 0;
 
     /* Set up global state */
     memset(&fcs_global_state, 0, sizeof(fcs_global_state));
@@ -478,6 +486,9 @@ void fcs_ahrs_tick(void) {
 #endif
     }
 
+    struct fcs_packet_log_t log_packet;
+    fcs_comms_init_log(&log_packet, log_tick++);
+
     /*
     Read sensor data from latest I/O board packets, and convert to UKF
     input format/units. These procedures combine multiple simultaneous sensor
@@ -489,19 +500,19 @@ void fcs_ahrs_tick(void) {
 
     ukf_sensor_clear();
 
-    if (_fcs_ahrs_process_accelerometers(v, ioboard)) {
+    if (_fcs_ahrs_process_accelerometers(v, ioboard, &log_packet)) {
         ukf_sensor_set_accelerometer(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_gyroscopes(v, ioboard)) {
+    if (_fcs_ahrs_process_gyroscopes(v, ioboard, &log_packet)) {
         ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_magnetometers(v, ioboard)) {
+    if (_fcs_ahrs_process_magnetometers(v, ioboard, &log_packet)) {
         ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
     }
-    if (_fcs_ahrs_process_pitots(v, ioboard)) {
+    if (_fcs_ahrs_process_pitots(v, ioboard, &log_packet)) {
         ukf_sensor_set_pitot_tas(v[0]);
     }
-    if (_fcs_ahrs_process_barometers(v, ioboard)) {
+    if (_fcs_ahrs_process_barometers(v, ioboard, &log_packet)) {
         ukf_sensor_set_barometer_amsl(v[0]);
     }
 
@@ -517,7 +528,7 @@ void fcs_ahrs_tick(void) {
                                     fcs_global_piksi_solution.velocity[2]);
 
         /* TODO: update sensor covariance for GPS based on Piksi status */
-    } else if (_fcs_ahrs_process_gps(p, v, ioboard)) {
+    } else if (_fcs_ahrs_process_gps(p, v, ioboard, &log_packet)) {
         ukf_sensor_set_gps_position(p[0], p[1], p[2]);
         ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
 
@@ -526,24 +537,12 @@ void fcs_ahrs_tick(void) {
 
     /* TODO: Read control set values from NMPC */
     double control_set[4] = { 0.0, 0.0, 0.0, 0.0 };
-    uint8_t i;
-
-    /*
-    Work out the nominal current control position, taking into account the
-    control response time configured in control_rates.
-    */
-    #pragma MUST_ITERATE(4, 4)
-    for (i = 0; i < 4; i++) {
-        double delta = control_set[i] - control_pos[i],
-               limit = control_rate[i] * AHRS_DELTA;
-        control_pos[i] += limitabs(delta, limit);
-    }
 
     /*
     Write current control values to I/O boards -- the CPLD replicates the I/O
     board output stream so we only need to write to one.
     */
-    uint32_t control_len;
+    size_t control_len;
     uint8_t control_buf[16];
     control_len = _fcs_ahrs_format_control_packet(
         control_buf,
@@ -551,14 +550,44 @@ void fcs_ahrs_tick(void) {
         control_set
     );
     assert(control_len < 16);
-
     fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
-    fcs_stream_write(FCS_STREAM_UART_INT1, control_buf, control_len);
 
+    /* Increment transmit counters */
     fcs_global_counters.ioboard_packet_tx[0]++;
     fcs_global_counters.ioboard_packet_tx[1]++;
 
-    /* Run the UKF */
+    /*
+    Work out the nominal current control position, taking into account the
+    control response time configured in control_rates. Log the result.
+    */
+    uint8_t i;
+    int16_t control_pos_log[4];
+    #pragma MUST_ITERATE(4, 4)
+    for (i = 0; i < 4; i++) {
+        double delta = control_set[i] - control_pos[i],
+               limit = control_rate[i] * AHRS_DELTA;
+        control_pos[i] += limitabs(delta, limit);
+        control_pos_log[i] = (int16_t)(control_pos[i] / control_scale[i] *
+                                       INT16_MAX);
+    }
+
+    fcs_comms_add_log_sensor_value(&log_packet, FCS_SENSOR_TYPE_CONTROL_POS,
+                                   0, (uint8_t*)control_pos_log,
+                                   sizeof(control_pos_log));
+
+    /*
+    Write the log values to stream 1 -- the CPLD will route this to the CPU
+    UART
+    */
+    size_t log_len;
+    uint8_t log_buf[256];
+    log_len = fcs_comms_serialize_log(log_buf, sizeof(log_buf), &log_packet);
+    fcs_stream_write(FCS_STREAM_UART_INT1, log_buf, log_len);
+
+    /*
+    Run the UKF, taking sensor readings and current control position into
+    account
+    */
     ukf_iterate(AHRS_DELTA, control_pos);
 
     /* Write current state to global state store */
@@ -812,7 +841,10 @@ are available, they are averaged after scaling.
 Return true if any values were read, and false otherwise.
 */
 bool _fcs_ahrs_process_accelerometers(float *restrict output,
-const struct sensor_packet_t *restrict packets) {
+const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log_rec) {
+    assert(output && packets && log_rec);
+
     float rv[3], v[3];
     uint8_t i;
     bool read = false;
@@ -821,6 +853,12 @@ const struct sensor_packet_t *restrict packets) {
         if (!(packets[i].sensor_update_flags & UPDATED_ACCEL)) {
             continue;
         }
+
+        /* Log sensor values */
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_ACCELEROMETER, i,
+            (uint8_t*)&packets[i].accel, sizeof(packets[i].accel)
+        );
 
         v[0] = ((float)packets[i].accel.x -
                 (float)ioboard_calibration[i].accel_bias[0]) *
@@ -863,7 +901,10 @@ Gyro bias estimation and compensation is handled by the AHRS UKF itself.
 Return true if any values were read, and false otherwise.
 */
 bool _fcs_ahrs_process_gyroscopes(float *restrict output,
-const struct sensor_packet_t *restrict packets) {
+const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log_rec) {
+    assert(output && packets && log_rec);
+
     float rv[3], v[3];
     uint8_t i;
     bool read = false;
@@ -873,6 +914,13 @@ const struct sensor_packet_t *restrict packets) {
             continue;
         }
 
+        /* Log sensor values */
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_GYROSCOPE, i,
+            (uint8_t*)&packets[i].gyro, sizeof(packets[i].gyro)
+        );
+
+        /* Apply scale calibration */
         v[0] = (float)packets[i].gyro.x *
                ioboard_calibration[i].gyro_scale[0];
 
@@ -909,7 +957,10 @@ measurements if there are multiple values available.
 Return true if any values were read, and false otherwise.
 */
 bool _fcs_ahrs_process_magnetometers(float *restrict output,
-const struct sensor_packet_t *restrict packets) {
+const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log_rec) {
+    assert(output && packets && log_rec);
+
     float rv[3], v[3];
     uint8_t i;
     bool read = false;
@@ -919,6 +970,13 @@ const struct sensor_packet_t *restrict packets) {
             continue;
         }
 
+        /* Log sensor values */
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_MAGNETOMETER, i,
+            (uint8_t*)&packets[i].mag, sizeof(packets[i].mag)
+        );
+
+        /* Scale based on sensitivity */
         v[0] = (float)packets[i].mag.x * (1.0f / MAG_SENSITIVITY);
         v[1] = (float)packets[i].mag.y * (1.0f / MAG_SENSITIVITY);
         v[2] = (float)packets[i].mag.z * (1.0f / MAG_SENSITIVITY);
@@ -953,7 +1011,10 @@ const struct sensor_packet_t *restrict packets) {
 }
 
 bool _fcs_ahrs_process_gps(double *restrict p_output,
-float *restrict v_output, const struct sensor_packet_t *restrict packets) {
+float *restrict v_output, const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log_rec) {
+    assert(p_output && v_output && packets && log_rec);
+
     double deg_mul = 1e-7 * (M_PI/180.0);
     float cm_mul = 1e-2f;
     bool read = false;
@@ -963,6 +1024,18 @@ float *restrict v_output, const struct sensor_packet_t *restrict packets) {
     pass the values through.
     */
     if (packets[0].sensor_update_flags & UPDATED_GPS_POS) {
+        /* Log sensor values */
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_GPS_POSITION, 0,
+            (uint8_t*)&packets[0].gps.position,
+            sizeof(packets[0].gps.position)
+        );
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_GPS_VELOCITY, 0,
+            (uint8_t*)&packets[0].gps.velocity,
+            sizeof(packets[0].gps.velocity)
+        );
+
         p_output[0] = (double)packets[0].gps.position.lat;
         p_output[1] = (double)packets[0].gps.position.lng;
         p_output[2] = (double)packets[0].gps.position.alt;
@@ -975,6 +1048,18 @@ float *restrict v_output, const struct sensor_packet_t *restrict packets) {
     }
 
     if (packets[1].sensor_update_flags & UPDATED_GPS_POS) {
+        /* Log sensor values */
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_GPS_POSITION, 1,
+            (uint8_t*)&packets[1].gps.position,
+            sizeof(packets[1].gps.position)
+        );
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_GPS_VELOCITY, 1,
+            (uint8_t*)&packets[1].gps.velocity,
+            sizeof(packets[1].gps.velocity)
+        );
+
         if (read) {
             p_output[0] += (double)packets[1].gps.position.lat;
             p_output[1] += (double)packets[1].gps.position.lng;
@@ -1018,11 +1103,21 @@ take the mean of the results if there are multiple values available.
 Return true if any values were read, and false otherwise.
 */
 bool _fcs_ahrs_process_pitots(float *restrict output,
-const struct sensor_packet_t *restrict packets) {
+const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log_rec) {
+    assert(output && packets && log_rec);
+
     bool read = false;
     float v;
 
     if (packets[0].sensor_update_flags & UPDATED_ADC_GPIO) {
+        /* Log sensor value */
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_PRESSURE_TEMP, 0,
+            (uint8_t*)&packets[0].pitot, sizeof(packets[0].pitot)
+        );
+
+        /* Apply calibration to the output value */
         *output = ((float)packets[0].pitot +
                    (float)ioboard_calibration[0].pitot_bias) *
                   ioboard_calibration[0].pitot_scale;
@@ -1030,6 +1125,13 @@ const struct sensor_packet_t *restrict packets) {
     }
 
     if (packets[1].sensor_update_flags & UPDATED_ADC_GPIO) {
+        /* Log sensor value */
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_PRESSURE_TEMP, 1,
+            (uint8_t*)&packets[1].pitot, sizeof(packets[1].pitot)
+        );
+
+        /* Apply calibration to the output value */
         v = ((float)packets[1].pitot +
              (float)ioboard_calibration[1].pitot_bias) *
             ioboard_calibration[1].pitot_scale;
@@ -1053,11 +1155,22 @@ available.
 Return true if any values were read, and false otherwise.
 */
 bool _fcs_ahrs_process_barometers(float *restrict output,
-const struct sensor_packet_t *restrict packets) {
+const struct sensor_packet_t *restrict packets,
+struct fcs_packet_log_t *log_rec) {
+    assert(output && packets && log_rec);
+
     bool read = false;
     float v;
 
     if (packets[0].sensor_update_flags & UPDATED_BAROMETER) {
+        /* Log sensor values */
+        int16_t val[2u] = { packets[0].pressure, packets[0].barometer_temp };
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_PRESSURE_TEMP, 0, (uint8_t*)val,
+            sizeof(val)
+        );
+
+        /* Apply calibration to the output value */
         *output = ((float)packets[0].pressure +
                    (float)ioboard_calibration[0].barometer_bias) *
                   ioboard_calibration[0].barometer_scale;
@@ -1065,6 +1178,14 @@ const struct sensor_packet_t *restrict packets) {
     }
 
     if (packets[1].sensor_update_flags & UPDATED_BAROMETER) {
+        /* Log sensor values */
+        int16_t val[2u] = { packets[1].pressure, packets[1].barometer_temp };
+        fcs_comms_add_log_sensor_value(
+            log_rec, FCS_SENSOR_TYPE_PRESSURE_TEMP, 1u, (uint8_t*)val,
+            sizeof(val)
+        );
+
+        /* Apply calibration to the output value */
         v = ((float)packets[1].pressure +
              (float)ioboard_calibration[1].barometer_bias) *
             ioboard_calibration[1].barometer_scale;
@@ -1087,6 +1208,8 @@ axis (forwards).
 */
 void _fcs_ahrs_ioboard_reset_geometry(
 struct fcs_ahrs_sensor_geometry_t *restrict geometry) {
+    assert(geometry);
+
     memset(geometry->accel_orientation, 0,
            sizeof(geometry->accel_orientation));
     geometry->accel_orientation[3] = 1.0;
@@ -1109,6 +1232,8 @@ the magnetometers
 */
 void _fcs_ahrs_ioboard_reset_calibration(
 struct fcs_ahrs_sensor_calibration_t *restrict calibration) {
+    assert(calibration);
+
     memset(calibration->accel_bias, 0, sizeof(int16_t) * 3);
     calibration->accel_scale[0] =
         calibration->accel_scale[1] =

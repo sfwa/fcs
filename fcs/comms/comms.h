@@ -171,7 +171,8 @@ Reading type:
 7:5 = sensor ID (0-3, 4+ reserved)
 4:0 = sensor type (0 = accel, 1 = gyro, 2 = mag, 3 = pitot, 4 = pressure/temp,
                    5 = rangefinder, 6 = current/voltage, 7 = gps position,
-                   8 = gps velocity, 9 = gps info, 10 - 31 reserved)
+                   8 = gps velocity, 9 = gps info, 10 = message,
+                   11 = control position, 12 - 31 reserved)
 
 
 Max usage:
@@ -193,9 +194,10 @@ Max usage:
 14 gps pos 1 lat, lon, alt
 8 gps velocity 1 n, e, d
 4 gps fix mode, num SVs, error
+10 control pos
 2 bytes CRC16
 
-Total: 108 + COBS-R + NUL + NUL = 111
+Total: 118 + COBS-R + NUL + NUL = 121
 
 (Also need to report i/v 1 and i/v 2, but maybe average these?)
 */
@@ -216,6 +218,7 @@ enum fcs_sensor_type_t {
     FCS_SENSOR_TYPE_GPS_VELOCITY,
     FCS_SENSOR_TYPE_GPS_INFO,
     FCS_SENSOR_TYPE_MESSAGE,
+    FCS_SENSOR_TYPE_CONTROL_POS,
     FCS_SENSOR_TYPE_LAST
 };
 
