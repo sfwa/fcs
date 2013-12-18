@@ -101,6 +101,11 @@ ADD_LIBRARY(fcs SHARED
     ../piksi/piksi.c
     ../drivers/stream.c
     ../comms/comms.c
+    ../comms/config.c
+    ../comms/gcs.c
+    ../comms/log.c
+    ../comms/state.c
+    ../comms/waypoint.c
     ../config/config.c
     ../ahrs/ahrs.c)
 

@@ -281,7 +281,7 @@ void fcs_ahrs_init(void) {
     _fcs_ahrs_ioboard_reset_geometry(&ioboard_geometry[1]);
 
     /*
-    TODO: read state from NMPC shared memory, just in case we're booting up
+    TODO: read state back from fcs_global_state, just in case we're booting up
     after an in-flight reset
     */
     struct ukf_state_t initial_state = {
