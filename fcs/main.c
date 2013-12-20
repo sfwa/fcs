@@ -60,7 +60,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <c6x.h>
 
 #include "config/config.h"
-#include "board/board.h"
+#include "hardware/board.h"
 #include "TRICAL/TRICAL.h"
 #include "ahrs/measurement.h"
 #include "ahrs/ahrs.h"

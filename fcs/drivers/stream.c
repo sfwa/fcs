@@ -30,8 +30,8 @@ SOFTWARE.
 #include "../stats/stats.h"
 
 #ifdef __TI_COMPILER_VERSION__
-#include "../board/int-uart.h"
-#include "../board/emif-uart.h"
+#include "../hardware/int-uart.h"
+#include "../hardware/emif-uart.h"
 #endif
 
 /*
