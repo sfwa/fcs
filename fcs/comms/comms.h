@@ -152,6 +152,43 @@ struct fcs_packet_config_t {
 };
 
 /*
+Status information (FCS->CPU): $PSFWAT
+- time of status (ms) -- 9 chars
+- flags -- 4 chars
+- I/O board resets -- 2x 3 chars
+- TRICAL resets -- 2x 3 chars
+- UKF resets -- 3 chars
+- Main loop cycle max -- 2x 8 chars
+- CPU packet RX -- 9 chars
+- CPU packet RX errors -- 9 chars
+- GPS num SVs -- 2 chars
+- Telemetry signal (dB) -- 4 chars
+- Telemetry noise (dB) -- 4 chars
+- Telemetry packet RX -- 6 chars
+- Telemetry packet RX errors -- 6 chars
+- CRC32 -- 8 chars
+
+=> 109 bytes + 7 bytes prefix + * +
+   2 bytes checksum + CRLF = 121 bytes total
+*/
+struct fcs_packet_status_t {
+    int32_t solution_time;
+    uint8_t flags[4u];
+    int32_t ioboard_resets[2u];
+    int32_t trical_resets[2u];
+    int32_t ukf_resets;
+    int32_t main_loop_cycle_max[2u];
+    int32_t cpu_packet_rx;
+    int32_t cpu_packet_rx_err;
+    int32_t gps_num_svs;
+    int32_t telemetry_signal_db;
+    int32_t telemetry_noise_db;
+    int32_t telemetry_packet_rx;
+    int32_t telemetry_packet_rx_err;
+    uint32_t crc32;
+};
+
+/*
 Binary log packet (all multi-byte values are LE):
 1 byte type
 2 bytes reserved (0)
@@ -283,6 +320,14 @@ struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len);
 
 enum fcs_validation_result_t fcs_comms_validate_gcs(
 const struct fcs_packet_gcs_t *restrict gcs);
+
+/* Status serialization */
+size_t fcs_comms_serialize_status(uint8_t *restrict buf,
+const struct fcs_packet_status_t *restrict status);
+
+enum fcs_validation_result_t fcs_comms_validate_status(
+const struct fcs_packet_status_t *restrict status);
+
 
 /* Binary log packets -- used to send raw sensor and state data at 1000Hz */
 

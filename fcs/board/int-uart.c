@@ -795,8 +795,11 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
     uint16_t nbytes = 0;
     if (rx_last_buf_size[uart_idx] != 0) {
         /*
-        Subtract BCNT from last buffer size to get the number of bytes written
-        to RX buffer
+        Subtract BCNT (the number of bytes remaining in the transfer request)
+        from last buffer size to get the number of bytes written to RX buffer
+
+        This will have wrap-around issues if the buffer isn't checked at least
+        every 255 bytes, but that's not going to happen at UART speeds.
         */
         nbytes = rx_last_buf_size[uart_idx] -
                (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16u);
@@ -823,8 +826,9 @@ uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
     uint16_t nbytes = 0;
     if (tx_last_buf_size[uart_idx] != 0) {
         /*
-        Subtract BCNT from last buffer size to get the number of bytes read
-        from TX buffer
+        Subtract BCNT (the number of bytes remaining in the last write
+        request) from last buffer size to get the number of bytes that have
+        been read from the TX buffer
         */
         nbytes = tx_last_buf_size[uart_idx] -
                (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT >> 16);

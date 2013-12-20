@@ -443,7 +443,7 @@ void fcs_ahrs_tick(void) {
     if (ioboard_timeout[0] <= 0 &&
             ioboard_timeout[1] < FCS_IOBOARD_RESTART_WINDOW) {
         ioboard_timeout[0] = FCS_IOBOARD_RESET_TIMEOUT;
-        fcs_global_counters.ioboard_reset[0]++;
+        fcs_global_counters.ioboard_resets[0]++;
 
 #ifdef __TI_COMPILER_VERSION__
         /* Assert IOBOARD_1_RESET_OUT on GPIO 2 */
@@ -465,11 +465,11 @@ void fcs_ahrs_tick(void) {
     not timed out itself, reset board 1. This avoids the case where both
     boards are reset at the same time.
     */
-    if (ioboard_timeout[1] <= 0 &&
+    if (ioboard_timeout[1u] <= 0 &&
             0 < ioboard_timeout[0] &&
             ioboard_timeout[0] < FCS_IOBOARD_RESTART_WINDOW) {
-        ioboard_timeout[1] = FCS_IOBOARD_RESET_TIMEOUT;
-        fcs_global_counters.ioboard_reset[1]++;
+        ioboard_timeout[1u] = FCS_IOBOARD_RESET_TIMEOUT;
+        fcs_global_counters.ioboard_resets[1u]++;
 
 #ifdef __TI_COMPILER_VERSION__
         /* Assert IOBOARD_2_RESET_OUT on GPIO 3 */
@@ -477,8 +477,8 @@ void fcs_ahrs_tick(void) {
 #endif
 
         assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
-    } else if (ioboard_timeout[1] > INT16_MIN) {
-        ioboard_timeout[1]--;
+    } else if (ioboard_timeout[1u] > INT16_MIN) {
+        ioboard_timeout[1u]--;
 
 #ifdef __TI_COMPILER_VERSION__
         /* De-assert IOBOARD_2_RESET_OUT on GPIO 3 */
@@ -524,13 +524,13 @@ void fcs_ahrs_tick(void) {
                                     fcs_global_piksi_solution.lon,
                                     fcs_global_piksi_solution.alt);
         ukf_sensor_set_gps_velocity(fcs_global_piksi_solution.velocity[0],
-                                    fcs_global_piksi_solution.velocity[1],
-                                    fcs_global_piksi_solution.velocity[2]);
+                                    fcs_global_piksi_solution.velocity[1u],
+                                    fcs_global_piksi_solution.velocity[2u]);
 
         /* TODO: update sensor covariance for GPS based on Piksi status */
     } else if (_fcs_ahrs_process_gps(p, v, ioboard, &log_packet)) {
-        ukf_sensor_set_gps_position(p[0], p[1], p[2]);
-        ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
+        ukf_sensor_set_gps_position(p[0], p[1u], p[2u]);
+        ukf_sensor_set_gps_velocity(v[0], v[1u], v[2u]);
 
         /* TODO: update sensor covariance for GPS based on DOP */
     }
@@ -549,12 +549,12 @@ void fcs_ahrs_tick(void) {
         (uint8_t)(fcs_global_state.solution_time & 0xFFu),
         control_set
     );
-    assert(control_len < 16);
+    assert(control_len < 16u);
     fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
 
     /* Increment transmit counters */
     fcs_global_counters.ioboard_packet_tx[0]++;
-    fcs_global_counters.ioboard_packet_tx[1]++;
+    fcs_global_counters.ioboard_packet_tx[1u]++;
 
     /*
     Work out the nominal current control position, taking into account the

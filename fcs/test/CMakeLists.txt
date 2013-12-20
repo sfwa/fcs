@@ -56,6 +56,7 @@ ADD_EXECUTABLE(unittest
     ../comms/gcs.c
     ../comms/log.c
     ../comms/state.c
+    ../comms/status.c
     ../comms/waypoint.c
     test_comms.cpp
     ../drivers/stream.c
@@ -105,6 +106,7 @@ ADD_LIBRARY(fcs SHARED
     ../comms/gcs.c
     ../comms/log.c
     ../comms/state.c
+    ../comms/status.c
     ../comms/waypoint.c
     ../config/config.c
     ../ahrs/ahrs.c)

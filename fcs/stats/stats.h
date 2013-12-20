@@ -28,7 +28,7 @@ struct fcs_stats_counter_t {
     uint64_t ioboard_packet_rx[2];
     uint64_t ioboard_packet_rx_err[2];
     uint64_t ioboard_packet_tx[2];
-    uint64_t ioboard_reset[2];
+    uint64_t ioboard_resets[2];
 
     uint64_t cpu_packet_rx;
     uint64_t cpu_packet_rx_err;

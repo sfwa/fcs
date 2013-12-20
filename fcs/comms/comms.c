@@ -47,28 +47,98 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
 void fcs_comms_init(void) {
     /* Open the CPU comms stream */
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 230400u) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 921600u) == FCS_STREAM_OK);
     assert(fcs_stream_open(FCS_STREAM_UART_EXT0) == FCS_STREAM_OK);
+
+    /* Open the RFD900 comms stream */
+    assert(
+        fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 230400u) == FCS_STREAM_OK);
+    assert(fcs_stream_open(FCS_STREAM_UART_EXT1) == FCS_STREAM_OK);
 }
 
 void fcs_comms_tick(void) {
     static uint32_t tick;
 
     uint8_t comms_buf[256u];
-    size_t comms_buf_len;
+    size_t comms_buf_len, write_len;
+
+    /* Generate a state packet for delivery to the CPU and RFD900a */
+    comms_buf_len = fcs_comms_serialize_state(comms_buf, &fcs_global_state);
+    assert(comms_buf_len && comms_buf_len < 256u);
 
     /* Send a state update packet to the CPU every 20ms (50Hz) */
     if (tick % 20u == 0) {
-        size_t packet_len, write_len;
-        packet_len = fcs_comms_serialize_state(comms_buf, &fcs_global_state);
-        assert(packet_len && packet_len < 256u);
-
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
-                                     packet_len);
+                                     comms_buf_len);
         fcs_global_counters.cpu_packet_tx++;
-
         /* We should definitely have enough room in the write buffer */
-        assert(packet_len == write_len);
+        assert(comms_buf_len == write_len);
+    }
+
+    /* Send a state update packet to the RFD900a every 1s */
+    if (tick % 1000u == 0) {
+        write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, comms_buf,
+                                     comms_buf_len);
+        assert(comms_buf_len == write_len);
+    }
+
+    /* TODO: Generate a status packet */
+    struct fcs_packet_status_t status;
+    status.solution_time = fcs_global_state.solution_time;
+    status.ioboard_resets[0] =
+        fcs_global_counters.ioboard_resets[0] <= INT32_MAX ?
+        fcs_global_counters.ioboard_resets[0] : INT32_MAX;
+    status.ioboard_resets[1u] =
+        fcs_global_counters.ioboard_resets[1u] <= INT32_MAX ?
+        fcs_global_counters.ioboard_resets[1u] : INT32_MAX;
+    status.trical_resets[0] =
+        fcs_global_counters.trical_resets[0] <= INT32_MAX ?
+        fcs_global_counters.trical_resets[0] : INT32_MAX;
+    status.trical_resets[1u] =
+        fcs_global_counters.trical_resets[1u] <= INT32_MAX ?
+        fcs_global_counters.trical_resets[1u] : INT32_MAX;
+    status.ukf_resets =
+        fcs_global_counters.ukf_resets <= INT32_MAX ?
+        fcs_global_counters.ukf_resets : INT32_MAX;
+    status.main_loop_cycle_max[0] =
+        fcs_global_counters.main_loop_cycle_max[0] <= INT32_MAX ?
+        fcs_global_counters.main_loop_cycle_max[0] : INT32_MAX;
+    status.main_loop_cycle_max[1u] =
+        fcs_global_counters.main_loop_cycle_max[1u] <= INT32_MAX ?
+        fcs_global_counters.main_loop_cycle_max[1u] : INT32_MAX;
+    status.cpu_packet_rx =
+        fcs_global_counters.cpu_packet_rx <= INT32_MAX ?
+        fcs_global_counters.cpu_packet_rx : INT32_MAX;
+    status.cpu_packet_rx_err =
+        fcs_global_counters.cpu_packet_rx_err <= INT32_MAX ?
+        fcs_global_counters.cpu_packet_rx_err : INT32_MAX;
+    status.gps_num_svs = 0; /* TODO */
+    status.telemetry_signal_db = 0; /* TODO */
+    status.telemetry_noise_db = 0; /* TODO */
+    status.telemetry_packet_rx = 0; /* TODO */
+    status.telemetry_packet_rx_err = 0; /* TODO */
+    comms_buf_len = fcs_comms_serialize_status(comms_buf, NULL);
+    assert(comms_buf_len && comms_buf_len < 256u);
+
+    /*
+    Send a status update packet to the CPU every 100ms (10Hz), but long enough
+    after the state update packet that the writes won't collide
+    */
+    if (tick % 100u == 12u) {
+        write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
+                                     comms_buf_len);
+        fcs_global_counters.cpu_packet_tx++;
+        assert(comms_buf_len == write_len);
+    }
+
+    /*
+    Send a status update packet to the RFD900a every 1s, 500ms after the state
+    packet was sent
+    */
+    if (tick % 1000u == 500u) {
+        write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, comms_buf,
+                                     comms_buf_len);
+        assert(comms_buf_len == write_len);
     }
 
     /* Check for packets */
