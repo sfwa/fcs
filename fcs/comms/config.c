@@ -30,6 +30,8 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../drivers/stream.h"
 #include "comms.h"
+#include "../TRICAL/TRICAL.h"
+#include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
 

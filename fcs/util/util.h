@@ -175,21 +175,29 @@ FCS_CONVERSION_OK if the result is valid, or FCS_CONVERSION_ERROR if not.
 enum fcs_conversion_result_t fcs_int32_from_ascii(int32_t *restrict result,
 const uint8_t *restrict value, size_t len);
 
-/* fcs_ascii_hex_from_uint8 -- convert a uint8_t value to two uppercase hex
-digits */
+/*
+fcs_ascii_hex_from_uint8 -- convert a uint8_t value to two uppercase hex
+digits
+*/
 size_t fcs_ascii_hex_from_uint8(uint8_t *restrict result, uint8_t value);
 
-/* fcs_uint8_from_ascii_hex-- convert two uppercase hex digits to a uint8.
-The len parameter must be 2. */
+/*
+fcs_uint8_from_ascii_hex -- convert two uppercase hex digits to a uint8.
+The len parameter must be 2.
+*/
 enum fcs_conversion_result_t fcs_uint8_from_ascii_hex(uint8_t *result,
 uint8_t *restrict value, size_t len);
 
-/* fcs_ascii_hex_from_uint32 -- convert a uint32_t value to eight uppercase
-hex digits (MSB first) */
+/*
+fcs_ascii_hex_from_uint32 -- convert a uint32_t value to eight uppercase
+hex digits (MSB first)
+*/
 size_t fcs_ascii_hex_from_uint32(uint8_t *restrict result, uint32_t value);
 
-/* fcs_uint32_from_ascii_hex-- convert eight uppercase hex digits (MSB first)
-to a uint32. The len parameter must be 8. */
+/*
+fcs_uint32_from_ascii_hex -- convert eight uppercase hex digits (MSB first)
+to a uint32. The len parameter must be 8.
+*/
 enum fcs_conversion_result_t fcs_uint32_from_ascii_hex(uint32_t *result,
 uint8_t *restrict value, size_t len);
 

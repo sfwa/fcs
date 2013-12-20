@@ -787,9 +787,9 @@ TEST(CommsLog, InitPacket) {
     struct fcs_packet_log_t packet;
     fcs_comms_init_log(&packet, 1234u);
     EXPECT_EQ(FCS_PACKET_LOG_TYPE, packet.buf[0]);
-    EXPECT_EQ(0, packet.buf[1u]);
-    EXPECT_EQ(0, packet.buf[2u]);
-    EXPECT_EQ(1234u, (packet.buf[4u] << 8u) + packet.buf[3u]);
+    EXPECT_EQ(0, packet.buf[1]);
+    EXPECT_EQ(0, packet.buf[2]);
+    EXPECT_EQ(1234u, (packet.buf[4] << 8u) + packet.buf[3]);
     EXPECT_EQ(5u, packet.len);
 }
 
@@ -807,9 +807,9 @@ TEST(CommsLog, AddSensorSingle) {
                                             1u, (uint8_t*)&value,
                                             sizeof(value));
     EXPECT_EQ(true, result);
-    EXPECT_EQ(0x02u, packet.buf[5u]);
-    EXPECT_EQ(0x23u, packet.buf[6u]);
-    EXPECT_EQ(1234, (int16_t)((packet.buf[8u] << 8u) + packet.buf[7u]));
+    EXPECT_EQ(0x02u, packet.buf[5]);
+    EXPECT_EQ(0x23u, packet.buf[6]);
+    EXPECT_EQ(1234, (int16_t)((packet.buf[8] << 8u) + packet.buf[7]));
 }
 
 TEST(CommsLog, AddSensorMultiple) {
@@ -829,15 +829,15 @@ TEST(CommsLog, AddSensorMultiple) {
                                             sizeof(value2));
     ASSERT_EQ(true, result);
 
-    EXPECT_EQ(0x02u, packet.buf[5u]);
-    EXPECT_EQ(0x23u, packet.buf[6u]);
-    EXPECT_EQ(1234, (int16_t)((packet.buf[8u] << 8u) + packet.buf[7u]));
+    EXPECT_EQ(0x02u, packet.buf[5]);
+    EXPECT_EQ(0x23u, packet.buf[6]);
+    EXPECT_EQ(1234, (int16_t)((packet.buf[8] << 8u) + packet.buf[7]));
 
-    EXPECT_EQ(0x06u, packet.buf[9u]);
-    EXPECT_EQ(0, packet.buf[10u]);
-    EXPECT_EQ(0, (int16_t)((packet.buf[12u] << 8u) + packet.buf[11u]));
-    EXPECT_EQ(1, (int16_t)((packet.buf[14u] << 8u) + packet.buf[13u]));
-    EXPECT_EQ(-1, (int16_t)((packet.buf[16u] << 8u) + packet.buf[15u]));
+    EXPECT_EQ(0x06u, packet.buf[9]);
+    EXPECT_EQ(0, packet.buf[10]);
+    EXPECT_EQ(0, (int16_t)((packet.buf[12] << 8u) + packet.buf[11]));
+    EXPECT_EQ(1, (int16_t)((packet.buf[14] << 8u) + packet.buf[13]));
+    EXPECT_EQ(-1, (int16_t)((packet.buf[16] << 8u) + packet.buf[15]));
 }
 
 TEST(CommsLog, AddSensorTooMany) {
@@ -932,7 +932,7 @@ TEST(CommsLog, SerializePacket) {
                                             sizeof(value2));
     ASSERT_EQ(true, result);
 
-    uint8_t out_buf[256u];
+    uint8_t out_buf[256];
     size_t len;
     len = fcs_comms_serialize_log(out_buf, sizeof(out_buf), &packet);
     EXPECT_EQ(21u, len);
@@ -940,6 +940,6 @@ TEST(CommsLog, SerializePacket) {
     EXPECT_EQ(0, out_buf[len + 1u]);
     EXPECT_STREQ(
         "\x2\x1\x1\x2\x1\x6\x2#\xD2\x4\x6\x1\x1\x2\x1\xD3\xFF\xFF\xA8",
-        (char*)&out_buf[1u]);
+        (char*)&out_buf[1]);
 }
 

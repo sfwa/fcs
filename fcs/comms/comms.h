@@ -65,19 +65,19 @@ State (FCS->CPU): $PSFWAS
 */
 struct fcs_packet_state_t {
     int32_t solution_time;
-    uint8_t next_waypoint_id[4u];
+    uint8_t next_waypoint_id[4];
     double lat, lon, alt;
-    double velocity[3u];
-    double wind_velocity[3u];
+    double velocity[3];
+    double wind_velocity[3];
     double yaw, pitch, roll;
-    double angular_velocity[3u];
+    double angular_velocity[3];
     double lat_lon_uncertainty, alt_uncertainty;
-    double velocity_uncertainty[3u];
-    double wind_velocity_uncertainty[3u];
+    double velocity_uncertainty[3];
+    double wind_velocity_uncertainty[3];
     double yaw_uncertainty, pitch_uncertainty, roll_uncertainty;
-    double angular_velocity_uncertainty[3u];
+    double angular_velocity_uncertainty[3];
     uint8_t mode_indicator;
-    uint8_t flags[7u];
+    uint8_t flags[7];
     uint32_t crc32;
 };
 
@@ -104,9 +104,9 @@ Waypoint information (CPU->FCS, FCS->CPU): $PSFWAP
    93 bytes total
 */
 struct fcs_packet_waypoint_t {
-    uint8_t waypoint_id[4u];
+    uint8_t waypoint_id[4];
     uint8_t waypoint_role;
-    uint8_t flags[3u];
+    uint8_t flags[3];
     double target_lat, target_lon, target_alt;
     double target_yaw, target_pitch, target_roll;
     double target_airspeed;
@@ -129,7 +129,7 @@ GCS information (CPU->FCS): $PSFWAG
 */
 struct fcs_packet_gcs_t {
     int32_t solution_time;
-    uint8_t flags[4u];
+    uint8_t flags[4];
     double lat, lon, alt;
     double pressure;
     uint32_t crc32;
@@ -145,9 +145,9 @@ Config information (CPU->FCS, FCS->CPU): $PSFWAC
 */
 struct fcs_packet_config_t {
     uint8_t param_name_len;
-    uint8_t param_name[24u];
+    uint8_t param_name[24];
     uint8_t param_value_len;
-    uint8_t param_value[128u];
+    uint8_t param_value[128];
     uint32_t crc32;
 };
 
@@ -173,11 +173,11 @@ Status information (FCS->CPU): $PSFWAT
 */
 struct fcs_packet_status_t {
     int32_t solution_time;
-    uint8_t flags[4u];
-    int32_t ioboard_resets[2u];
-    int32_t trical_resets[2u];
+    uint8_t flags[4];
+    int32_t ioboard_resets[2];
+    int32_t trical_resets[2];
     int32_t ukf_resets;
-    int32_t main_loop_cycle_max[2u];
+    int32_t main_loop_cycle_max[2];
     int32_t cpu_packet_rx;
     int32_t cpu_packet_rx_err;
     int32_t gps_num_svs;
@@ -187,83 +187,6 @@ struct fcs_packet_status_t {
     int32_t telemetry_packet_rx_err;
     uint32_t crc32;
 };
-
-/*
-Binary log packet (all multi-byte values are LE):
-1 byte type
-2 bytes reserved (0)
-2 bytes frame index
-... (sensor readings)
-2 bytes CRC16
-
-Sensor reading:
-1 byte reading header
-1 byte reading type
-
-Reading header:
-7:4 = reserved (0s)
-3:0 = length in bytes
-
-Reading type:
-7:5 = sensor ID (0-3, 4+ reserved)
-4:0 = sensor type (0 = accel, 1 = gyro, 2 = mag, 3 = pitot, 4 = pressure/temp,
-                   5 = rangefinder, 6 = current/voltage, 7 = gps position,
-                   8 = gps velocity, 9 = gps info, 10 = message,
-                   11 = control position, 12 - 31 reserved)
-
-
-Max usage:
-1 type
-1 reserved (0)
-2 index
-8 accel 1 x, y, z
-8 accel 2 x, y, z
-8 gyro 1 x, y, z
-8 gyro 2 x, y, z
-6 pressure/temp 1
-6 pressure/temp 2
-4 pitot 1
-4 pitot 2
-4 range 1
-4 range 2
-8 magnetometer 1 x, y, z
-8 magnetometer 2 x, y, z
-14 gps pos 1 lat, lon, alt
-8 gps velocity 1 n, e, d
-4 gps fix mode, num SVs, error
-10 control pos
-2 bytes CRC16
-
-Total: 118 + COBS-R + NUL + NUL = 121
-
-(Also need to report i/v 1 and i/v 2, but maybe average these?)
-*/
-struct fcs_packet_log_t {
-    uint8_t buf[256u];
-    size_t len;
-};
-
-enum fcs_sensor_type_t {
-    FCS_SENSOR_TYPE_ACCELEROMETER,
-    FCS_SENSOR_TYPE_GYROSCOPE,
-    FCS_SENSOR_TYPE_MAGNETOMETER,
-    FCS_SENSOR_TYPE_PITOT,
-    FCS_SENSOR_TYPE_PRESSURE_TEMP,
-    FCS_SENSOR_TYPE_RANGEFINDER,
-    FCS_SENSOR_TYPE_IV,
-    FCS_SENSOR_TYPE_GPS_POSITION,
-    FCS_SENSOR_TYPE_GPS_VELOCITY,
-    FCS_SENSOR_TYPE_GPS_INFO,
-    FCS_SENSOR_TYPE_MESSAGE,
-    FCS_SENSOR_TYPE_CONTROL_POS,
-    FCS_SENSOR_TYPE_LAST
-};
-
-#define FCS_SENSOR_ID_MAX 3u
-#define FCS_SENSOR_LEN_MAX 15u
-
-/* TODO: if there are other binary/log packet types, this should be an enum */
-#define FCS_PACKET_LOG_TYPE 1u
 
 /* Init functions for comms module */
 void fcs_comms_init(void);
@@ -327,28 +250,5 @@ const struct fcs_packet_status_t *restrict status);
 
 enum fcs_validation_result_t fcs_comms_validate_status(
 const struct fcs_packet_status_t *restrict status);
-
-
-/* Binary log packets -- used to send raw sensor and state data at 1000Hz */
-
-/* Initialize a log packet with a packet index of `frame_id` */
-void fcs_comms_init_log(struct fcs_packet_log_t *log_rec, uint16_t frame_id);
-
-/*
-Serialize and add COBS-R + framing to log packet, and copy the result to
-`out_buf`. Returns the length of the serialized data.
-
-Modifies `log_rec` to include a CRC16SBP.
-*/
-size_t fcs_comms_serialize_log(uint8_t *restrict out_buf, size_t out_buf_len,
-struct fcs_packet_log_t *log_rec);
-
-/*
-Add a sensor value entry to a log packet. Returns true if the sensor value
-could be added, or false if it couldn't.
-*/
-bool fcs_comms_add_log_sensor_value(struct fcs_packet_log_t *log_rec,
-enum fcs_sensor_type_t sensor_type, uint8_t sensor_id,
-const uint8_t *restrict sensor_val, size_t sensor_val_len);
 
 #endif

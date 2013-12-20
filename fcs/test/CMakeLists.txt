@@ -54,13 +54,13 @@ ADD_EXECUTABLE(unittest
     ../comms/comms.c
     ../comms/config.c
     ../comms/gcs.c
-    ../comms/log.c
     ../comms/state.c
     ../comms/status.c
     ../comms/waypoint.c
     test_comms.cpp
     ../drivers/stream.c
     test_stream.cpp
+    ../ahrs/measurement.c
     ../ahrs/ahrs.c
     test_ahrs.cpp)
 
@@ -104,11 +104,10 @@ ADD_LIBRARY(fcs SHARED
     ../comms/comms.c
     ../comms/config.c
     ../comms/gcs.c
-    ../comms/log.c
     ../comms/state.c
     ../comms/status.c
     ../comms/waypoint.c
-    ../config/config.c
+    ../ahrs/measurement.c
     ../ahrs/ahrs.c)
 
 ADD_DEPENDENCIES(fcs ukf)

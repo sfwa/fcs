@@ -29,6 +29,7 @@ SOFTWARE.
 #define FCS_CORE_COMMS 0
 #define FCS_CORE_CONFIG 0
 #define FCS_CORE_PIKSI 0
+#define FCS_CORE_PLATFORM 0
 
 #define FCS_CLOCK_HZ 1000000000u
 #define FCS_CORE0_TICK_HZ 1000u
@@ -40,15 +41,5 @@ SOFTWARE.
 #define FCS_SEMAPHORE_GLOBAL_STATE 3u
 #define FCS_SEMAPHORE_GLOBAL_WAYPOINTS 4u
 #define FCS_SEMAPHORE_GLOBAL_CONTROL 5u
-
-/*
-Called by CORE0 on boot. Initializes I2C and starts reading from the EEPROM.
-*/
-void fcs_config_init(void);
-
-/*
-Called each tick of CORE0 (1kHz). Manages ongoing tasks.
-*/
-void fcs_config_tick(void);
 
 #endif

@@ -30,8 +30,6 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../drivers/stream.h"
 #include "comms.h"
-#include "../ahrs/ahrs.h"
-#include "../stats/stats.h"
 
 size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
 const struct fcs_packet_waypoint_t *restrict waypoint) {

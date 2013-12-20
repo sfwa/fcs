@@ -423,6 +423,9 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     uart_mem[XR16M752_LCR] = 0x03u; /* 8 bit, 1 stop bit, no parity */
     uart_mem[XR16M752_IER] = 0x01u; /* RX interrupt only */
     uart_mem[XR16M752_MCR] = 0x18u; /* 0x18 for loopback + INT_OE */
+    uart_mem[XR16M752_FCR] = 0x01u; /* enable FIFOs so we can clear them */
+    uart_mem[XR16M752_FCR] = 0x07u; /* clear FIFOs */
+    uart_mem[XR16M752_FCR] = 0; /* disable FIFOs */
 
     /*
     The GPIO peripheral has a few global config options, and registers for

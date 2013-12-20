@@ -62,4 +62,9 @@ Pin    Direction    Net                    Description
 
 */
 
+void fcs_board_init_platform(void);
+uint32_t fcs_board_init_core(void);
+
+void fcs_board_tick(void);
+
 #endif

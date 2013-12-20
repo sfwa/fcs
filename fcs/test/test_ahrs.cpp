@@ -31,6 +31,8 @@ extern "C" {
 #include "util/3dmath.h"
 #include "comms/comms.h"
 #include "ukf/cukf.h"
+#include "TRICAL/TRICAL.h"
+#include "ahrs/measurement.h"
 #include "ahrs/ahrs.h"
 #include "drivers/stream.h"
 

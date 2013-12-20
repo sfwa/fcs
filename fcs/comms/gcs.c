@@ -30,8 +30,6 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../drivers/stream.h"
 #include "comms.h"
-#include "../ahrs/ahrs.h"
-#include "../stats/stats.h"
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
 struct fcs_packet_gcs_t *restrict gcs, uint8_t *restrict buf, size_t len) {

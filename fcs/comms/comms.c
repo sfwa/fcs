@@ -25,24 +25,23 @@ SOFTWARE.
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
 #include "../config/config.h"
+#include "../util/3dmath.h"
 #include "../util/util.h"
 #include "../drivers/stream.h"
 #include "comms.h"
+#include "../TRICAL/TRICAL.h"
+#include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
 
-static struct fcs_packet_state_t comms_state_in;
-static bool comms_state_valid;
-static struct fcs_packet_config_t comms_config_in;
-static bool comms_config_valid;
-static struct fcs_packet_gcs_t comms_gcs_in;
-static bool comms_gcs_valid;
-static struct fcs_packet_waypoint_t comms_waypoint_in;
-static bool comms_waypoint_valid;
-
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
+void _fcs_comms_generate_status_packet(struct fcs_packet_status_t *out_status,
+const struct fcs_ahrs_state_t *ahrs_state);
+void _fcs_comms_generate_state_packet(struct fcs_packet_state_t *out_state,
+const struct fcs_ahrs_state_t *ahrs_state);
 
 void fcs_comms_init(void) {
     /* Open the CPU comms stream */
@@ -59,11 +58,13 @@ void fcs_comms_init(void) {
 void fcs_comms_tick(void) {
     static uint32_t tick;
 
-    uint8_t comms_buf[256u];
+    uint8_t comms_buf[256];
     size_t comms_buf_len, write_len;
 
     /* Generate a state packet for delivery to the CPU and RFD900a */
-    comms_buf_len = fcs_comms_serialize_state(comms_buf, &fcs_global_state);
+    struct fcs_packet_state_t state;
+    _fcs_comms_generate_state_packet(&state, &fcs_global_ahrs_state);
+    comms_buf_len = fcs_comms_serialize_state(comms_buf, &state);
     assert(comms_buf_len && comms_buf_len < 256u);
 
     /* Send a state update packet to the CPU every 20ms (50Hz) */
@@ -84,39 +85,7 @@ void fcs_comms_tick(void) {
 
     /* Generate a status packet */
     struct fcs_packet_status_t status;
-    status.solution_time = fcs_global_state.solution_time;
-    status.ioboard_resets[0] =
-        fcs_global_counters.ioboard_resets[0] <= INT32_MAX ?
-        fcs_global_counters.ioboard_resets[0] : INT32_MAX;
-    status.ioboard_resets[1u] =
-        fcs_global_counters.ioboard_resets[1u] <= INT32_MAX ?
-        fcs_global_counters.ioboard_resets[1u] : INT32_MAX;
-    status.trical_resets[0] =
-        fcs_global_counters.trical_resets[0] <= INT32_MAX ?
-        fcs_global_counters.trical_resets[0] : INT32_MAX;
-    status.trical_resets[1u] =
-        fcs_global_counters.trical_resets[1u] <= INT32_MAX ?
-        fcs_global_counters.trical_resets[1u] : INT32_MAX;
-    status.ukf_resets =
-        fcs_global_counters.ukf_resets <= INT32_MAX ?
-        fcs_global_counters.ukf_resets : INT32_MAX;
-    status.main_loop_cycle_max[0] =
-        fcs_global_counters.main_loop_cycle_max[0] <= INT32_MAX ?
-        fcs_global_counters.main_loop_cycle_max[0] : INT32_MAX;
-    status.main_loop_cycle_max[1u] =
-        fcs_global_counters.main_loop_cycle_max[1u] <= INT32_MAX ?
-        fcs_global_counters.main_loop_cycle_max[1u] : INT32_MAX;
-    status.cpu_packet_rx =
-        fcs_global_counters.cpu_packet_rx <= INT32_MAX ?
-        fcs_global_counters.cpu_packet_rx : INT32_MAX;
-    status.cpu_packet_rx_err =
-        fcs_global_counters.cpu_packet_rx_err <= INT32_MAX ?
-        fcs_global_counters.cpu_packet_rx_err : INT32_MAX;
-    status.gps_num_svs = 0; /* TODO */
-    status.telemetry_signal_db = 0; /* TODO */
-    status.telemetry_noise_db = 0; /* TODO */
-    status.telemetry_packet_rx = 0; /* TODO */
-    status.telemetry_packet_rx_err = 0; /* TODO */
+    _fcs_comms_generate_status_packet(&status, &fcs_global_ahrs_state);
     comms_buf_len = fcs_comms_serialize_status(comms_buf, &status);
     assert(comms_buf_len && comms_buf_len < 256u);
 
@@ -141,13 +110,32 @@ void fcs_comms_tick(void) {
         assert(comms_buf_len == write_len);
     }
 
+    /*
+    Write the log values to stream 1 -- the CPLD will route this to the CPU
+    UART
+    */
+    comms_buf_len = fcs_measurement_log_serialize(
+        comms_buf, sizeof(comms_buf), &fcs_global_ahrs_state.measurements);
+    fcs_stream_write(FCS_STREAM_UART_INT1, comms_buf, comms_buf_len);
+
     /* Check for packets */
     comms_buf_len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, comms_buf);
     assert(comms_buf_len < 256u);
 
     if (comms_buf_len >= FCS_COMMS_MIN_PACKET_SIZE) {
         enum fcs_deserialization_result_t result;
-        switch (comms_buf[6u]) {
+
+        /* TODO: do something with incoming packets */
+        struct fcs_packet_state_t comms_state_in;
+        bool comms_state_valid;
+        struct fcs_packet_config_t comms_config_in;
+        bool comms_config_valid;
+        struct fcs_packet_gcs_t comms_gcs_in;
+        bool comms_gcs_valid;
+        struct fcs_packet_waypoint_t comms_waypoint_in;
+        bool comms_waypoint_valid;
+
+        switch (comms_buf[6]) {
             case 'S':
                 result = fcs_comms_deserialize_state(
                     &comms_state_in, comms_buf, comms_buf_len);
@@ -229,5 +217,151 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
         return nbytes;
     } else {
         return 0;
+    }
+}
+
+void _fcs_comms_generate_status_packet(struct fcs_packet_status_t *out_status,
+const struct fcs_ahrs_state_t *ahrs_state) {
+    assert(out_status);
+
+    out_status->solution_time = ahrs_state->solution_time;
+    out_status->solution_time &= 0x3FFFFFFFu;
+
+    out_status->ioboard_resets[0] =
+        fcs_global_counters.ioboard_resets[0] <= INT32_MAX ?
+        fcs_global_counters.ioboard_resets[0] : INT32_MAX;
+    out_status->ioboard_resets[1] =
+        fcs_global_counters.ioboard_resets[1] <= INT32_MAX ?
+        fcs_global_counters.ioboard_resets[1] : INT32_MAX;
+    out_status->trical_resets[0] =
+        fcs_global_counters.trical_resets[0] <= INT32_MAX ?
+        fcs_global_counters.trical_resets[0] : INT32_MAX;
+    out_status->trical_resets[1] =
+        fcs_global_counters.trical_resets[1] <= INT32_MAX ?
+        fcs_global_counters.trical_resets[1] : INT32_MAX;
+    out_status->ukf_resets =
+        fcs_global_counters.ukf_resets <= INT32_MAX ?
+        fcs_global_counters.ukf_resets : INT32_MAX;
+    out_status->main_loop_cycle_max[0] =
+        fcs_global_counters.main_loop_cycle_max[0] <= INT32_MAX ?
+        fcs_global_counters.main_loop_cycle_max[0] : INT32_MAX;
+    out_status->main_loop_cycle_max[1] =
+        fcs_global_counters.main_loop_cycle_max[1] <= INT32_MAX ?
+        fcs_global_counters.main_loop_cycle_max[1] : INT32_MAX;
+    out_status->cpu_packet_rx =
+        fcs_global_counters.cpu_packet_rx <= INT32_MAX ?
+        fcs_global_counters.cpu_packet_rx : INT32_MAX;
+    out_status->cpu_packet_rx_err =
+        fcs_global_counters.cpu_packet_rx_err <= INT32_MAX ?
+        fcs_global_counters.cpu_packet_rx_err : INT32_MAX;
+    out_status->gps_num_svs = 0; /* TODO */
+    out_status->telemetry_signal_db = 0; /* TODO */
+    out_status->telemetry_noise_db = 0; /* TODO */
+    out_status->telemetry_packet_rx = 0; /* TODO */
+    out_status->telemetry_packet_rx_err = 0; /* TODO */
+}
+
+void _fcs_comms_generate_state_packet(struct fcs_packet_state_t *out_state,
+const struct fcs_ahrs_state_t *ahrs_state) {
+    assert(ahrs_state);
+    assert(out_state);
+
+    /* Wrap-around at 30 bits (1073741.823s) */
+    out_state->solution_time = ahrs_state->solution_time;
+    out_state->solution_time &= 0x3FFFFFFFu;
+
+    /* Convert lat/lon to degrees */
+    out_state->lat = ahrs_state->lat * (180.0/M_PI);
+    out_state->lon = ahrs_state->lon * (180.0/M_PI);
+    out_state->alt = ahrs_state->alt;
+
+    memcpy(out_state->velocity, ahrs_state->velocity, 3u * sizeof(double));
+    memcpy(out_state->wind_velocity, ahrs_state->wind_velocity,
+           3u * sizeof(double));
+
+    /* Convert angular velocity to degrees/s */
+    out_state->angular_velocity[0] =
+        ahrs_state->angular_velocity[0] * (180.0/M_PI);
+    out_state->angular_velocity[1] =
+        ahrs_state->angular_velocity[1] * (180.0/M_PI);
+    out_state->angular_velocity[2] =
+        ahrs_state->angular_velocity[2] * (180.0/M_PI);
+
+    /* Convert state.attitude to yaw/pitch/roll, in degrees */
+    double yaw, pitch, roll;
+
+    #define q ahrs_state->attitude
+    yaw = atan2(2.0f * (q[W] * q[Z] + q[X] * q[Y]),
+                1.0f - 2.0f * (q[Y] * q[Y] + q[Z] * q[Z])) * (180.0/M_PI);
+    pitch = asin(2.0f * (q[W] * q[X] - q[Z] * q[X])) * (180.0/M_PI);
+    roll = atan2(2.0f * (q[W] * q[X] + q[Y] * q[Z]),
+                 1.0f - 2.0f * (q[X] * q[X] + q[Y] * q[Y])) * (180.0/M_PI);
+    #undef q
+
+    if (yaw < 0.0) {
+        yaw += 360.0;
+    }
+    assert(0.0 <= yaw && yaw <= 360.0);
+    assert(-90.0 <= pitch && pitch <= 90.0);
+    assert(-180.0 <= roll && roll <= 180.0);
+
+    out_state->yaw = yaw;
+    out_state->pitch = pitch;
+    out_state->roll = roll;
+
+    /*
+    Work out 95th percentile confidence intervals for each of the output
+    values, based on the current state covariance matrix and the assumption
+    that error will follow a Gaussian distribution
+    */
+
+    /*
+    Ignore changes in lon with varying lat -- small angles and all that.
+
+    Formula for m per degree latitude is approx (2 * pi / 360) * r
+    */
+    out_state->lat_lon_uncertainty = 1.96 *
+                                     sqrt(max(ahrs_state->lat_covariance,
+                                              ahrs_state->lon_covariance)) *
+                                     6378000.0;
+    out_state->alt_uncertainty = 1.96 * sqrt(ahrs_state->alt_covariance);
+
+    out_state->velocity_uncertainty[0] =
+        1.96 * sqrt(ahrs_state->velocity_covariance[0]);
+    out_state->velocity_uncertainty[1] =
+        1.96 * sqrt(ahrs_state->velocity_covariance[1]);
+    out_state->velocity_uncertainty[2] =
+        1.96 * sqrt(ahrs_state->velocity_covariance[2]);
+
+    out_state->wind_velocity_uncertainty[0] =
+        1.96 * sqrt(ahrs_state->wind_velocity_covariance[0]);
+    out_state->wind_velocity_uncertainty[1] =
+        1.96 * sqrt(ahrs_state->wind_velocity_covariance[1]);
+    out_state->wind_velocity_uncertainty[2] =
+        1.96 * sqrt(ahrs_state->wind_velocity_covariance[2]);
+
+    /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
+    out_state->roll_uncertainty =
+        1.96 * sqrt(ahrs_state->attitude_covariance[0]) * (180.0/M_PI);
+    out_state->pitch_uncertainty =
+        1.96 * sqrt(ahrs_state->attitude_covariance[1]) * (180.0/M_PI);
+    out_state->yaw_uncertainty =
+        1.96 * sqrt(ahrs_state->attitude_covariance[2]) * (180.0/M_PI);
+
+    out_state->angular_velocity_uncertainty[0] =
+        sqrt(ahrs_state->angular_velocity_covariance[0]) * (180.0/M_PI)*1.96;
+    out_state->angular_velocity_uncertainty[1] =
+        sqrt(ahrs_state->angular_velocity_covariance[1]) * (180.0/M_PI)*1.96;
+    out_state->angular_velocity_uncertainty[2] =
+        sqrt(ahrs_state->angular_velocity_covariance[2]) * (180.0/M_PI)*1.96;
+
+    /* Check that the state is valid */
+    enum fcs_validation_result_t valid;
+    valid = fcs_comms_validate_state(out_state);
+
+    if (valid != FCS_VALIDATION_OK) {
+        out_state->mode_indicator = 'N';
+    } else {
+        out_state->mode_indicator = 'A';
     }
 }

@@ -23,46 +23,42 @@ SOFTWARE.
 #ifndef _FCS_AHRS_H
 #define _FCS_AHRS_H
 
+#define FCS_AHRS_NUM_TRICAL_INSTANCES 2u
+
 /*
-Configuration data types for the AHRS
+AHRS global state
 */
+struct fcs_ahrs_state_t {
+    uint64_t solution_time;
+    struct fcs_measurement_log_t measurements;
 
-struct fcs_ahrs_sensor_geometry_t {
-    float accel_orientation[4];
-    float gyro_orientation[4];
-    float mag_orientation[4];
-    float accel_position[3];
-};
+    /* State estimate values */
+    double lat, lon, alt; /* rad, rad, m above ellipsoid*/
+    double velocity[3]; /* NED, m/s */
+    double acceleration[3]; /* body x, y, z in m/s/s */
+    double attitude[4]; /* quaternion, body to world */
+    double angular_velocity[3]; /* clockwise around x, y, z in rad/s */
+    double angular_acceleration[3]; /* clockwise around x, y, z in rad/s/s */
+    double wind_velocity[3]; /* NED, m/s */
+    double gyro_bias[3]; /* x, y, z in rad/s */
+    double control_pos[4]; /* arbitrary control units */
 
-struct fcs_ahrs_sensor_calibration_t {
-    int16_t accel_bias[3];
-    float accel_scale[3];
-    float gyro_scale[3];
-    int16_t pitot_bias;
-    float pitot_scale;
-    int16_t barometer_bias;
-    float barometer_scale;
-};
+    /* State estimate covariance */
+    double lat_covariance, lon_covariance, alt_covariance;
+    double velocity_covariance[3];
+    double acceleration_covariance[3];
+    double attitude_covariance[3];
+    double angular_velocity_covariance[3];
+    double angular_acceleration_covariance[3];
+    double wind_velocity_covariance[3];
+    double gyro_bias_covariance[3];
 
-struct fcs_ahrs_sensor_covariance_t {
-    float accel_covariance;
-    float gyro_covariance;
-    float mag_covariance;
-    float gps_position_covariance_h;
-    float gps_position_covariance_v;
-    float gps_velocity_covariance_h;
-    float gps_velocity_covariance_v;
-    float pitot_covariance;
-    float barometer_amsl_covariance;
-};
-
-struct fcs_ahrs_wmm_field_t {
-    float mag_field[3];
-};
-
-struct fcs_ahrs_dynamics_model_t {
-    double process_noise[24];
-    uint8_t model;
+    /* Configuration */
+    double wmm_field[3];
+    double ukf_process_noise[24];
+    uint32_t ukf_dynamics_model;
+    struct fcs_calibration_map_t calibration;
+    TRICAL_instance_t trical_instances[FCS_AHRS_NUM_TRICAL_INSTANCES];
 };
 
 void fcs_ahrs_init(void);
@@ -72,9 +68,6 @@ void fcs_ahrs_tick(void);
 Updated every AHRS tick -- contains the current state and uncertainty
 estimates
 */
-extern struct fcs_packet_state_t fcs_global_state;
-
-/* Mirror of the state structure */
-extern struct fcs_packet_state_t fcs_global_state_mirror;
+extern struct fcs_ahrs_state_t fcs_global_ahrs_state;
 
 #endif

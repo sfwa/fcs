@@ -30,8 +30,6 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../drivers/stream.h"
 #include "comms.h"
-#include "../ahrs/ahrs.h"
-#include "../stats/stats.h"
 
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_packet_state_t *restrict state) {
@@ -87,19 +85,19 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    if (state->velocity_uncertainty[1u] <
+    if (state->velocity_uncertainty[1] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
             state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->velocity[1u], 3u, 2u);
+            &buf[index], state->velocity[1], 3u, 2u);
     }
     buf[index++] = ',';
 
-    if (state->velocity_uncertainty[2u] <
+    if (state->velocity_uncertainty[2] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
             state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->velocity[2u], 3u, 2u);
+            &buf[index], state->velocity[2], 3u, 2u);
     }
     buf[index++] = ',';
 
@@ -111,19 +109,19 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    if (state->wind_velocity_uncertainty[1u] <
+    if (state->wind_velocity_uncertainty[1] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
             state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->wind_velocity[1u], 2u, 2u);
+            &buf[index], state->wind_velocity[1], 2u, 2u);
     }
     buf[index++] = ',';
 
-    if (state->wind_velocity_uncertainty[2u] <
+    if (state->wind_velocity_uncertainty[2] <
             FCS_STATE_MAX_VELOCITY_UNCERTAINTY &&
             state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->wind_velocity[2u], 2u, 2u);
+            &buf[index], state->wind_velocity[2], 2u, 2u);
     }
     buf[index++] = ',';
 
@@ -160,19 +158,19 @@ const struct fcs_packet_state_t *restrict state) {
     }
     buf[index++] = ',';
 
-    if (state->angular_velocity_uncertainty[1u] <
+    if (state->angular_velocity_uncertainty[1] <
             FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY &&
             state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->angular_velocity[1u], 3u, 2u);
+            &buf[index], state->angular_velocity[1], 3u, 2u);
     }
     buf[index++] = ',';
 
-    if (state->angular_velocity_uncertainty[2u] <
+    if (state->angular_velocity_uncertainty[2] <
             FCS_STATE_MAX_ANGULAR_VELOCITY_UNCERTAINTY &&
             state->mode_indicator != 'N') {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->angular_velocity[2u], 3u, 2u);
+            &buf[index], state->angular_velocity[2], 3u, 2u);
     }
     buf[index++] = ',';
 
@@ -194,11 +192,11 @@ const struct fcs_packet_state_t *restrict state) {
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->velocity_uncertainty[1u], 2u, 0);
+        &buf[index], state->velocity_uncertainty[1], 2u, 0);
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->velocity_uncertainty[2u], 2u, 0);
+        &buf[index], state->velocity_uncertainty[2], 2u, 0);
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
@@ -206,11 +204,11 @@ const struct fcs_packet_state_t *restrict state) {
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->wind_velocity_uncertainty[1u], 2u, 0);
+        &buf[index], state->wind_velocity_uncertainty[1], 2u, 0);
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->wind_velocity_uncertainty[2u], 2u, 0);
+        &buf[index], state->wind_velocity_uncertainty[2], 2u, 0);
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
@@ -230,11 +228,11 @@ const struct fcs_packet_state_t *restrict state) {
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->angular_velocity_uncertainty[1u], 2u, 0);
+        &buf[index], state->angular_velocity_uncertainty[1], 2u, 0);
     buf[index++] = ',';
 
     index += fcs_ascii_fixed_from_double(
-        &buf[index], state->angular_velocity_uncertainty[2u], 2u, 0);
+        &buf[index], state->angular_velocity_uncertainty[2], 2u, 0);
     buf[index++] = ',';
 
     buf[index++] = state->mode_indicator;
@@ -253,7 +251,7 @@ const struct fcs_packet_state_t *restrict state) {
     index += fcs_ascii_hex_from_uint32(&buf[index], crc);
 
     /* Exclude initial $ from the checksum calculation */
-    uint8_t checksum = fcs_text_checksum(&buf[1u], index - 1u);
+    uint8_t checksum = fcs_text_checksum(&buf[1], index - 1u);
     buf[index++] = '*';
     index += fcs_ascii_hex_from_uint8(&buf[index], checksum);
 
@@ -413,37 +411,37 @@ const struct fcs_packet_state_t *restrict state) {
         -180.0 <= state->lon && state->lon <= 180.0 &&
         -500.0 <= state->alt && state->alt < 10000.0 &&
         -1000.0 < state->velocity[0] && state->velocity[0] < 1000.0 &&
-        -1000.0 < state->velocity[1u] && state->velocity[1] < 1000.0 &&
-        -1000.0 < state->velocity[2u] && state->velocity[2] < 1000.0 &&
+        -1000.0 < state->velocity[1] && state->velocity[1] < 1000.0 &&
+        -1000.0 < state->velocity[2] && state->velocity[2] < 1000.0 &&
         -100.0 < state->wind_velocity[0] &&
             state->wind_velocity[0] < 100.0 &&
-        -100.0 < state->wind_velocity[1u] &&
-            state->wind_velocity[1u] < 100.0 &&
-        -100.0 < state->wind_velocity[2u] &&
-            state->wind_velocity[2u] < 100.0 &&
+        -100.0 < state->wind_velocity[1] &&
+            state->wind_velocity[1] < 100.0 &&
+        -100.0 < state->wind_velocity[2] &&
+            state->wind_velocity[2] < 100.0 &&
         0.0 <= state->yaw && state->yaw < 360.0 &&
         -90.0 <= state->pitch && state->pitch <= 90.0 &&
         -180.0 <= state->roll && state->roll <= 180.0 &&
         -360.0 <= state->angular_velocity[0] &&
             state->angular_velocity[0] <= 360.0 &&
-        -360.0 <= state->angular_velocity[1u] &&
-            state->angular_velocity[1u] <= 360.0 &&
-        -360.0 <= state->angular_velocity[2u] &&
-            state->angular_velocity[2u] <= 360.0 &&
+        -360.0 <= state->angular_velocity[1] &&
+            state->angular_velocity[1] <= 360.0 &&
+        -360.0 <= state->angular_velocity[2] &&
+            state->angular_velocity[2] <= 360.0 &&
         0.0 <= state->lat_lon_uncertainty &&
         0.0 <= state->alt_uncertainty &&
         0.0 <= state->velocity_uncertainty[0] &&
-        0.0 <= state->velocity_uncertainty[1u] &&
-        0.0 <= state->velocity_uncertainty[2u] &&
+        0.0 <= state->velocity_uncertainty[1] &&
+        0.0 <= state->velocity_uncertainty[2] &&
         0.0 <= state->wind_velocity_uncertainty[0] &&
-        0.0 <= state->wind_velocity_uncertainty[1u] &&
-        0.0 <= state->wind_velocity_uncertainty[2u] &&
+        0.0 <= state->wind_velocity_uncertainty[1] &&
+        0.0 <= state->wind_velocity_uncertainty[2] &&
         0.0 <= state->yaw_uncertainty &&
         0.0 <= state->pitch_uncertainty &&
         0.0 <= state->roll_uncertainty &&
         0.0 <= state->angular_velocity_uncertainty[0] &&
-        0.0 <= state->angular_velocity_uncertainty[1u] &&
-        0.0 <= state->angular_velocity_uncertainty[2u]) {
+        0.0 <= state->angular_velocity_uncertainty[1] &&
+        0.0 <= state->angular_velocity_uncertainty[2]) {
         return FCS_VALIDATION_OK;
     } else {
         return FCS_VALIDATION_ERROR;

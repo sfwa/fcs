@@ -26,6 +26,8 @@ SOFTWARE.
 
 #include "../config/config.h"
 #include "nmpc.h"
+#include "../TRICAL/TRICAL.h"
+#include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
 
 void fcs_nmpc_init(void) {
