@@ -82,7 +82,7 @@ void fcs_comms_tick(void) {
         assert(comms_buf_len == write_len);
     }
 
-    /* TODO: Generate a status packet */
+    /* Generate a status packet */
     struct fcs_packet_status_t status;
     status.solution_time = fcs_global_state.solution_time;
     status.ioboard_resets[0] =
@@ -117,7 +117,7 @@ void fcs_comms_tick(void) {
     status.telemetry_noise_db = 0; /* TODO */
     status.telemetry_packet_rx = 0; /* TODO */
     status.telemetry_packet_rx_err = 0; /* TODO */
-    comms_buf_len = fcs_comms_serialize_status(comms_buf, NULL);
+    comms_buf_len = fcs_comms_serialize_status(comms_buf, &status);
     assert(comms_buf_len && comms_buf_len < 256u);
 
     /*
