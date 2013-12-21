@@ -60,6 +60,85 @@ FCS_STREAM_OK = 0
 FCS_STREAM_ERROR = 1
 
 
+ahrs_state = None
+ahrs_tick = 0
+
+
+class TRICALInstance(Structure):
+    _fields_ = [
+        ("field_norm", c_float),
+        ("measurement_noise", c_float),
+        ("state", c_float * 9),
+        ("state_covariance", c_float * 9 * 9),
+        ("measurement_count", c_uint)
+    ]
+
+
+class AHRSCalibrationEntry(Structure):
+    _fields_ = [
+        ("header", c_ubyte),
+        ("sensor", c_ubyte),
+        ("type", c_ubyte),
+        ("reserved", c_ubyte),
+        ("error", c_float),
+        ("params", c_float * 9),
+        ("orientation", c_float * 4),
+        ("offset", c_float * 3)
+    ]
+
+
+class AHRSCalibrationMap(Structure):
+    _fields_ = [
+        ("sensor_calibration", AHRSCalibrationEntry * 128)
+    ]
+
+
+class AHRSMeasurementLog(Structure):
+    _fields_ = [
+        ("data", c_ubyte * 256),
+        ("length", c_uint)
+    ]
+
+
+class AHRSState(Structure):
+    _fields_ = [
+        ("solution_time", c_ulonglong),
+        ("measurements", AHRSMeasurementLog),
+
+        # UKF state + control input
+        ("lat", c_double),
+        ("lon", c_double),
+        ("alt", c_double),
+        ("velocity", c_double * 3),
+        ("acceleration", c_double * 3),
+        ("attitude", c_double * 4),
+        ("angular_velocity", c_double * 3),
+        ("angular_acceleration", c_double * 3),
+        ("wind_velocity", c_double * 3),
+        ("gyro_bias", c_double * 3),
+        ("control_pos", c_double * 4),
+
+        # UKF covariance
+        ("lat_covariance", c_double),
+        ("lon_covariance", c_double),
+        ("alt_covariance", c_double),
+        ("velocity_covariance", c_double * 3),
+        ("acceleration_covariance", c_double * 3),
+        ("attitude_covariance", c_double * 3),
+        ("angular_velocity_covariance", c_double * 3),
+        ("angular_acceleration_covariance", c_double * 3),
+        ("wind_velocity_covariance", c_double * 3),
+        ("gyro_bias_covariance", c_double * 3),
+
+        # Configuration
+        ("wmm_field", c_double * 3),
+        ("ukf_process_noise", c_double * 24),
+        ("ukf_dynamics_model", c_uint),
+        ("calibration", AHRSCalibrationMap),
+        ("trical_instances", TRICALInstance * 2)
+    ]
+
+
 def reset():
     """
     (Re-)initializes all FCS modules.
@@ -67,7 +146,7 @@ def reset():
     if not _fcs:
         raise RuntimeError("Please call init()")
 
-    _fcs.fcs_config_init()
+    _fcs.fcs_board_init()
     _fcs.fcs_util_init()
     _fcs.fcs_comms_init()
     _fcs.fcs_piksi_init()
@@ -82,11 +161,15 @@ def tick():
     if not _fcs:
         raise RuntimeError("Please call init()")
 
-    _fcs.fcs_comms_tick()
-    _fcs.fcs_config_tick()
+    global ahrs_tick, ahrs_state
+    _fcs.fcs_measurement_log_init(ahrs_state.measurements, ahrs_tick)
+    ahrs_tick += 1
+
+    _fcs.fcs_board_tick()
     _fcs.fcs_piksi_tick()
     _fcs.fcs_ahrs_tick()
     _fcs.fcs_nmpc_tick()
+    _fcs.fcs_comms_tick()
 
 
 def write(stream_id, value):
@@ -136,9 +219,12 @@ def init(dll_path):
     Loads the FCS dynamic library at `dll_path` and sets up the ctypes
     interface. Must be called before any other functions from this module.
     """
-    global _fcs
+    global _fcs, ahrs_state
     # Load the library
     _fcs = cdll.LoadLibrary(dll_path)
+
+    # Get a reference to the state
+    ahrs_state = AHRSState.in_dll(_fcs, "fcs_global_ahrs_state")
 
     # From ahrs/ahrs.h
     _fcs.fcs_ahrs_init.argtypes = []
@@ -147,19 +233,17 @@ def init(dll_path):
     _fcs.fcs_ahrs_tick.argtypes = []
     _fcs.fcs_ahrs_tick.restype = None
 
+    # From ahrs/measurement.h
+    _fcs.fcs_measurement_log_init.argtypes = [POINTER(AHRSMeasurementLog),
+                                              c_ushort]
+    _fcs.fcs_measurement_log_init.restype = None
+
     # From comms/comms.h
     _fcs.fcs_comms_init.argtypes = []
     _fcs.fcs_comms_init.restype = None
 
     _fcs.fcs_comms_tick.argtypes = []
     _fcs.fcs_comms_tick.restype = None
-
-    # From config/config.h
-    _fcs.fcs_config_init.argtypes = []
-    _fcs.fcs_config_init.restype = None
-
-    _fcs.fcs_config_tick.argtypes = []
-    _fcs.fcs_config_tick.restype = None
 
     # From drivers/stream.c
     _fcs._fcs_stream_write_to_rx_buffer.argtypes = [c_ubyte, c_char_p,
@@ -172,6 +256,13 @@ def init(dll_path):
 
     _fcs.fcs_stream_bytes_available.argtypes = [c_ubyte]
     _fcs.fcs_stream_bytes_available.restype = c_ulong
+
+    # From hardware/platform/cpuv1-ioboardv1.c
+    _fcs.fcs_board_init.argtypes = []
+    _fcs.fcs_board_init.restype = None
+
+    _fcs.fcs_board_tick.argtypes = []
+    _fcs.fcs_board_tick.restype = None
 
     # From nmpc/nmpc.h
     _fcs.fcs_nmpc_init.argtypes = []

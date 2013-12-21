@@ -227,6 +227,8 @@ const struct fcs_ahrs_state_t *ahrs_state) {
     out_status->solution_time = ahrs_state->solution_time;
     out_status->solution_time &= 0x3FFFFFFFu;
 
+    memset(out_status->flags, '-', sizeof(out_status->flags));
+
     uint8_t i;
     for (i = 0; i < 2; i++) {
         out_status->ioboard_resets[i] =
@@ -256,6 +258,9 @@ const struct fcs_ahrs_state_t *ahrs_state) {
     /* Wrap-around at 30 bits (1073741.823s) */
     out_state->solution_time = ahrs_state->solution_time;
     out_state->solution_time &= 0x3FFFFFFFu;
+
+    memset(out_state->next_waypoint_id, '-',
+           sizeof(out_state->next_waypoint_id));
 
     /* Convert lat/lon to degrees */
     out_state->lat = ahrs_state->lat * (180.0/M_PI);
@@ -331,6 +336,8 @@ const struct fcs_ahrs_state_t *ahrs_state) {
             1.96 *
             sqrt(ahrs_state->angular_velocity_covariance[i]) * (180.0/M_PI);
     }
+
+    memset(out_state->flags, '-', sizeof(out_state->flags));
 
     /* Check that the state is valid */
     enum fcs_validation_result_t valid;

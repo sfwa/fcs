@@ -39,6 +39,7 @@ SOFTWARE.
 #include "../stats/stats.h"
 #include "../TRICAL/TRICAL.h"
 #include "measurement.h"
+#include "wmm.h"
 #include "ahrs.h"
 
 #define AHRS_DELTA 0.001
@@ -144,7 +145,15 @@ void fcs_ahrs_init(void) {
 }
 
 void fcs_ahrs_tick(void) {
-    /* TODO: calculate WMM field at current lat/lon */
+    /* Increment solution time */
+    fcs_global_ahrs_state.solution_time++;
+
+    /* Calculate WMM field at current lat/lon/alt/time */
+    bool result;
+    result = fcs_wmm_calculate_field(
+        fcs_global_ahrs_state.lat, fcs_global_ahrs_state.lon,
+        fcs_global_ahrs_state.alt, 2014.0, fcs_global_ahrs_state.wmm_field);
+    assert(result);
 
     /* Handle magnetometer calibration update based on new readings */
     struct fcs_calibration_t *restrict sensor_calibration_map =

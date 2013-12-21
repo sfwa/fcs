@@ -107,11 +107,14 @@ int main(void) {
              start_t = frame * cycles_per_tick;
     frame++;
 
+    uint16_t tick = 0;
+
     while (TSCL - start_t < cycles_per_tick);
 
     while (1) {
         if (core == FCS_CORE_AHRS) {
-            fcs_measurement_log_init(&fcs_global_ahrs_state.measurements);
+            fcs_measurement_log_init(&fcs_global_ahrs_state.measurements,
+                                     tick++);
         }
 
         if (core == FCS_CORE_PLATFORM) {

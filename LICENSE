@@ -43,7 +43,7 @@ util/cobsr.c is distributed under the MIT license:
 
 util/crc32.c is distributed under an unrestricted license:
 
-    Copyright (C) 1986 Gary S. Brown.  You may use this program, or
+    Copyright (C) 1986 Gary S. Brown. You may use this program, or
     code or tables extracted from it, as desired without restriction.
 
 util/crc8.c is distributed under the ISC license:
@@ -94,8 +94,8 @@ c66x-csl is distributed under license from Texas Instruments Incorporated:
     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-The PLL and DDR3 setup code in main.c is distributed under license from
-Texas Instruments Incorporated:
+The PLL and DDR3 setup code in hardware/core/c6657.c is distributed under
+license from Texas Instruments Incorporated:
 
     Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
 
@@ -114,6 +114,34 @@ Texas Instruments Incorporated:
       Neither the name of Texas Instruments Incorporated nor the names of
       its contributors may be used to endorse or promote products derived
       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+ahrs/wmm.c is in the public domain, as it consists primarily of code written
+by a US government agency. The license information incuded with the current
+version of the upstream code is:
+
+    "The WMM source code is in the public domain and not licensed or under
+    copyright.
+
+    The information and software may be used freely by the public. As required
+    by 17 U.S.C. 403, third parties producing copyrighted works consisting
+    predominantly of the material produced by U.S. government agencies must
+    provide notice with such work(s) identifying the U.S. Government material
+    incorporated and stating that such material is not subject to copyright
+    protection."
+
+However, in relation to ahrs/wmm.c the following disclaimer applies:
 
     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT

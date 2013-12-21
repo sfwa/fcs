@@ -459,9 +459,9 @@ double out_value[4], double *out_error, double out_offset[3]) {
                    6  7
                       8
 
-                This is based on the TRICAL calibration code, except in this
-                case the identity matrix is not added in to D before
-                multiplying it by B.
+                This is exactly the same as the equivalent TRICAL function
+                (and for magnetometers we use the TRICAL calibration state
+                estimate directly).
                 */
                 c[0] = temp_value[0] - p[0];
                 c[1] = temp_value[1] - p[1];

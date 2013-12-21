@@ -61,6 +61,7 @@ ADD_EXECUTABLE(unittest
     ../drivers/stream.c
     test_stream.cpp
     ../ahrs/measurement.c
+    ../ahrs/wmm.c
     ../ahrs/ahrs.c
     test_ahrs.cpp
     ../hardware/platform/cpuv1-ioboardv1.c
@@ -109,7 +110,9 @@ ADD_LIBRARY(fcs SHARED
     ../comms/state.c
     ../comms/status.c
     ../comms/waypoint.c
+    ../hardware/platform/cpuv1-ioboardv1.c
     ../ahrs/measurement.c
+    ../ahrs/wmm.c
     ../ahrs/ahrs.c)
 
 ADD_DEPENDENCIES(fcs ukf)
