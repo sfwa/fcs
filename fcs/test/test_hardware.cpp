@@ -51,8 +51,8 @@ const double *restrict control_values);
 
 TEST(Hardware, ReadIOBoardPacket) {
     bool result;
+    struct fcs_measurement_log_t measurements;
     size_t len;
-    struct sensor_packet_t packet;
     uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
@@ -62,49 +62,33 @@ TEST(Hardware, ReadIOBoardPacket) {
     fcs_stream_open(FCS_STREAM_UART_INT0);
 
     /* Write a full packet */
-    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_INT0, s, 62);
-    ASSERT_EQ(62, len);
+    len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_INT0, s, 62u);
+    ASSERT_EQ(62u, len);
 
     /* Read back and confirm results */
-    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    fcs_measurement_log_init(&measurements, 0);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 0, &measurements);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x61, packet.crc);
-    EXPECT_EQ(0x0100, packet.tick);
-    EXPECT_EQ(0x02, packet.sensor_update_flags);
-    EXPECT_EQ(0x03, packet.cpu_load);
-    EXPECT_EQ(0x0400, packet.status);
-    EXPECT_EQ(0x0500, packet.accel.x);
-    EXPECT_EQ(0x0600, packet.accel.y);
-    EXPECT_EQ(0x0700, packet.accel.z);
-    EXPECT_EQ(0x0800, packet.gyro.x);
-    EXPECT_EQ(0x0900, packet.gyro.y);
-    EXPECT_EQ(0x1000, packet.gyro.z);
-    EXPECT_EQ(0x1100, packet.accel_gyro_temp);
-    EXPECT_EQ(0x1200, packet.pressure);
-    EXPECT_EQ(0x1300, packet.barometer_temp);
-    EXPECT_EQ(0x1400, packet.pitot);
-    EXPECT_EQ(0x1500, packet.i);
-    EXPECT_EQ(0x1600, packet.v);
-    EXPECT_EQ(0x1700, packet.range);
-    EXPECT_EQ(0x18, packet.gpin_state);
-    EXPECT_EQ(0x1900, packet.mag.x);
-    EXPECT_EQ(0x2000, packet.mag.y);
-    EXPECT_EQ(0x2100, packet.mag.z);
-    EXPECT_EQ(0x22000000, packet.gps.position.lat);
-    EXPECT_EQ(0x23000000, packet.gps.position.lng);
-    EXPECT_EQ(0x24000000, packet.gps.position.alt);
-    EXPECT_EQ(0x2500, packet.gps.velocity.n);
-    EXPECT_EQ(0x2600, packet.gps.velocity.e);
-    EXPECT_EQ(0x2700, packet.gps.velocity.d);
-    EXPECT_EQ(0x28, packet.gps_info.fix_mode_num_satellites);
-    EXPECT_EQ(0x29, packet.gps_info.pos_err);
+    /* Check a measurement */
+    struct fcs_measurement_t measurement;
+    double value[4];
+
+    result = fcs_measurement_log_find(&measurements,
+                                      FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
+                                      &measurement);
+    ASSERT_TRUE(result);
+    len = fcs_measurement_get_values(&measurement, value);
+    ASSERT_EQ(3u, len);
+    EXPECT_FLOAT_EQ(2048.0, value[0]);
+    EXPECT_FLOAT_EQ(2304.0, value[1]);
+    EXPECT_FLOAT_EQ(4096.0, value[2]);
 }
 
 TEST(Hardware, ReadIOBoardPacketPartial) {
     bool result;
     size_t len;
-    struct sensor_packet_t packet;
+    struct fcs_measurement_log_t measurements;
     uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
@@ -118,7 +102,8 @@ TEST(Hardware, ReadIOBoardPacketPartial) {
     ASSERT_EQ(31, len);
 
     /* Read back and confirm failure */
-    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    fcs_measurement_log_init(&measurements, 0);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 0, &measurements);
     ASSERT_FALSE(result);
 
     /* Write the rest of the packet */
@@ -126,45 +111,28 @@ TEST(Hardware, ReadIOBoardPacketPartial) {
     ASSERT_EQ(31, len);
 
     /* Read back and confirm success */
-    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 0, &measurements);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x61, packet.crc);
-    EXPECT_EQ(0x0100, packet.tick);
-    EXPECT_EQ(0x02, packet.sensor_update_flags);
-    EXPECT_EQ(0x03, packet.cpu_load);
-    EXPECT_EQ(0x0400, packet.status);
-    EXPECT_EQ(0x0500, packet.accel.x);
-    EXPECT_EQ(0x0600, packet.accel.y);
-    EXPECT_EQ(0x0700, packet.accel.z);
-    EXPECT_EQ(0x0800, packet.gyro.x);
-    EXPECT_EQ(0x0900, packet.gyro.y);
-    EXPECT_EQ(0x1000, packet.gyro.z);
-    EXPECT_EQ(0x1100, packet.accel_gyro_temp);
-    EXPECT_EQ(0x1200, packet.pressure);
-    EXPECT_EQ(0x1300, packet.barometer_temp);
-    EXPECT_EQ(0x1400, packet.pitot);
-    EXPECT_EQ(0x1500, packet.i);
-    EXPECT_EQ(0x1600, packet.v);
-    EXPECT_EQ(0x1700, packet.range);
-    EXPECT_EQ(0x18, packet.gpin_state);
-    EXPECT_EQ(0x1900, packet.mag.x);
-    EXPECT_EQ(0x2000, packet.mag.y);
-    EXPECT_EQ(0x2100, packet.mag.z);
-    EXPECT_EQ(0x22000000, packet.gps.position.lat);
-    EXPECT_EQ(0x23000000, packet.gps.position.lng);
-    EXPECT_EQ(0x24000000, packet.gps.position.alt);
-    EXPECT_EQ(0x2500, packet.gps.velocity.n);
-    EXPECT_EQ(0x2600, packet.gps.velocity.e);
-    EXPECT_EQ(0x2700, packet.gps.velocity.d);
-    EXPECT_EQ(0x28, packet.gps_info.fix_mode_num_satellites);
-    EXPECT_EQ(0x29, packet.gps_info.pos_err);
+    /* Check a measurement */
+    struct fcs_measurement_t measurement;
+    double value[4];
+
+    result = fcs_measurement_log_find(&measurements,
+                                      FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
+                                      &measurement);
+    ASSERT_TRUE(result);
+    len = fcs_measurement_get_values(&measurement, value);
+    ASSERT_EQ(3u, len);
+    EXPECT_FLOAT_EQ(2048.0, value[0]);
+    EXPECT_FLOAT_EQ(2304.0, value[1]);
+    EXPECT_FLOAT_EQ(4096.0, value[2]);
 }
 
 TEST(Hardware, ReadIOBoardPacketAfterGarbage) {
     bool result;
     size_t len;
-    struct sensor_packet_t packet;
+    struct fcs_measurement_log_t measurements;
     uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
@@ -186,45 +154,29 @@ TEST(Hardware, ReadIOBoardPacketAfterGarbage) {
     EXPECT_EQ(70, len);
 
     /* Read back and confirm results */
-    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    fcs_measurement_log_init(&measurements, 0);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 0, &measurements);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x61, packet.crc);
-    EXPECT_EQ(0x0100, packet.tick);
-    EXPECT_EQ(0x02, packet.sensor_update_flags);
-    EXPECT_EQ(0x03, packet.cpu_load);
-    EXPECT_EQ(0x0400, packet.status);
-    EXPECT_EQ(0x0500, packet.accel.x);
-    EXPECT_EQ(0x0600, packet.accel.y);
-    EXPECT_EQ(0x0700, packet.accel.z);
-    EXPECT_EQ(0x0800, packet.gyro.x);
-    EXPECT_EQ(0x0900, packet.gyro.y);
-    EXPECT_EQ(0x1000, packet.gyro.z);
-    EXPECT_EQ(0x1100, packet.accel_gyro_temp);
-    EXPECT_EQ(0x1200, packet.pressure);
-    EXPECT_EQ(0x1300, packet.barometer_temp);
-    EXPECT_EQ(0x1400, packet.pitot);
-    EXPECT_EQ(0x1500, packet.i);
-    EXPECT_EQ(0x1600, packet.v);
-    EXPECT_EQ(0x1700, packet.range);
-    EXPECT_EQ(0x18, packet.gpin_state);
-    EXPECT_EQ(0x1900, packet.mag.x);
-    EXPECT_EQ(0x2000, packet.mag.y);
-    EXPECT_EQ(0x2100, packet.mag.z);
-    EXPECT_EQ(0x22000000, packet.gps.position.lat);
-    EXPECT_EQ(0x23000000, packet.gps.position.lng);
-    EXPECT_EQ(0x24000000, packet.gps.position.alt);
-    EXPECT_EQ(0x2500, packet.gps.velocity.n);
-    EXPECT_EQ(0x2600, packet.gps.velocity.e);
-    EXPECT_EQ(0x2700, packet.gps.velocity.d);
-    EXPECT_EQ(0x28, packet.gps_info.fix_mode_num_satellites);
-    EXPECT_EQ(0x29, packet.gps_info.pos_err);
+    /* Check a measurement */
+    struct fcs_measurement_t measurement;
+    double value[4];
+
+    result = fcs_measurement_log_find(&measurements,
+                                      FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
+                                      &measurement);
+    ASSERT_TRUE(result);
+    len = fcs_measurement_get_values(&measurement, value);
+    ASSERT_EQ(3u, len);
+    EXPECT_FLOAT_EQ(2048.0, value[0]);
+    EXPECT_FLOAT_EQ(2304.0, value[1]);
+    EXPECT_FLOAT_EQ(4096.0, value[2]);
 }
 
 TEST(Hardware, ReadIOBoardPacketAfterPacket) {
     bool result;
     size_t len;
-    struct sensor_packet_t packet;
+    struct fcs_measurement_log_t measurements;
     uint8_t s[] = "\x00\x03\x61\x01\x04\x02\x03\x04\x02\x05\x02\x06\x02\x07"
                   "\x02\x08\x02\t\x02\x10\x02\x11\x02\x12\x02\x13\x02\x14\x02"
                   "\x15\x02\x16\x02\x17\x03\x18\x19\x02 \x02!\x02\"\x01\x01"
@@ -245,75 +197,37 @@ TEST(Hardware, ReadIOBoardPacketAfterPacket) {
     EXPECT_EQ(124, len);
 
     /* Read back and confirm results */
-    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    fcs_measurement_log_init(&measurements, 0);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 0, &measurements);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x61, packet.crc);
-    EXPECT_EQ(0x0100, packet.tick);
-    EXPECT_EQ(0x02, packet.sensor_update_flags);
-    EXPECT_EQ(0x03, packet.cpu_load);
-    EXPECT_EQ(0x0400, packet.status);
-    EXPECT_EQ(0x0500, packet.accel.x);
-    EXPECT_EQ(0x0600, packet.accel.y);
-    EXPECT_EQ(0x0700, packet.accel.z);
-    EXPECT_EQ(0x0800, packet.gyro.x);
-    EXPECT_EQ(0x0900, packet.gyro.y);
-    EXPECT_EQ(0x1000, packet.gyro.z);
-    EXPECT_EQ(0x1100, packet.accel_gyro_temp);
-    EXPECT_EQ(0x1200, packet.pressure);
-    EXPECT_EQ(0x1300, packet.barometer_temp);
-    EXPECT_EQ(0x1400, packet.pitot);
-    EXPECT_EQ(0x1500, packet.i);
-    EXPECT_EQ(0x1600, packet.v);
-    EXPECT_EQ(0x1700, packet.range);
-    EXPECT_EQ(0x18, packet.gpin_state);
-    EXPECT_EQ(0x1900, packet.mag.x);
-    EXPECT_EQ(0x2000, packet.mag.y);
-    EXPECT_EQ(0x2100, packet.mag.z);
-    EXPECT_EQ(0x22000000, packet.gps.position.lat);
-    EXPECT_EQ(0x23000000, packet.gps.position.lng);
-    EXPECT_EQ(0x24000000, packet.gps.position.alt);
-    EXPECT_EQ(0x2500, packet.gps.velocity.n);
-    EXPECT_EQ(0x2600, packet.gps.velocity.e);
-    EXPECT_EQ(0x2700, packet.gps.velocity.d);
-    EXPECT_EQ(0x28, packet.gps_info.fix_mode_num_satellites);
-    EXPECT_EQ(0x29, packet.gps_info.pos_err);
+    /* Check a measurement */
+    struct fcs_measurement_t measurement;
+    double value[4];
 
-    memset(&packet, 0, sizeof(packet));
+    result = fcs_measurement_log_find(&measurements,
+                                      FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
+                                      &measurement);
+    ASSERT_TRUE(result);
+    len = fcs_measurement_get_values(&measurement, value);
+    ASSERT_EQ(3u, len);
+    EXPECT_FLOAT_EQ(2048.0, value[0]);
+    EXPECT_FLOAT_EQ(2304.0, value[1]);
+    EXPECT_FLOAT_EQ(4096.0, value[2]);
 
-    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 1, &measurements);
     ASSERT_TRUE(result);
 
-    EXPECT_EQ(0x61, packet.crc);
-    EXPECT_EQ(0x0100, packet.tick);
-    EXPECT_EQ(0x02, packet.sensor_update_flags);
-    EXPECT_EQ(0x03, packet.cpu_load);
-    EXPECT_EQ(0x0400, packet.status);
-    EXPECT_EQ(0x0500, packet.accel.x);
-    EXPECT_EQ(0x0600, packet.accel.y);
-    EXPECT_EQ(0x0700, packet.accel.z);
-    EXPECT_EQ(0x0800, packet.gyro.x);
-    EXPECT_EQ(0x0900, packet.gyro.y);
-    EXPECT_EQ(0x1000, packet.gyro.z);
-    EXPECT_EQ(0x1100, packet.accel_gyro_temp);
-    EXPECT_EQ(0x1200, packet.pressure);
-    EXPECT_EQ(0x1300, packet.barometer_temp);
-    EXPECT_EQ(0x1400, packet.pitot);
-    EXPECT_EQ(0x1500, packet.i);
-    EXPECT_EQ(0x1600, packet.v);
-    EXPECT_EQ(0x1700, packet.range);
-    EXPECT_EQ(0x18, packet.gpin_state);
-    EXPECT_EQ(0x1900, packet.mag.x);
-    EXPECT_EQ(0x2000, packet.mag.y);
-    EXPECT_EQ(0x2100, packet.mag.z);
-    EXPECT_EQ(0x22000000, packet.gps.position.lat);
-    EXPECT_EQ(0x23000000, packet.gps.position.lng);
-    EXPECT_EQ(0x24000000, packet.gps.position.alt);
-    EXPECT_EQ(0x2500, packet.gps.velocity.n);
-    EXPECT_EQ(0x2600, packet.gps.velocity.e);
-    EXPECT_EQ(0x2700, packet.gps.velocity.d);
-    EXPECT_EQ(0x28, packet.gps_info.fix_mode_num_satellites);
-    EXPECT_EQ(0x29, packet.gps_info.pos_err);
+    /* Check a measurement */
+    result = fcs_measurement_log_find(&measurements,
+                                      FCS_MEASUREMENT_TYPE_GYROSCOPE, 1,
+                                      &measurement);
+    ASSERT_TRUE(result);
+    len = fcs_measurement_get_values(&measurement, value);
+    ASSERT_EQ(3u, len);
+    EXPECT_FLOAT_EQ(2048.0, value[0]);
+    EXPECT_FLOAT_EQ(2304.0, value[1]);
+    EXPECT_FLOAT_EQ(4096.0, value[2]);
 }
 
 TEST(Hardware, SerializeControlPacket) {

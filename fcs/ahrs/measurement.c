@@ -324,49 +324,49 @@ const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
     assert(measurement);
     assert(out_value);
 
-    size_t n;
+    size_t n = 0;
     memset(out_value, 0, sizeof(double) * 4u);
 
     /* Convert the raw sensor data to floating point */
     switch (fcs_measurement_get_sensor_type(measurement)) {
         case FCS_MEASUREMENT_TYPE_CONTROL_POS:
             /* 4x 16-bit signed values */
-            n = 4u;
+            n = n ? n : 4u;
             out_value[3] = measurement->data.i16[3];
         case FCS_MEASUREMENT_TYPE_ACCELEROMETER:
         case FCS_MEASUREMENT_TYPE_GYROSCOPE:
         case FCS_MEASUREMENT_TYPE_MAGNETOMETER:
         case FCS_MEASUREMENT_TYPE_GPS_VELOCITY:
             /* 3x 16-bit signed values */
-            n = 3u;
+            n = n ? n : 3u;
             out_value[2] = measurement->data.i16[2];
         case FCS_MEASUREMENT_TYPE_PRESSURE_TEMP:
         case FCS_MEASUREMENT_TYPE_IV:
             /* 2x 16-bit signed values */
-            n = 2u;
+            n = n ? n : 2u;
             out_value[1] = measurement->data.i16[1];
         case FCS_MEASUREMENT_TYPE_PITOT:
         case FCS_MEASUREMENT_TYPE_RANGEFINDER:
             /* 1x 16-bit signed values */
-            n = 1u;
+            n = n ? n : 1u;
             out_value[0] = measurement->data.i16[0];
             break;
         case FCS_MEASUREMENT_TYPE_GPS_POSITION:
             /* 3x 32-bit signed, with preset scaling */
-            n = 3u;
+            n = n ? n : 3u;
             out_value[0] = measurement->data.i32[0] * 1e-7 * (M_PI/180.0);
             out_value[1] = measurement->data.i32[1] * 1e-7 * (M_PI/180.0);
             out_value[2] = measurement->data.i32[2] * 1e-2;
             break;
         case FCS_MEASUREMENT_TYPE_GPS_INFO:
             /* byte 0 7:4 fix mode, byte 0 3:0 num SVs, byte 1 dop */
-            n = 3u;
+            n = n ? n : 3u;
             out_value[0] = measurement->data.u8[0] >> 4u;
             out_value[1] = measurement->data.u8[0] & 0xFu;
             out_value[2] = measurement->data.u8[1];
         case FCS_MEASUREMENT_TYPE_RADIO:
             /* 4x 8-bit signed */
-            n = 4u;
+            n = n ? n : 4u;
             out_value[0] = measurement->data.i8[0];
             out_value[1] = measurement->data.i8[1];
             out_value[2] = measurement->data.i8[2];
