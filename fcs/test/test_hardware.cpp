@@ -1,50 +1,53 @@
+/*
+Copyright (C) 2013 Ben Dyer
 
-bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev,
-struct sensor_packet_t *dest);
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+#include "test.h"
+
+#include <cstdlib>
+#include <cmath>
+
+extern "C" {
+#include "config/config.h"
+#include "util/util.h"
+#include "util/3dmath.h"
+#include "comms/comms.h"
+#include "ukf/cukf.h"
+#include "TRICAL/TRICAL.h"
+#include "ahrs/measurement.h"
+#include "ahrs/ahrs.h"
+#include "drivers/stream.h"
+#include "hardware/board.h"
+
+/* Prototypes for private test hooks */
+size_t _fcs_stream_write_to_rx_buffer(uint8_t buffer_idx, const uint8_t *val,
+size_t len);
+size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx, const uint8_t *val,
+size_t maxlen);
+
+bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
+struct fcs_measurement_log_t *out_measurements);
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const double *restrict control_values);
-
-/* See hardware/platform/cpuv1-ioboardv1.c */
-struct sensor_packet_t {
-    uint8_t crc;
-    uint16_t tick;
-    uint8_t sensor_update_flags;
-    uint8_t cpu_load;
-    uint16_t status;
-    struct {
-        int16_t x, y, z;
-    } __attribute__ ((packed)) accel;
-    struct {
-        int16_t x, y, z;
-    } __attribute__ ((packed)) gyro;
-    int16_t accel_gyro_temp;
-    uint16_t pressure;
-    uint16_t barometer_temp;
-    int16_t pitot;
-    int16_t i;
-    int16_t v;
-    int16_t range;
-    uint8_t gpin_state;
-    struct {
-        int16_t x, y, z;
-    } __attribute__ ((packed)) mag;
-    struct {
-        struct {
-            int32_t lat, lng, alt;
-        } position;
-        struct {
-            int16_t n, e, d;
-        } __attribute__ ((packed)) velocity;
-    } __attribute__ ((packed)) gps;
-    struct {
-        uint8_t fix_mode_num_satellites;
-        uint8_t pos_err;
-    } __attribute__ ((packed)) gps_info;
-} __attribute__ ((packed));
-
-#define ACCEL_SENSITIVITY 4096.0
-#define GYRO_SENSITIVITY 65.5
-#define MAG_SENSITIVITY 1090.0
+}
 
 TEST(Hardware, ReadIOBoardPacket) {
     bool result;
@@ -63,7 +66,7 @@ TEST(Hardware, ReadIOBoardPacket) {
     ASSERT_EQ(62, len);
 
     /* Read back and confirm results */
-    result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
     EXPECT_EQ(0x61, packet.crc);
@@ -115,7 +118,7 @@ TEST(Hardware, ReadIOBoardPacketPartial) {
     ASSERT_EQ(31, len);
 
     /* Read back and confirm failure */
-    result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_FALSE(result);
 
     /* Write the rest of the packet */
@@ -123,7 +126,7 @@ TEST(Hardware, ReadIOBoardPacketPartial) {
     ASSERT_EQ(31, len);
 
     /* Read back and confirm success */
-    result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
     EXPECT_EQ(0x61, packet.crc);
@@ -183,7 +186,7 @@ TEST(Hardware, ReadIOBoardPacketAfterGarbage) {
     EXPECT_EQ(70, len);
 
     /* Read back and confirm results */
-    result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
     EXPECT_EQ(0x61, packet.crc);
@@ -242,7 +245,7 @@ TEST(Hardware, ReadIOBoardPacketAfterPacket) {
     EXPECT_EQ(124, len);
 
     /* Read back and confirm results */
-    result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
     EXPECT_EQ(0x61, packet.crc);
@@ -278,7 +281,7 @@ TEST(Hardware, ReadIOBoardPacketAfterPacket) {
 
     memset(&packet, 0, sizeof(packet));
 
-    result = _fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
+    result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, &packet);
     ASSERT_TRUE(result);
 
     EXPECT_EQ(0x61, packet.crc);

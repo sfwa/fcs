@@ -35,11 +35,8 @@ SOFTWARE.
 #include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
-#include "../comms/comms.h"
 #include "../ukf/cukf.h"
-#include "../drivers/stream.h"
 #include "../stats/stats.h"
-#include "../piksi/piksi.h"
 #include "../TRICAL/TRICAL.h"
 #include "measurement.h"
 #include "ahrs.h"
@@ -61,10 +58,6 @@ struct fcs_ahrs_state_t fcs_global_ahrs_state;
 
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
-
-/* Internal functions */
-void _fcs_ahrs_update_global_state(struct ukf_state_t *restrict s,
-double *restrict covariance);
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
@@ -93,6 +86,12 @@ void fcs_ahrs_init(void) {
     ukf_set_state(&initial_state);
 
     /*
+    Copy the UKF default state to the global AHRS state structure to make sure
+    everything's in sync
+    */
+    ukf_get_state((struct ukf_state_t*)&fcs_global_ahrs_state.lat);
+
+    /*
     TODO: Configure default UKF covariance and sensor offsets
     covariance.accel_covariance = 81.0;
     covariance.gyro_covariance = 0.5 * (M_PI / 180.0);
@@ -105,8 +104,8 @@ void fcs_ahrs_init(void) {
     covariance.barometer_amsl_covariance = 4.0;
     */
 
-    /* TODO: Set the field */
-    fcs_global_ahrs_state.wmm_field[0] = 0.6;
+    /* Set the default field value */
+    fcs_global_ahrs_state.wmm_field[0] = 1.0;
     fcs_global_ahrs_state.wmm_field[1] = 0.0;
     fcs_global_ahrs_state.wmm_field[2] = 0.0;
 
@@ -130,46 +129,66 @@ void fcs_ahrs_init(void) {
 
     /* Update the TRICAL instance parameters based on the UKF configuration */
     uint8_t i;
+    float default_scale = 1.0 / (float)INT16_MAX, *restrict instance_state;
     for (i = 0; i < FCS_AHRS_NUM_TRICAL_INSTANCES; i++) {
-        float norm = (float)vector3_norm_d(fcs_global_ahrs_state.wmm_field),
-              noise = (float)sqrt(1.5);
-
         TRICAL_init(&fcs_global_ahrs_state.trical_instances[i]);
-        TRICAL_norm_set(&fcs_global_ahrs_state.trical_instances[i], norm);
-        TRICAL_noise_set(&fcs_global_ahrs_state.trical_instances[i], noise);
+
+        /*
+        Set the starting diagonal for the scale factor matrix to something
+        in a similar order of magnitude to the maximum value of the sensor
+        */
+        instance_state = fcs_global_ahrs_state.trical_instances[i].state;
+        instance_state[3] = instance_state[6] = instance_state[8] =
+            default_scale;
     }
 }
 
 void fcs_ahrs_tick(void) {
+    /* TODO: calculate WMM field at current lat/lon */
+
     /* Handle magnetometer calibration update based on new readings */
     struct fcs_calibration_t *restrict sensor_calibration_map =
         fcs_global_ahrs_state.calibration.sensor_calibration;
+    TRICAL_instance_t *restrict instance;
     struct fcs_measurement_t mag_measurement;
     double mag_value[4];
     float mag_value_f[3];
+    float norm = (float)vector3_norm_d(fcs_global_ahrs_state.wmm_field);
     uint8_t i, j;
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(
                 &fcs_global_ahrs_state.measurements,
                 FCS_MEASUREMENT_TYPE_MAGNETOMETER, i, &mag_measurement)) {
-            /* TODO: fix magnetometer sensitivity / field scaling */
-
+            /* Get the measurement value */
             fcs_measurement_get_values(&mag_measurement, mag_value);
+
+            /* Determine the sensor key for the calibration parameters */
+            uint8_t sensor_key =
+                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
+                ((FCS_MEASUREMENT_TYPE_MAGNETOMETER <<
+                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+
+            /* Update TRICAL instance parameters with the latest results */
+            instance = &fcs_global_ahrs_state.trical_instances[i];
+            TRICAL_norm_set(instance, norm);
+            TRICAL_noise_set(instance,
+                sensor_calibration_map[sensor_key].error *
+                sensor_calibration_map[sensor_key].error);
 
             mag_value_f[0] = mag_value[0];
             mag_value_f[1] = mag_value[1];
             mag_value_f[2] = mag_value[2];
-            TRICAL_estimate_update(&fcs_global_ahrs_state.trical_instances[i],
-                                   mag_value_f);
+            TRICAL_estimate_update(instance, mag_value_f);
 
             for (j = 0; j < 9u; j++) {
-                if (isnan(
-                        fcs_global_ahrs_state.trical_instances[i].state[j])) {
+                if (isnan(instance->state[j])) {
                     /*
                     TRICAL has blown up -- reset this instance and ignore the
                     current reading.
                     */
-                    TRICAL_reset(&fcs_global_ahrs_state.trical_instances[i]);
+                    TRICAL_reset(instance);
                     fcs_global_counters.trical_resets[i]++;
                     break;
                 }
@@ -179,16 +198,8 @@ void fcs_ahrs_tick(void) {
             Copy the TRICAL calibration estimate to the magnetometer
             calibration
             */
-            uint8_t sensor_key =
-                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
-                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
-                ((FCS_MEASUREMENT_TYPE_MAGNETOMETER <<
-                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
-                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
-
             memcpy(sensor_calibration_map[sensor_key].params,
-                   fcs_global_ahrs_state.trical_instances[i].state,
-                   9u * sizeof(float));
+                   instance->state, 9u * sizeof(float));
         }
     }
 
@@ -203,10 +214,10 @@ void fcs_ahrs_tick(void) {
         {0, 0, 0, 1} /* mag_orientation */
     };
 
-    /* FIXME: get these from WMM or something */
-    params.mag_field[0] = 0.6;
-    params.mag_field[1] = 0.0;
-    params.mag_field[2] = 0.0;
+    /* Use the latest WMM field vector */
+    params.mag_field[0] = fcs_global_ahrs_state.wmm_field[0];
+    params.mag_field[1] = fcs_global_ahrs_state.wmm_field[1];
+    params.mag_field[2] = fcs_global_ahrs_state.wmm_field[2];
 
     /* Read sensor data from the measurement log, and pass it to the UKF */
     double v[4], err, offset[3];

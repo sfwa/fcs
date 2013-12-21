@@ -33,16 +33,18 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
 #endif
 
-#include "../config/config.h"
-#include "../util/util.h"
-#include "../util/3dmath.h"
-#include "../comms/comms.h"
-#include "../ukf/cukf.h"
-#include "../drivers/stream.h"
-#include "../stats/stats.h"
-#include "../piksi/piksi.h"
-#include "../TRICAL/TRICAL.h"
-#include "ahrs.h"
+#include "../../config/config.h"
+#include "../board.h"
+#include "../../util/util.h"
+#include "../../util/3dmath.h"
+#include "../../comms/comms.h"
+#include "../../ukf/cukf.h"
+#include "../../drivers/stream.h"
+#include "../../stats/stats.h"
+#include "../../piksi/piksi.h"
+#include "../../TRICAL/TRICAL.h"
+#include "../../ahrs/measurement.h"
+#include "../../ahrs/ahrs.h"
 
 struct sensor_packet_t {
     /* Base fields */
@@ -184,8 +186,8 @@ static inline int32_t swap_int32(int32_t val) {
 }
 
 /* Prototypes of internal functions */
-bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev,
-struct sensor_packet_t *dest);
+bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
+struct fcs_measurement_log_t *out_measurements);
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const double *restrict control_values);
 
@@ -218,7 +220,9 @@ void fcs_board_tick(void) {
 
     uint8_t i;
     for (i = 0; i < 2; i++){
-        if (_fcs_read_ioboard_packet(FCS_STREAM_UART_INT0 + i, i)) {
+        if (_fcs_read_ioboard_packet(
+                FCS_STREAM_UART_INT0 + i, i,
+                &fcs_global_ahrs_state.measurements)) {
             ioboard_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
         }
 
@@ -253,11 +257,15 @@ void fcs_board_tick(void) {
     Write current control values to I/O boards -- the CPLD replicates the I/O
     board output stream so we only need to write to one.
     */
+
+    /* TODO: Read control set values from NMPC */
+    double control_set[4] = { 0.0, 0.0, 0.0, 0.0 };
+
     size_t control_len;
     uint8_t control_buf[16];
     control_len = _fcs_format_control_packet(
         control_buf,
-        (uint8_t)(fcs_global_state.solution_time & 0xFFu),
+        (uint8_t)(fcs_global_ahrs_state.solution_time & 0xFFu),
         control_set
     );
     assert(control_len < 16u);
@@ -273,9 +281,9 @@ Read, deserialize and validate a full I/O board packet from `dev`. Since we
 get two of these every tick there's no point doing this incrementally; we just
 need to make sure we can deal with partial/corrupted packets.
 */
-bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev,
-struct sensor_packet_t *dest) {
-    assert(dest);
+bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
+struct fcs_measurement_log_t *out_measurements) {
+    assert(out_measurements);
 
     /* Read latest I/O board packets from the UART streams */
     uint8_t buf[64], i = 0, checksum;
@@ -325,9 +333,9 @@ struct sensor_packet_t *dest) {
     }
 
     /* Decode the message into the packet buffer */
-    result = fcs_cobsr_decode((uint8_t*)dest,
-                              sizeof(struct sensor_packet_t),
-                              buf, nbytes - 1u);
+    struct sensor_packet_t packet;
+    result = fcs_cobsr_decode((uint8_t*)&packet, sizeof(packet), buf,
+                              nbytes - 1u);
 
     /* Confirm decode was successful */
     if (result.status != FCS_COBSR_DECODE_OK) {
@@ -335,43 +343,120 @@ struct sensor_packet_t *dest) {
     }
 
     /* Confirm packet size is what we expect */
-    if (result.out_len != sizeof(struct sensor_packet_t)) {
+    if (result.out_len != sizeof(packet)) {
         goto invalid;
     }
 
     /* Validate the packet checksum */
-    checksum = fcs_crc8(
-        (uint8_t*)&dest->tick, result.out_len - 1u, 0x0);
+    checksum = fcs_crc8((uint8_t*)&packet.tick, result.out_len - 1u, 0x0);
 
-    if (checksum != dest->crc) {
+    if (checksum != packet.crc) {
         goto invalid;
     }
 
-    /* Swap bytes for multi-byte values -- AVR32 is big-endian */
-    dest->tick = swap_uint16(dest->tick);
-    dest->status = swap_uint16(dest->status);
-    dest->accel.x = swap_int16(dest->accel.x);
-    dest->accel.y = swap_int16(dest->accel.y);
-    dest->accel.z = swap_int16(dest->accel.z);
-    dest->gyro.x = swap_int16(dest->gyro.x);
-    dest->gyro.y = swap_int16(dest->gyro.y);
-    dest->gyro.z = swap_int16(dest->gyro.z);
-    dest->accel_gyro_temp = swap_int16(dest->accel_gyro_temp);
-    dest->pressure = swap_uint16(dest->pressure);
-    dest->barometer_temp = swap_uint16(dest->barometer_temp);
-    dest->pitot = swap_int16(dest->pitot);
-    dest->i = swap_int16(dest->i);
-    dest->v = swap_int16(dest->v);
-    dest->range = swap_int16(dest->range);
-    dest->mag.x = swap_int16(dest->mag.x);
-    dest->mag.y = swap_int16(dest->mag.y);
-    dest->mag.z = swap_int16(dest->mag.z);
-    dest->gps.position.lat = swap_int32(dest->gps.position.lat);
-    dest->gps.position.lng = swap_int32(dest->gps.position.lng);
-    dest->gps.position.alt = swap_int32(dest->gps.position.alt);
-    dest->gps.velocity.n = swap_int16(dest->gps.velocity.n);
-    dest->gps.velocity.e = swap_int16(dest->gps.velocity.e);
-    dest->gps.velocity.d = swap_int16(dest->gps.velocity.d);
+    /* Copy sensor readings to the system measurement log */
+    struct fcs_measurement_t measurement;
+
+    if (packet.sensor_update_flags & UPDATED_ACCEL) {
+        measurement.header = 6u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_ACCELEROMETER);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.accel.x);
+        measurement.data.i16[1] = swap_int16(packet.accel.y);
+        measurement.data.i16[2] = swap_int16(packet.accel.z);
+        fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    if (packet.sensor_update_flags & UPDATED_GYRO) {
+        measurement.header = 6u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_GYROSCOPE);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.gyro.x);
+        measurement.data.i16[1] = swap_int16(packet.gyro.y);
+        measurement.data.i16[2] = swap_int16(packet.gyro.z);
+        fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    if (packet.sensor_update_flags & UPDATED_BAROMETER) {
+        measurement.header = 4u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_PRESSURE_TEMP);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.pressure);
+        measurement.data.i16[1] = swap_int16(packet.barometer_temp);
+        fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    if (packet.sensor_update_flags & UPDATED_ADC_GPIO) {
+        /* Update the pitot */
+        measurement.header = 2u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_PITOT);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.pitot);
+        fcs_measurement_log_add(out_measurements, &measurement);
+
+        /* Update current/voltage */
+        measurement.header = 4u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_IV);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.i);
+        measurement.data.i16[1] = swap_int16(packet.v);
+        fcs_measurement_log_add(out_measurements, &measurement);
+
+        /* Update ultransonic rangefinder */
+        measurement.header = 2u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_RANGEFINDER);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.range);
+        fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    if (packet.sensor_update_flags & UPDATED_MAG) {
+        measurement.header = 6u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_MAGNETOMETER);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.mag.x);
+        measurement.data.i16[1] = swap_int16(packet.mag.y);
+        measurement.data.i16[2] = swap_int16(packet.mag.z);
+        fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    if (packet.sensor_update_flags & UPDATED_GPS_POS) {
+        measurement.header = 12u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_GPS_POSITION);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i32[0] = swap_int32(packet.gps.position.lat);
+        measurement.data.i32[1] = swap_int32(packet.gps.position.lng);
+        measurement.data.i32[2] = swap_int32(packet.gps.position.alt);
+        fcs_measurement_log_add(out_measurements, &measurement);
+
+        measurement.header = 6u;
+        fcs_measurement_set_sensor_type(&measurement,
+                                        FCS_MEASUREMENT_TYPE_GPS_VELOCITY);
+        fcs_measurement_set_sensor_id(&measurement, board_id);
+
+        measurement.data.i16[0] = swap_int16(packet.gps.velocity.n);
+        measurement.data.i16[1] = swap_int16(packet.gps.velocity.e);
+        measurement.data.i16[2] = swap_int16(packet.gps.velocity.d);
+        fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    /* TODO: log GPS info updates */
 
     fcs_global_counters.ioboard_packet_rx[dev]++;
     return true;

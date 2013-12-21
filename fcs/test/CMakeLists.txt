@@ -62,7 +62,8 @@ ADD_EXECUTABLE(unittest
     test_stream.cpp
     ../ahrs/measurement.c
     ../ahrs/ahrs.c
-    test_ahrs.cpp)
+    test_ahrs.cpp
+    ../hardware/platform/cpuv1-ioboardv1.c)
 
 # Create dependency of test on googletest, ukf and TRICAL
 ADD_DEPENDENCIES(unittest googletest)
