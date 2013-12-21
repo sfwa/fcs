@@ -67,12 +67,14 @@ void fcs_ahrs_init(void) {
     assert(ukf_config_get_measurement_dim() == 20);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
 
+    fcs_wmm_init();
+
     /*
     TODO: read state back from fcs_global_ahrs_state, just in case we're
     booting up after an in-flight reset
     */
     struct ukf_state_t initial_state = {
-        {0, 0, 0},
+        {-37.0 * (M_PI/180.0), 145.0 * (M_PI/180.0), 10.0},
         {0, 0, 0},
         {0, 0, 0},
         {0, 0, 0, 1},

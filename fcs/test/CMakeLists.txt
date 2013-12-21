@@ -60,8 +60,9 @@ ADD_EXECUTABLE(unittest
     test_comms.cpp
     ../drivers/stream.c
     test_stream.cpp
-    ../ahrs/measurement.c
     ../ahrs/wmm.c
+    test_wmm.cpp
+    ../ahrs/measurement.c
     ../ahrs/ahrs.c
     test_ahrs.cpp
     ../hardware/platform/cpuv1-ioboardv1.c

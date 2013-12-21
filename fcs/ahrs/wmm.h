@@ -24,8 +24,14 @@ SOFTWARE.
 #define _FCS_WMM_H
 
 /*
+Prepare derived values from the current WMM coefficients. Must be called
+prior to `fcs_wmm_calculate_field`.
+*/
+void fcs_wmm_init(void);
+
+/*
 Calculate the magnetic field at the given point in space and time. The result
-is copied to `out_field` as NED field components in uT.
+is copied to `out_field` as NED field components in nT.
 
 The lat and lon values are in radians; alt is in metres above the WGS84
 ellipsoid. The year value is a fractional Gregorian year, e.g. 1st July 2014
