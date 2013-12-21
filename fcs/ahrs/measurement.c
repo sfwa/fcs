@@ -84,28 +84,19 @@ const struct fcs_measurement_t *restrict measurement) {
     return length;
 }
 
-void fcs_measurement_set_sensor_type(
-struct fcs_measurement_t *restrict measurement,
+void fcs_measurement_set_sensor(
+struct fcs_measurement_t *restrict measurement, uint8_t sensor_id,
 enum fcs_measurement_type_t type) {
     assert(measurement);
+    assert(sensor_id < FCS_MEASUREMENT_SENSOR_ID_MAX);
     assert(type >= FCS_MEASUREMENT_TYPE_INVALID);
     assert(type < FCS_MEASUREMENT_TYPE_LAST);
 
     measurement->sensor =
-        (measurement->sensor & FCS_MEASUREMENT_SENSOR_ID_MASK) |
-        ((type << FCS_MEASUREMENT_SENSOR_TYPE_OFFSET)
-         & FCS_MEASUREMENT_SENSOR_TYPE_MASK);
-}
-
-void fcs_measurement_set_sensor_id(
-struct fcs_measurement_t *restrict measurement, uint8_t sensor_id) {
-    assert(measurement);
-    assert(sensor_id < FCS_MEASUREMENT_SENSOR_ID_MAX);
-
-    measurement->sensor =
         ((sensor_id << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
          FCS_MEASUREMENT_SENSOR_ID_MASK) |
-        (measurement->sensor & FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+        ((type << FCS_MEASUREMENT_SENSOR_TYPE_OFFSET)
+         & FCS_MEASUREMENT_SENSOR_TYPE_MASK);
 }
 
 enum fcs_calibration_type_t fcs_calibration_get_type(

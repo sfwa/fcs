@@ -73,8 +73,7 @@ TEST(MeasurementLog, AddSensorSingle) {
     struct fcs_measurement_t measurement;
 
     measurement.header = sizeof(int16_t);
-    fcs_measurement_set_sensor_type(&measurement, FCS_MEASUREMENT_TYPE_PITOT);
-    fcs_measurement_set_sensor_id(&measurement, 2u);
+    fcs_measurement_set_sensor(&measurement, 2u, FCS_MEASUREMENT_TYPE_PITOT);
     measurement.data.i16[0] = 1234;
 
     result = fcs_measurement_log_add(&packet, &measurement);
@@ -93,17 +92,15 @@ TEST(MeasurementLog, AddSensorMultiple) {
     struct fcs_measurement_t measurement;
 
     measurement.header = sizeof(int16_t);
-    fcs_measurement_set_sensor_type(&measurement, FCS_MEASUREMENT_TYPE_PITOT);
-    fcs_measurement_set_sensor_id(&measurement, 2u);
+    fcs_measurement_set_sensor(&measurement, 2u, FCS_MEASUREMENT_TYPE_PITOT);
     measurement.data.i16[0] = 1234;
     result = fcs_measurement_log_add(&packet, &measurement);
 
     ASSERT_EQ(true, result);
 
     measurement.header = sizeof(int16_t) * 3u;
-    fcs_measurement_set_sensor_type(&measurement,
-                                    FCS_MEASUREMENT_TYPE_ACCELEROMETER);
-    fcs_measurement_set_sensor_id(&measurement, 0u);
+    fcs_measurement_set_sensor(&measurement, 0,
+                               FCS_MEASUREMENT_TYPE_ACCELEROMETER);
     measurement.data.i16[0] = 0;
     measurement.data.i16[1] = 1;
     measurement.data.i16[2] = -1;
@@ -202,17 +199,15 @@ TEST(MeasurementLog, SerializePacket) {
     struct fcs_measurement_t measurement;
 
     measurement.header = sizeof(int16_t);
-    fcs_measurement_set_sensor_type(&measurement, FCS_MEASUREMENT_TYPE_PITOT);
-    fcs_measurement_set_sensor_id(&measurement, 2u);
+    fcs_measurement_set_sensor(&measurement, 2u, FCS_MEASUREMENT_TYPE_PITOT);
     measurement.data.i16[0] = 1234;
     result = fcs_measurement_log_add(&packet, &measurement);
 
     ASSERT_EQ(true, result);
 
     measurement.header = sizeof(int16_t) * 3u;
-    fcs_measurement_set_sensor_type(&measurement,
-                                    FCS_MEASUREMENT_TYPE_ACCELEROMETER);
-    fcs_measurement_set_sensor_id(&measurement, 0u);
+    fcs_measurement_set_sensor(&measurement, 0,
+                               FCS_MEASUREMENT_TYPE_ACCELEROMETER);
     measurement.data.i16[0] = 0;
     measurement.data.i16[1] = 1;
     measurement.data.i16[2] = -1;

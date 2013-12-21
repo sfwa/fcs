@@ -139,22 +139,6 @@ struct control_packet_t {
     uint16_t pwm[4];
 } __attribute__ ((packed));
 
-struct cmd_packet_t {
-    uint8_t crc;
-    uint8_t tick;
-    uint8_t msg_type;
-    uint8_t cmd[CMD_KEY_LEN];
-    uint8_t val;
-} __attribute__ ((packed));
-
-struct firmware_packet_t {
-    uint8_t crc;
-    uint8_t tick;
-    uint8_t msg_type;
-    uint16_t addr;
-    uint32_t data;
-};
-
 enum msg_type_t {
     MSG_TYPE_NONE = 0,
     MSG_TYPE_CONTROL = 1,
@@ -164,20 +148,14 @@ enum msg_type_t {
 
 #define FCS_IOBOARD_RESET_TIMEOUT 50
 #define FCS_IOBOARD_PACKET_TIMEOUT 5
-#define FCS_IOBOARD_RESTART_WINDOW 10
 
 /* Endian swap functions -- AVR32s are big-endian */
 static inline uint16_t swap_uint16(uint16_t val) {
-    return (val << 8) | (val >> 8 );
+    return (val << 8) | ((val >> 8) & 0xFF);
 }
 
 static inline int16_t swap_int16(int16_t val) {
     return (val << 8) | ((val >> 8) & 0xFF);
-}
-
-static inline uint32_t swap_uint32(uint32_t val) {
-    val = ((val << 8) & 0xFF00FF00 ) | ((val >> 8) & 0xFF00FF );
-    return (val << 16) | (val >> 16);
 }
 
 static inline int32_t swap_int32(int32_t val) {
@@ -190,7 +168,6 @@ bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements);
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const double *restrict control_values);
-
 
 void fcs_board_init(void) {
     /*
@@ -359,9 +336,8 @@ struct fcs_measurement_log_t *out_measurements) {
 
     if (packet.sensor_update_flags & UPDATED_ACCEL) {
         measurement.header = 6u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_ACCELEROMETER);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_ACCELEROMETER);
 
         measurement.data.i16[0] = swap_int16(packet.accel.x);
         measurement.data.i16[1] = swap_int16(packet.accel.y);
@@ -371,9 +347,8 @@ struct fcs_measurement_log_t *out_measurements) {
 
     if (packet.sensor_update_flags & UPDATED_GYRO) {
         measurement.header = 6u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_GYROSCOPE);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_GYROSCOPE);
 
         measurement.data.i16[0] = swap_int16(packet.gyro.x);
         measurement.data.i16[1] = swap_int16(packet.gyro.y);
@@ -383,9 +358,8 @@ struct fcs_measurement_log_t *out_measurements) {
 
     if (packet.sensor_update_flags & UPDATED_BAROMETER) {
         measurement.header = 4u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_PRESSURE_TEMP);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_PRESSURE_TEMP);
 
         measurement.data.i16[0] = swap_int16(packet.pressure);
         measurement.data.i16[1] = swap_int16(packet.barometer_temp);
@@ -395,18 +369,16 @@ struct fcs_measurement_log_t *out_measurements) {
     if (packet.sensor_update_flags & UPDATED_ADC_GPIO) {
         /* Update the pitot */
         measurement.header = 2u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_PITOT);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_PITOT);
 
         measurement.data.i16[0] = swap_int16(packet.pitot);
         fcs_measurement_log_add(out_measurements, &measurement);
 
         /* Update current/voltage */
         measurement.header = 4u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_IV);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_IV);
 
         measurement.data.i16[0] = swap_int16(packet.i);
         measurement.data.i16[1] = swap_int16(packet.v);
@@ -414,9 +386,8 @@ struct fcs_measurement_log_t *out_measurements) {
 
         /* Update ultransonic rangefinder */
         measurement.header = 2u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_RANGEFINDER);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_RANGEFINDER);
 
         measurement.data.i16[0] = swap_int16(packet.range);
         fcs_measurement_log_add(out_measurements, &measurement);
@@ -424,9 +395,8 @@ struct fcs_measurement_log_t *out_measurements) {
 
     if (packet.sensor_update_flags & UPDATED_MAG) {
         measurement.header = 6u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_MAGNETOMETER);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_MAGNETOMETER);
 
         measurement.data.i16[0] = swap_int16(packet.mag.x);
         measurement.data.i16[1] = swap_int16(packet.mag.y);
@@ -436,9 +406,8 @@ struct fcs_measurement_log_t *out_measurements) {
 
     if (packet.sensor_update_flags & UPDATED_GPS_POS) {
         measurement.header = 12u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_GPS_POSITION);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_GPS_POSITION);
 
         measurement.data.i32[0] = swap_int32(packet.gps.position.lat);
         measurement.data.i32[1] = swap_int32(packet.gps.position.lng);
@@ -446,9 +415,8 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_log_add(out_measurements, &measurement);
 
         measurement.header = 6u;
-        fcs_measurement_set_sensor_type(&measurement,
-                                        FCS_MEASUREMENT_TYPE_GPS_VELOCITY);
-        fcs_measurement_set_sensor_id(&measurement, board_id);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_GPS_VELOCITY);
 
         measurement.data.i16[0] = swap_int16(packet.gps.velocity.n);
         measurement.data.i16[1] = swap_int16(packet.gps.velocity.e);

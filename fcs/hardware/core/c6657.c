@@ -203,9 +203,9 @@ static void _fcs_core_pll_setup(void) {
     Example: If PLLM = 15, then BWADJ = 7
     */
     temp = ((FCS_CORE_PLL_MUL + 1) >> 1) - 1; /* Divide the pllm by 2 */
-    cfg->CORE_PLL_CTL0 &=~(0xFF000000);  /* Clear the BWADJ Field */
+    cfg->CORE_PLL_CTL0 &= ~(0xFF000000);  /* Clear the BWADJ Field */
     cfg->CORE_PLL_CTL0 |=  ((temp << 24) & 0xFF000000);
-    cfg->CORE_PLL_CTL1 &=~(0x0000000F);   /* Clear the BWADJ field */
+    cfg->CORE_PLL_CTL1 &= ~(0x0000000F);   /* Clear the BWADJ field */
     cfg->CORE_PLL_CTL1 |= ((temp >> 8) & 0x0000000F);
 
     /*
@@ -277,38 +277,6 @@ static void _fcs_core_pll_setup(void) {
     pll->PLLCTL |= (1 << 0);
 
     /* 15. The PLL and PLL Controller are now initialized in PLL mode */
-
-/*
-    int dsp_freq;
-    int dsp_freM,dsp_freD;
-
-    // Compute the real dsp freq (*100)
-    dsp_freq = (((REF_CLOCK_KHZ/10) * ((pll_mult+1)/2))/(pll_div+1));
-
-    // Displayed frequency setup
-    // dsp freq in MHz
-    dsp_freM = dsp_freq / 100;
-
-    // dsp freq first decimal if freq expressed in MHz
-    dsp_freD = ((dsp_freq - dsp_freM * 100) + 5) / 10;
-
-    // Add roundup unit to MHz displayed and reajust decimal value if
-    // necessary...
-    if (dsp_freD > 9)
-    {
-        dsp_freD = dsp_freD - 10;
-        dsp_freM = dsp_freM + 1;
-    }
-
-    // Print freq info...
-    GEL_TextOut("PLL1 Setup for DSP @ %d.%d MHz.\n",,,,,
-                dsp_freM, dsp_freD );
-    GEL_TextOut("           SYSCLK2 = %f MHz, SYSCLK5 = %f MHz.\n",,,,, (
-                (float)(dsp_freq/100)/div2), ((float)(dsp_freq/100)/div5));
-    GEL_TextOut("           SYSCLK8 = %f MHz.\n",,,,,
-                ((float)(dsp_freq/100)/div8));
-    GEL_TextOut("PLL1 Setup... Done.\n" );
-*/
 }
 
 static void _fcs_ddr3_pll_setup(void) {

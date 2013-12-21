@@ -110,12 +110,9 @@ const struct fcs_measurement_t *restrict measurement);
 size_t fcs_measurement_get_length(
 const struct fcs_measurement_t *restrict measurement);
 
-void fcs_measurement_set_sensor_type(
-struct fcs_measurement_t *restrict measurement,
+void fcs_measurement_set_sensor(
+struct fcs_measurement_t *restrict measurement, uint8_t sensor_id,
 enum fcs_measurement_type_t type);
-
-void fcs_measurement_set_sensor_id(
-struct fcs_measurement_t *restrict measurement, uint8_t sensor_id);
 
 /*
 fcs_calibration_t specifies the calibration to be applied to a particular
