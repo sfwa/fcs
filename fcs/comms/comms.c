@@ -227,33 +227,20 @@ const struct fcs_ahrs_state_t *ahrs_state) {
     out_status->solution_time = ahrs_state->solution_time;
     out_status->solution_time &= 0x3FFFFFFFu;
 
-    out_status->ioboard_resets[0] =
-        fcs_global_counters.ioboard_resets[0] <= INT32_MAX ?
-        fcs_global_counters.ioboard_resets[0] : INT32_MAX;
-    out_status->ioboard_resets[1] =
-        fcs_global_counters.ioboard_resets[1] <= INT32_MAX ?
-        fcs_global_counters.ioboard_resets[1] : INT32_MAX;
-    out_status->trical_resets[0] =
-        fcs_global_counters.trical_resets[0] <= INT32_MAX ?
-        fcs_global_counters.trical_resets[0] : INT32_MAX;
-    out_status->trical_resets[1] =
-        fcs_global_counters.trical_resets[1] <= INT32_MAX ?
-        fcs_global_counters.trical_resets[1] : INT32_MAX;
-    out_status->ukf_resets =
-        fcs_global_counters.ukf_resets <= INT32_MAX ?
-        fcs_global_counters.ukf_resets : INT32_MAX;
-    out_status->main_loop_cycle_max[0] =
-        fcs_global_counters.main_loop_cycle_max[0] <= INT32_MAX ?
-        fcs_global_counters.main_loop_cycle_max[0] : INT32_MAX;
-    out_status->main_loop_cycle_max[1] =
-        fcs_global_counters.main_loop_cycle_max[1] <= INT32_MAX ?
-        fcs_global_counters.main_loop_cycle_max[1] : INT32_MAX;
+    uint8_t i;
+    for (i = 0; i < 2; i++) {
+        out_status->ioboard_resets[i] =
+            fcs_global_counters.ioboard_resets[i] & 0x0FFFFFFFu;
+        out_status->trical_resets[i] =
+            fcs_global_counters.trical_resets[i] & 0x0FFFFFFFu;
+        out_status->main_loop_cycle_max[i] =
+            fcs_global_counters.main_loop_cycle_max[i] & 0x0FFFFFFFu;
+    }
+
     out_status->cpu_packet_rx =
-        fcs_global_counters.cpu_packet_rx <= INT32_MAX ?
-        fcs_global_counters.cpu_packet_rx : INT32_MAX;
+        fcs_global_counters.cpu_packet_rx & 0x0FFFFFFFu;
     out_status->cpu_packet_rx_err =
-        fcs_global_counters.cpu_packet_rx_err <= INT32_MAX ?
-        fcs_global_counters.cpu_packet_rx_err : INT32_MAX;
+        fcs_global_counters.cpu_packet_rx_err & 0x0FFFFFFFu;
     out_status->gps_num_svs = 0; /* TODO */
     out_status->telemetry_signal_db = 0; /* TODO */
     out_status->telemetry_noise_db = 0; /* TODO */
@@ -326,20 +313,6 @@ const struct fcs_ahrs_state_t *ahrs_state) {
                                      6378000.0;
     out_state->alt_uncertainty = 1.96 * sqrt(ahrs_state->alt_covariance);
 
-    out_state->velocity_uncertainty[0] =
-        1.96 * sqrt(ahrs_state->velocity_covariance[0]);
-    out_state->velocity_uncertainty[1] =
-        1.96 * sqrt(ahrs_state->velocity_covariance[1]);
-    out_state->velocity_uncertainty[2] =
-        1.96 * sqrt(ahrs_state->velocity_covariance[2]);
-
-    out_state->wind_velocity_uncertainty[0] =
-        1.96 * sqrt(ahrs_state->wind_velocity_covariance[0]);
-    out_state->wind_velocity_uncertainty[1] =
-        1.96 * sqrt(ahrs_state->wind_velocity_covariance[1]);
-    out_state->wind_velocity_uncertainty[2] =
-        1.96 * sqrt(ahrs_state->wind_velocity_covariance[2]);
-
     /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
     out_state->roll_uncertainty =
         1.96 * sqrt(ahrs_state->attitude_covariance[0]) * (180.0/M_PI);
@@ -348,12 +321,16 @@ const struct fcs_ahrs_state_t *ahrs_state) {
     out_state->yaw_uncertainty =
         1.96 * sqrt(ahrs_state->attitude_covariance[2]) * (180.0/M_PI);
 
-    out_state->angular_velocity_uncertainty[0] =
-        sqrt(ahrs_state->angular_velocity_covariance[0]) * (180.0/M_PI)*1.96;
-    out_state->angular_velocity_uncertainty[1] =
-        sqrt(ahrs_state->angular_velocity_covariance[1]) * (180.0/M_PI)*1.96;
-    out_state->angular_velocity_uncertainty[2] =
-        sqrt(ahrs_state->angular_velocity_covariance[2]) * (180.0/M_PI)*1.96;
+    uint8_t i;
+    for (i = 0; i < 3; i++) {
+        out_state->velocity_uncertainty[i] =
+            1.96 * sqrt(ahrs_state->velocity_covariance[i]);
+        out_state->wind_velocity_uncertainty[i] =
+            1.96 * sqrt(ahrs_state->wind_velocity_covariance[i]);
+        out_state->angular_velocity_uncertainty[i] =
+            1.96 *
+            sqrt(ahrs_state->angular_velocity_covariance[i]) * (180.0/M_PI);
+    }
 
     /* Check that the state is valid */
     enum fcs_validation_result_t valid;
