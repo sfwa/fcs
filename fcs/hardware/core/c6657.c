@@ -26,16 +26,16 @@ SOFTWARE.
 #include <stdbool.h>
 
 #include <c6x.h>
-#include "c66x-csl/ti/csl/cslr_device.h"
-#include "c66x-csl/ti/csl/cslr_bootcfg.h"
-#include "c66x-csl/ti/csl/cslr_gpio.h"
-#include "c66x-csl/ti/csl/cslr_cgem.h"
-#include "c66x-csl/ti/csl/cslr_msmc.h"
-#include "c66x-csl/ti/csl/cslr_pllc.h"
-#include "c66x-csl/ti/csl/cslr_emif4f.h"
-#include "c66x-csl/ti/csl/cslr_psc.h"
-#include "c66x-csl/ti/csl/cslr_xmc.h"
-#include "c66x-csl/ti/csl/cslr_sem.h"
+#include "../../c66x-csl/ti/csl/cslr_device.h"
+#include "../../c66x-csl/ti/csl/cslr_bootcfg.h"
+#include "../../c66x-csl/ti/csl/cslr_gpio.h"
+#include "../../c66x-csl/ti/csl/cslr_cgem.h"
+#include "../../c66x-csl/ti/csl/cslr_msmc.h"
+#include "../../c66x-csl/ti/csl/cslr_pllc.h"
+#include "../../c66x-csl/ti/csl/cslr_emif4f.h"
+#include "../../c66x-csl/ti/csl/cslr_psc.h"
+#include "../../c66x-csl/ti/csl/cslr_xmc.h"
+#include "../../c66x-csl/ti/csl/cslr_sem.h"
 
 #include "../../config/config.h"
 #include "../board.h"
@@ -880,9 +880,9 @@ uint32_t fcs_board_init_core(void) {
     _fcs_delay_cycles(1000u); /* 1us to 10us depending on PLL state */
 
     if (core == 0) {
-        result_ticks = _fcs_init_core0();
+        result_cycles = _fcs_init_core0();
     } else if (core == 1u) {
-        result_ticks = _fcs_init_core1();
+        result_cycles = _fcs_init_core1();
     } else {
         assert(false);
     }

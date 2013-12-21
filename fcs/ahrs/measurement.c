@@ -47,7 +47,6 @@ const struct fcs_measurement_t *measurement) {
         >> FCS_MEASUREMENT_SENSOR_TYPE_OFFSET
     );
 
-    assert(type >= FCS_MEASUREMENT_TYPE_INVALID);
     assert(type < FCS_MEASUREMENT_TYPE_LAST);
 
     return type;
@@ -109,7 +108,6 @@ const struct fcs_calibration_t *restrict calibration) {
         >> FCS_CALIBRATION_TYPE_OFFSET
     );
 
-    assert(type >= FCS_CALIBRATION_NONE);
     assert(type < FCS_CALIBRATION_LAST);
 
     return type;

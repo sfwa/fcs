@@ -77,14 +77,13 @@ double out_field[3]) {
           &dec, &dip, &ti, &gv);
 
     /* COMPUTE X, Y, Z, AND H COMPONENTS OF THE MAGNETIC FIELD */
-    double rdec, rdip, c_rdip, x, y, z, h;
+    double rdec, rdip, c_rdip, x, y, z;
     rdec = dec  * (M_PI/180.0);
     rdip = dip  * (M_PI/180.0);
     c_rdip  = cos(rdip);
     x = ti * (cos(rdec) * c_rdip);
     y = ti * (c_rdip    * sin(rdec));
     z = ti * (sin(rdip));
-    h = ti * (c_rdip);
 
     if (isnan(x) || isnan(y) || isnan(z)) {
         return false;
@@ -105,10 +104,10 @@ access bits removed since we've got everything in memory.
 
 static void E0000(int IENTRY, int *maxdeg, double alt, double glat,
 double glon, double time, double *dec, double *dip, double *ti, double *gv) {
-    static int maxord,i,icomp,n,m,j,D1,D2,D3,D4;
+    static int maxord,i,n,m,j,D1,D2,D3,D4;
     static double c[13][13],cd[13][13],tc[13][13],dp[13][13],snorm[169],
         sp[13],cp[13],fn[13],fm[13],pp[13],k[13][13],pi,dtr,a,b,re,
-        a2,b2,c2,a4,b4,c4,epoch,gnm,hnm,dgnm,dhnm,flnmj,otime,oalt,
+        a2,b2,c2,a4,b4,c4,flnmj,otime,oalt,
         olat,olon,dt,rlon,rlat,srlon,srlat,crlon,crlat,srlat2,
         crlat2,q,q1,q2,ct,st,r2,r,d,ca,sa,aor,ar,br,bt,bp,bpp,
         par,temp1,temp2,parp,bx,by,bz,bh;
@@ -154,7 +153,6 @@ GEOMAG:
     }
 
     /* CONVERT SCHMIDT NORMALIZED GAUSS COEFFICIENTS TO UNNORMALIZED */
-S4:
     *snorm = 1.0;
     fm[0] = 0.0;
     for (n=1; n<=maxord; n++) {

@@ -169,7 +169,7 @@ struct fcs_measurement_log_t *out_measurements);
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const double *restrict control_values);
 
-void fcs_board_init(void) {
+void fcs_board_init_platform(void) {
     /*
     Set I/O board serial baud rates. We don't actually open the streams here
     -- we wait for the I/O board comms to time out and reset the links to
