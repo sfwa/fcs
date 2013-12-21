@@ -160,10 +160,6 @@ enum msg_type_t {
     MSG_TYPE_CMD = 3
 };
 
-/* Latest I/O board state packets */
-static struct sensor_packet_t ioboard[2];
-static int16_t ioboard_timeout[2];
-
 #define FCS_IOBOARD_RESET_TIMEOUT 50
 #define FCS_IOBOARD_PACKET_TIMEOUT 5
 #define FCS_IOBOARD_RESTART_WINDOW 10
@@ -187,6 +183,13 @@ static inline int32_t swap_int32(int32_t val) {
     return (val << 16) | ((val >> 16) & 0xFFFF);
 }
 
+/* Prototypes of internal functions */
+bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev,
+struct sensor_packet_t *dest);
+uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
+const double *restrict control_values);
+
+
 void fcs_board_init(void) {
     /*
     Set I/O board serial baud rates. We don't actually open the streams here
@@ -197,7 +200,6 @@ void fcs_board_init(void) {
         fcs_stream_set_rate(FCS_STREAM_UART_INT0, 3000000u) == FCS_STREAM_OK);
     assert(
         fcs_stream_set_rate(FCS_STREAM_UART_INT1, 3000000u) == FCS_STREAM_OK);
-    ioboard_timeout[0] = ioboard_timeout[1] = 0;
 
 #ifdef __TI_COMPILER_VERSION__
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
@@ -212,59 +214,39 @@ void fcs_board_init(void) {
 }
 
 void fcs_board_tick(void) {
-    if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT0, &ioboard[0])) {
-        ioboard_timeout[0] = FCS_IOBOARD_PACKET_TIMEOUT;
-    }
+    static int16_t ioboard_timeout[2];
 
-    if (_fcs_ahrs_read_ioboard_packet(FCS_STREAM_UART_INT1, &ioboard[1])) {
-        ioboard_timeout[1] = FCS_IOBOARD_PACKET_TIMEOUT;
-    }
+    uint8_t i;
+    for (i = 0; i < 2; i++){
+        if (_fcs_read_ioboard_packet(FCS_STREAM_UART_INT0 + i, i)) {
+            ioboard_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
+        }
 
-    /*
-    Handle I/O board comms errors. Log and clear any UART errors, but the I/O
-    board itself should not reset in that circumstance.
+        /*
+        Handle I/O board comms errors. Log and clear any UART errors, but the
+        I/O board itself should not reset in that circumstance.
 
-    If the time since last I/O board tick/reset is too high, both the I/O
-    board and the stream should be reset.
+        If the time since last I/O board tick/reset is too high, the stream
+        should be reset.
+        */
+        if (fcs_stream_check_error(FCS_STREAM_UART_INT0 + i) ==
+                FCS_STREAM_ERROR) {
+            fcs_global_counters.ioboard_packet_rx_err[i]++;
+        }
 
-    HOWEVER, the two I/O boards should never be reset at the same time, since
-    that will increase the likelihood of the failsafe system activating.
-    */
-    if (fcs_stream_check_error(FCS_STREAM_UART_INT0) == FCS_STREAM_ERROR) {
-        fcs_global_counters.ioboard_packet_rx_err[0]++;
-    }
-    if (fcs_stream_check_error(FCS_STREAM_UART_INT1) == FCS_STREAM_ERROR) {
-        fcs_global_counters.ioboard_packet_rx_err[1]++;
-    }
+        /*
+        If the board has timed out, start the reset for stream 0. Otherwise,
+        just decrement the timeout counter.
+        */
+        if (ioboard_timeout[i] <= 0) {
+            ioboard_timeout[i] = FCS_IOBOARD_RESET_TIMEOUT;
+            fcs_global_counters.ioboard_resets[i]++;
 
-    /*
-    If board 0 has timed out, and board 1 has had a while since reset, start
-    the reset for board 0. Otherwise, just decrement the timeout counter.
-    */
-    if (ioboard_timeout[0] <= 0 &&
-            ioboard_timeout[1] < FCS_IOBOARD_RESTART_WINDOW) {
-        ioboard_timeout[0] = FCS_IOBOARD_RESET_TIMEOUT;
-        fcs_global_counters.ioboard_resets[0]++;
-
-        assert(fcs_stream_open(FCS_STREAM_UART_INT0) == FCS_STREAM_OK);
-    } else if (ioboard_timeout[0] > INT16_MIN) {
-        ioboard_timeout[0]--;
-    }
-
-    /*
-    If board 1 has timed out, and board 0 has had a while since reset but has
-    not timed out itself, reset board 1. This avoids the case where both
-    boards are reset at the same time.
-    */
-    if (ioboard_timeout[1] <= 0 &&
-            0 < ioboard_timeout[0] &&
-            ioboard_timeout[0] < FCS_IOBOARD_RESTART_WINDOW) {
-        ioboard_timeout[1] = FCS_IOBOARD_RESET_TIMEOUT;
-        fcs_global_counters.ioboard_resets[1]++;
-
-        assert(fcs_stream_open(FCS_STREAM_UART_INT1) == FCS_STREAM_OK);
-    } else if (ioboard_timeout[1] > INT16_MIN) {
-        ioboard_timeout[1]--;
+            assert(fcs_stream_open(FCS_STREAM_UART_INT0 + i) ==
+                   FCS_STREAM_OK);
+        } else if (ioboard_timeout[i] > INT16_MIN) {
+            ioboard_timeout[i]--;
+        }
     }
 
     /*
@@ -273,7 +255,7 @@ void fcs_board_tick(void) {
     */
     size_t control_len;
     uint8_t control_buf[16];
-    control_len = _fcs_ahrs_format_control_packet(
+    control_len = _fcs_format_control_packet(
         control_buf,
         (uint8_t)(fcs_global_state.solution_time & 0xFFu),
         control_set
@@ -291,7 +273,7 @@ Read, deserialize and validate a full I/O board packet from `dev`. Since we
 get two of these every tick there's no point doing this incrementally; we just
 need to make sure we can deal with partial/corrupted packets.
 */
-bool _fcs_ahrs_read_ioboard_packet(enum fcs_stream_device_t dev,
+bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev,
 struct sensor_packet_t *dest) {
     assert(dest);
 
@@ -402,7 +384,7 @@ invalid:
 /*
 Serialize a control packet containing `control_values` into `buf`.
 */
-uint32_t _fcs_ahrs_format_control_packet(uint8_t *buf, uint8_t tick,
+uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const double *restrict control_values) {
     assert(buf);
     assert(control_values);

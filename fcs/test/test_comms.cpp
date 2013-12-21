@@ -23,10 +23,14 @@ SOFTWARE.
 #include "test.h"
 
 extern "C" {
+#include <math.h>
 #include "config/config.h"
 #include "util/util.h"
 #include "comms/comms.h"
 #include "drivers/stream.h"
+#include "TRICAL/TRICAL.h"
+#include "ahrs/measurement.h"
+#include "ahrs/ahrs.h"
 
 /* Prototypes for private test functions */
 
@@ -38,6 +42,10 @@ size_t len);
 
 /* from comms/comms.c */
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
+void _fcs_comms_generate_status_packet(struct fcs_packet_status_t *out_status,
+const struct fcs_ahrs_state_t *ahrs_state);
+void _fcs_comms_generate_state_packet(struct fcs_packet_state_t *out_state,
+const struct fcs_ahrs_state_t *ahrs_state);
 }
 
 TEST(Comms, Initialisation) {
@@ -783,163 +791,107 @@ TEST(CommsIO, ReadPacketAfterPacket) {
     ASSERT_STREQ((char*)s, (char*)buf);
 }
 
-TEST(CommsLog, InitPacket) {
-    struct fcs_packet_log_t packet;
-    fcs_comms_init_log(&packet, 1234u);
-    EXPECT_EQ(FCS_PACKET_LOG_TYPE, packet.buf[0]);
-    EXPECT_EQ(0, packet.buf[1]);
-    EXPECT_EQ(0, packet.buf[2]);
-    EXPECT_EQ(1234u, (packet.buf[4] << 8u) + packet.buf[3]);
-    EXPECT_EQ(5u, packet.len);
+TEST(CommsState, GenerateStatePacket) {
+    struct fcs_packet_state_t out_state;
+    struct fcs_ahrs_state_t in_state = {
+        .solution_time = 1235u,
+        .lat = M_PI / 2.0,
+        .lon = -M_PI / 4.0,
+        .alt = 30.0,
+        .velocity = { 1.0, -2.0, 3.0 },
+        .acceleration = { 0.0, 0.0, 0.0 },
+        .attitude = { 0.0, 0.0, 0.0, 1.0 },
+        .angular_velocity = { -0.1 * M_PI, 0.2 * M_PI, -0.3 * M_PI },
+        .angular_acceleration = { 0.0, 0.0, 0.0 },
+        .wind_velocity = { -1.0, 2.0, -3.0 },
+        .gyro_bias = { 0.0, 0.0, 0.0 },
+        .lat_covariance = 0.01 * 1e-8,
+        .lon_covariance = 0.02 * 1e-8,
+        .alt_covariance = 0.03,
+        .velocity_covariance = { 0.04, 0.05, 0.06 },
+        .acceleration_covariance = { 0.07, 0.08, 0.09 },
+        .attitude_covariance = { 0.10, 0.11, 0.12 },
+        .angular_velocity_covariance = { 0.13, 0.14, 0.15 },
+        .angular_acceleration_covariance = { 0.16, 0.17, 0.18 },
+        .wind_velocity_covariance = { 0.19, 0.20, 0.21 },
+        .gyro_bias_covariance = { 0.22, 0.23, 0.24 }
+    };
+
+    out_state.solution_time = 0;
+    out_state.next_waypoint_id[0] = 't';
+    out_state.next_waypoint_id[1] = 'e';
+    out_state.next_waypoint_id[2] = 's';
+    out_state.next_waypoint_id[3] = 't';
+    memset(out_state.flags, 0, 4);
+
+    _fcs_comms_generate_state_packet(&out_state, &in_state);
+    EXPECT_EQ(1235u, out_state.solution_time);
+    EXPECT_DOUBLE_EQ(90.0, out_state.lat);
+    EXPECT_DOUBLE_EQ(-45.0, out_state.lon);
+    EXPECT_DOUBLE_EQ(30.0, out_state.alt);
+    EXPECT_DOUBLE_EQ(1.0, out_state.velocity[0]);
+    EXPECT_DOUBLE_EQ(-2.0, out_state.velocity[1]);
+    EXPECT_DOUBLE_EQ(3.0, out_state.velocity[2]);
+    EXPECT_DOUBLE_EQ(-1.0, out_state.wind_velocity[0]);
+    EXPECT_DOUBLE_EQ(2.0, out_state.wind_velocity[1]);
+    EXPECT_DOUBLE_EQ(-3.0, out_state.wind_velocity[2]);
+    EXPECT_DOUBLE_EQ(0.0, out_state.yaw);
+    EXPECT_DOUBLE_EQ(0.0, out_state.pitch);
+    EXPECT_DOUBLE_EQ(0.0, out_state.roll);
+    EXPECT_DOUBLE_EQ(-18.0, out_state.angular_velocity[0]);
+    EXPECT_DOUBLE_EQ(36.0, out_state.angular_velocity[1]);
+    EXPECT_DOUBLE_EQ(-54.0, out_state.angular_velocity[2]);
+    EXPECT_NEAR(176.789, out_state.lat_lon_uncertainty, 1e-3);
+    EXPECT_NEAR(0.339, out_state.alt_uncertainty, 1e-3);
+    EXPECT_NEAR(0.392, out_state.velocity_uncertainty[0], 1e-3);
+    EXPECT_NEAR(0.438, out_state.velocity_uncertainty[1], 1e-3);
+    EXPECT_NEAR(0.480, out_state.velocity_uncertainty[2], 1e-3);
+    EXPECT_NEAR(0.854, out_state.wind_velocity_uncertainty[0], 1e-3);
+    EXPECT_NEAR(0.876, out_state.wind_velocity_uncertainty[1], 1e-3);
+    EXPECT_NEAR(0.898, out_state.wind_velocity_uncertainty[2], 1e-3);
+    EXPECT_NEAR(38.902, out_state.yaw_uncertainty, 1e-3);
+    EXPECT_NEAR(37.246, out_state.pitch_uncertainty, 1e-3);
+    EXPECT_NEAR(35.512, out_state.roll_uncertainty, 1e-3);
+    EXPECT_NEAR(40.490, out_state.angular_velocity_uncertainty[0],
+                1e-3);
+    EXPECT_NEAR(42.019, out_state.angular_velocity_uncertainty[1],
+                1e-3);
+    EXPECT_NEAR(43.493, out_state.angular_velocity_uncertainty[2],
+                1e-3);
+    EXPECT_EQ('A', out_state.mode_indicator);
 }
 
-TEST(CommsLog, InitPacketMissing) {
-    EXPECT_DEATH({ fcs_comms_init_log(NULL, 1234u); }, "Assertion.*failed");
+TEST(CommsState, GenerateStatePacketRotated) {
+    struct fcs_packet_state_t out_state;
+    struct fcs_ahrs_state_t in_state = {
+        .solution_time = 1u,
+        .lat = M_PI / 2.0,
+        .lon = -M_PI / 4.0,
+        .alt = 30.0,
+        .velocity = { 1.0, -2.0, 3.0 },
+        .acceleration = { 0.0, 0.0, 0.0 },
+        .attitude = { 0.0, 0.0, 0.707107, 0.707107 },
+        .angular_velocity = { -0.1 * M_PI, 0.2 * M_PI, -0.3 * M_PI },
+        .angular_acceleration = { 0.0, 0.0, 0.0 },
+        .wind_velocity = { -1.0, 2.0, -3.0 },
+        .gyro_bias = { 0.0, 0.0, 0.0 },
+        .lat_covariance = 0.01 * 1e-8,
+        .lon_covariance = 0.02 * 1e-8,
+        .alt_covariance = 0.03,
+        .velocity_covariance = { 0.03, 0.04, 0.05 },
+        .acceleration_covariance = { 0.06, 0.07, 0.08 },
+        .attitude_covariance = { 0.09, 0.10, 0.11 },
+        .angular_velocity_covariance = { 0.12, 0.13, 0.14 },
+        .angular_acceleration_covariance = { 0.15, 0.16, 0.17 },
+        .wind_velocity_covariance = { 0.18, 0.19, 0.20 },
+        .gyro_bias_covariance = { 0.21, 0.22, 0.23 }
+    };
+
+    out_state.solution_time = 0;
+    _fcs_comms_generate_state_packet(&out_state, &in_state);
+    ASSERT_EQ(1u, out_state.solution_time);
+
+    EXPECT_NEAR(90.0, out_state.yaw, 1e-3);
+    EXPECT_NEAR(0.0, out_state.pitch, 1e-3);
+    EXPECT_NEAR(0.0, out_state.roll, 1e-3);
 }
-
-TEST(CommsLog, AddSensorSingle) {
-    struct fcs_packet_log_t packet;
-    fcs_comms_init_log(&packet, 1u);
-
-    int16_t value = 1234;
-    bool result;
-    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
-                                            1u, (uint8_t*)&value,
-                                            sizeof(value));
-    EXPECT_EQ(true, result);
-    EXPECT_EQ(0x02u, packet.buf[5]);
-    EXPECT_EQ(0x23u, packet.buf[6]);
-    EXPECT_EQ(1234, (int16_t)((packet.buf[8] << 8u) + packet.buf[7]));
-}
-
-TEST(CommsLog, AddSensorMultiple) {
-    struct fcs_packet_log_t packet;
-    fcs_comms_init_log(&packet, 1u);
-
-    int16_t value1 = 1234, value2[3] = { 0, 1, -1 };
-    bool result;
-    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
-                                            1u, (uint8_t*)&value1,
-                                            sizeof(value1));
-    ASSERT_EQ(true, result);
-
-    result = fcs_comms_add_log_sensor_value(&packet,
-                                            FCS_SENSOR_TYPE_ACCELEROMETER,
-                                            0, (uint8_t*)&value2,
-                                            sizeof(value2));
-    ASSERT_EQ(true, result);
-
-    EXPECT_EQ(0x02u, packet.buf[5]);
-    EXPECT_EQ(0x23u, packet.buf[6]);
-    EXPECT_EQ(1234, (int16_t)((packet.buf[8] << 8u) + packet.buf[7]));
-
-    EXPECT_EQ(0x06u, packet.buf[9]);
-    EXPECT_EQ(0, packet.buf[10]);
-    EXPECT_EQ(0, (int16_t)((packet.buf[12] << 8u) + packet.buf[11]));
-    EXPECT_EQ(1, (int16_t)((packet.buf[14] << 8u) + packet.buf[13]));
-    EXPECT_EQ(-1, (int16_t)((packet.buf[16] << 8u) + packet.buf[15]));
-}
-
-TEST(CommsLog, AddSensorTooMany) {
-    struct fcs_packet_log_t packet;
-    fcs_comms_init_log(&packet, 1u);
-
-    int16_t value[7];
-    bool result;
-    uint8_t i;
-
-    for (i = 0; i < 15; i++) {
-        result = fcs_comms_add_log_sensor_value(&packet,
-                                            FCS_SENSOR_TYPE_PITOT, 1u,
-                                            (uint8_t*)&value, sizeof(value));
-        EXPECT_EQ(true, result);
-    }
-
-    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
-                                            1u, (uint8_t*)&value,
-                                            sizeof(value));
-    EXPECT_EQ(false, result);
-}
-
-TEST(CommsLog, AddSensorInvalidType) {
-    EXPECT_DEATH({
-        struct fcs_packet_log_t packet;
-        fcs_comms_init_log(&packet, 1u);
-
-        int16_t value = 1234;
-        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_LAST, 0,
-                                       (uint8_t*)&value, sizeof(value));
-    }, "Assertion.*failed");
-}
-
-TEST(CommsLog, AddSensorTooLong) {
-    EXPECT_DEATH({
-        struct fcs_packet_log_t packet;
-        fcs_comms_init_log(&packet, 1u);
-
-        int16_t value[30];
-        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 0,
-                                       (uint8_t*)&value, sizeof(value));
-    }, "Assertion.*failed");
-}
-
-TEST(CommsLog, AddSensorInvalidID) {
-    EXPECT_DEATH({
-        struct fcs_packet_log_t packet;
-        fcs_comms_init_log(&packet, 1u);
-
-        int16_t value = 1234;
-        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 15,
-                                       (uint8_t*)&value, sizeof(value));
-    }, "Assertion.*failed");
-}
-
-TEST(CommsLog, AddSensorNoLength) {
-    EXPECT_DEATH({
-        struct fcs_packet_log_t packet;
-        fcs_comms_init_log(&packet, 1u);
-
-        int16_t value = 1234;
-        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 0,
-                                       (uint8_t*)&value, 0);
-    }, "Assertion.*failed");
-}
-
-TEST(CommsLog, AddSensorNoData) {
-    EXPECT_DEATH({
-        struct fcs_packet_log_t packet;
-        fcs_comms_init_log(&packet, 1u);
-
-        fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT, 0,
-                                      NULL, 2u);
-    }, "Assertion.*failed");
-}
-
-TEST(CommsLog, SerializePacket) {
-    struct fcs_packet_log_t packet;
-    fcs_comms_init_log(&packet, 1u);
-
-    int16_t value1 = 1234, value2[3] = { 0, 1, -1 };
-    bool result;
-    result = fcs_comms_add_log_sensor_value(&packet, FCS_SENSOR_TYPE_PITOT,
-                                            1u, (uint8_t*)&value1,
-                                            sizeof(value1));
-    ASSERT_EQ(true, result);
-
-    result = fcs_comms_add_log_sensor_value(&packet,
-                                            FCS_SENSOR_TYPE_ACCELEROMETER,
-                                            0, (uint8_t*)&value2,
-                                            sizeof(value2));
-    ASSERT_EQ(true, result);
-
-    uint8_t out_buf[256];
-    size_t len;
-    len = fcs_comms_serialize_log(out_buf, sizeof(out_buf), &packet);
-    EXPECT_EQ(21u, len);
-    EXPECT_EQ(0, out_buf[0]);
-    EXPECT_EQ(0, out_buf[len + 1u]);
-    EXPECT_STREQ(
-        "\x2\x1\x1\x2\x1\x6\x2#\xD2\x4\x6\x1\x1\x2\x1\xD3\xFF\xFF\xA8",
-        (char*)&out_buf[1]);
-}
-

@@ -54,14 +54,10 @@ value.
 The control_scale value is the magnitude of the maximum control input.
 */
 static double control_rate[4];
-static double control_pos[4];
 static double control_scale[4];
 
-/* Log packet tick count -- used by the CPU to detect missing log packets */
-static uint16_t log_tick;
-
 /* Global FCS state structure */
-struct fcs_packet_state_t fcs_global_state;
+struct fcs_ahrs_state_t fcs_global_ahrs_state;
 
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
@@ -77,13 +73,9 @@ void fcs_ahrs_init(void) {
     assert(ukf_config_get_measurement_dim() == 20);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
 
-    /* Set up global state */
-    memset(&fcs_global_state, 0, sizeof(fcs_global_state));
-    fcs_global_state.mode_indicator = 'N';
-
     /*
-    TODO: read state back from fcs_global_state, just in case we're booting up
-    after an in-flight reset
+    TODO: read state back from fcs_global_ahrs_state, just in case we're
+    booting up after an in-flight reset
     */
     struct ukf_state_t initial_state = {
         {0, 0, 0},
@@ -113,6 +105,11 @@ void fcs_ahrs_init(void) {
     covariance.barometer_amsl_covariance = 4.0;
     */
 
+    /* TODO: Set the field */
+    fcs_global_ahrs_state.wmm_field[0] = 0.6;
+    fcs_global_ahrs_state.wmm_field[1] = 0.0;
+    fcs_global_ahrs_state.wmm_field[2] = 0.0;
+
     /* Set the UKF model */
     double default_process_noise[] = {
         1e-15, 1e-15, 1e-5, /* lat, lon, alt */
@@ -134,37 +131,64 @@ void fcs_ahrs_init(void) {
     /* Update the TRICAL instance parameters based on the UKF configuration */
     uint8_t i;
     for (i = 0; i < FCS_AHRS_NUM_TRICAL_INSTANCES; i++) {
+        float norm = (float)vector3_norm_d(fcs_global_ahrs_state.wmm_field),
+              noise = (float)sqrt(1.5);
+
         TRICAL_init(&fcs_global_ahrs_state.trical_instances[i]);
-        TRICAL_norm_set(&fcs_global_ahrs_state.trical_instances[i],
-                        vector3_norm_f(fcs_global_ahrs_state.wmm_field));
-        TRICAL_noise_set(&fcs_global_ahrs_state.trical_instances[i],
-                         (float)sqrt(1.5));
+        TRICAL_norm_set(&fcs_global_ahrs_state.trical_instances[i], norm);
+        TRICAL_noise_set(&fcs_global_ahrs_state.trical_instances[i], noise);
     }
 }
 
 void fcs_ahrs_tick(void) {
     /* Handle magnetometer calibration update based on new readings */
+    struct fcs_calibration_t *restrict sensor_calibration_map =
+        fcs_global_ahrs_state.calibration.sensor_calibration;
     struct fcs_measurement_t mag_measurement;
     double mag_value[4];
+    float mag_value_f[3];
     uint8_t i, j;
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(
-                measurements, FCS_MEASUREMENT_TYPE_MAGNETOMETER, i,
-                &mag_measurement)) {
-            fcs_measurement_get_values(&measurement, mag_value);
-            TRICAL_estimate_update(&magnetometer_calibration[i], mag_value);
+                &fcs_global_ahrs_state.measurements,
+                FCS_MEASUREMENT_TYPE_MAGNETOMETER, i, &mag_measurement)) {
+            /* TODO: fix magnetometer sensitivity / field scaling */
+
+            fcs_measurement_get_values(&mag_measurement, mag_value);
+
+            mag_value_f[0] = mag_value[0];
+            mag_value_f[1] = mag_value[1];
+            mag_value_f[2] = mag_value[2];
+            TRICAL_estimate_update(&fcs_global_ahrs_state.trical_instances[i],
+                                   mag_value_f);
 
             for (j = 0; j < 9u; j++) {
-                if (isnan(magnetometer_calibration[i].state)) {
+                if (isnan(
+                        fcs_global_ahrs_state.trical_instances[i].state[j])) {
                     /*
                     TRICAL has blown up -- reset this instance and ignore the
                     current reading.
                     */
-                    TRICAL_reset(&magnetometer_calibration[i]);
+                    TRICAL_reset(&fcs_global_ahrs_state.trical_instances[i]);
                     fcs_global_counters.trical_resets[i]++;
                     break;
                 }
             }
+
+            /*
+            Copy the TRICAL calibration estimate to the magnetometer
+            calibration
+            */
+            uint8_t sensor_key =
+                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
+                ((FCS_MEASUREMENT_TYPE_MAGNETOMETER <<
+                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+
+            memcpy(sensor_calibration_map[sensor_key].params,
+                   fcs_global_ahrs_state.trical_instances[i].state,
+                   9u * sizeof(float));
         }
     }
 
@@ -190,8 +214,9 @@ void fcs_ahrs_tick(void) {
     ukf_sensor_clear();
 
     if (fcs_measurement_log_get_calibrated_value(
-            measurements, calibration, FCS_MEASUREMENT_TYPE_ACCELEROMETER, v,
-            &err, offset)) {
+            &fcs_global_ahrs_state.measurements,
+            &fcs_global_ahrs_state.calibration,
+            FCS_MEASUREMENT_TYPE_ACCELEROMETER, v, &err, offset)) {
         ukf_sensor_set_accelerometer(v[0], v[1], v[2]);
         params.accel_covariance[0] = params.accel_covariance[1] =
             params.accel_covariance[2] = err * err;
@@ -201,38 +226,43 @@ void fcs_ahrs_tick(void) {
     }
 
     if (fcs_measurement_log_get_calibrated_value(
-            measurements, calibration, FCS_MEASUREMENT_TYPE_GYROSCOPE, v,
-            &error, offset)) {
+            &fcs_global_ahrs_state.measurements,
+            &fcs_global_ahrs_state.calibration,
+            FCS_MEASUREMENT_TYPE_GYROSCOPE, v, &err, offset)) {
         ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
         params.gyro_covariance[0] = params.gyro_covariance[1] =
             params.gyro_covariance[2] = err * err;
     }
 
     if (fcs_measurement_log_get_calibrated_value(
-            measurements, calibration, FCS_MEASUREMENT_TYPE_MAGNETOMETER, v,
-            &error, offset)) {
+            &fcs_global_ahrs_state.measurements,
+            &fcs_global_ahrs_state.calibration,
+            FCS_MEASUREMENT_TYPE_MAGNETOMETER, v, &err, offset)) {
         ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
         params.mag_covariance[0] = params.mag_covariance[1] =
             params.mag_covariance[2] = err * err;
     }
 
     if (fcs_measurement_log_get_calibrated_value(
-            measurements, calibration, FCS_MEASUREMENT_TYPE_PITOT, v,
-            &error, offset)) {
+            &fcs_global_ahrs_state.measurements,
+            &fcs_global_ahrs_state.calibration,
+            FCS_MEASUREMENT_TYPE_PITOT, v, &err, offset)) {
         ukf_sensor_set_pitot_tas(v[0]);
         params.pitot_covariance = err * err;
     }
 
     if (fcs_measurement_log_get_calibrated_value(
-            measurements, calibration, FCS_MEASUREMENT_TYPE_PRESSURE_TEMP, v,
-            &error, offset)) {
+            &fcs_global_ahrs_state.measurements,
+            &fcs_global_ahrs_state.calibration,
+            FCS_MEASUREMENT_TYPE_PRESSURE_TEMP, v, &err, offset)) {
         ukf_sensor_set_barometer_amsl(v[0]);
         params.barometer_amsl_covariance = err * err;
     }
 
     if (fcs_measurement_log_get_calibrated_value(
-            measurements, calibration, FCS_MEASUREMENT_TYPE_GPS_POSITION, v,
-            &error, offset)) {
+            &fcs_global_ahrs_state.measurements,
+            &fcs_global_ahrs_state.calibration,
+            FCS_MEASUREMENT_TYPE_GPS_POSITION, v, &err, offset)) {
         ukf_sensor_set_gps_position(v[0], v[1], v[2]);
         params.gps_position_covariance[0] =
             params.gps_position_covariance[1] = err * err;
@@ -240,8 +270,9 @@ void fcs_ahrs_tick(void) {
     }
 
     if (fcs_measurement_log_get_calibrated_value(
-            measurements, calibration, FCS_MEASUREMENT_TYPE_GPS_VELOCITY, v,
-            &error, offset)) {
+            &fcs_global_ahrs_state.measurements,
+            &fcs_global_ahrs_state.calibration,
+            FCS_MEASUREMENT_TYPE_GPS_VELOCITY, v, &err, offset)) {
         ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
         params.gps_velocity_covariance[0] =
             params.gps_velocity_covariance[1] = err * err;
@@ -255,7 +286,6 @@ void fcs_ahrs_tick(void) {
     Work out the nominal current control position, taking into account the
     control response time configured in control_rates. Log the result.
     */
-    uint8_t i;
     struct fcs_measurement_t control_log;
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4; i++) {
@@ -263,13 +293,15 @@ void fcs_ahrs_tick(void) {
                limit = control_rate[i] * AHRS_DELTA;
         fcs_global_ahrs_state.control_pos[i] += limitabs(delta, limit);
         control_log.data.i16[i] =
-            (int16_t)(control_pos[i] / control_scale[i] * INT16_MAX);
+            (int16_t)(fcs_global_ahrs_state.control_pos[i] / control_scale[i]
+                      * INT16_MAX);
     }
 
     control_log.header = (8u << FCS_MEASUREMENT_HEADER_LENGTH_OFFSET)
                          & FCS_MEASUREMENT_HEADER_LENGTH_MASK;
     control_log.sensor = FCS_MEASUREMENT_TYPE_CONTROL_POS;
-    fcs_measurement_log_add(measurements, &control_log);
+    fcs_measurement_log_add(&fcs_global_ahrs_state.measurements,
+                            &control_log);
 
     /*
     Run the UKF, taking sensor readings and current control position into

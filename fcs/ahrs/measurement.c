@@ -25,17 +25,20 @@ SOFTWARE.
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
 #include "../config/config.h"
+#include "../util/3dmath.h"
 #include "../util/util.h"
 #include "../drivers/stream.h"
 #include "../comms/comms.h"
 #include "../stats/stats.h"
+#include "../TRICAL/TRICAL.h"
 #include "measurement.h"
 #include "ahrs.h"
 
-static inline enum fcs_measurement_type_t fcs_measurement_get_sensor_type(
-struct fcs_measurement_t *measurement) {
+enum fcs_measurement_type_t fcs_measurement_get_sensor_type(
+const struct fcs_measurement_t *measurement) {
     assert(measurement);
 
     enum fcs_measurement_type_t type;
@@ -50,8 +53,8 @@ struct fcs_measurement_t *measurement) {
     return type;
 }
 
-static inline uint8_t fcs_measurement_get_sensor_id(
-struct fcs_measurement_t *measurement) {
+uint8_t fcs_measurement_get_sensor_id(
+const struct fcs_measurement_t *restrict measurement) {
     assert(measurement);
 
     uint8_t sensor_id;
@@ -62,11 +65,11 @@ struct fcs_measurement_t *measurement) {
 
     assert(sensor_id <= FCS_MEASUREMENT_SENSOR_ID_MAX);
 
-    return sensor_id
+    return sensor_id;
 }
 
-static inline size_t fcs_measurement_get_length(
-struct fcs_measurement_t *measurement) {
+size_t fcs_measurement_get_length(
+const struct fcs_measurement_t *restrict measurement) {
     assert(measurement);
 
     size_t length;
@@ -76,25 +79,37 @@ struct fcs_measurement_t *measurement) {
     );
 
     assert(length);
-    assert(length <= FCS_MEASUREMENT_LEN_MAX);
+    assert(length <= FCS_MEASUREMENT_LENGTH_MAX);
 
     return length;
 }
 
-static inline void fcs_measurement_set_sensor_type(
-struct fcs_measurement_t *measurement, enum fcs_measurement_type_t type) {
+void fcs_measurement_set_sensor_type(
+struct fcs_measurement_t *restrict measurement,
+enum fcs_measurement_type_t type) {
     assert(measurement);
     assert(type >= FCS_MEASUREMENT_TYPE_INVALID);
     assert(type < FCS_MEASUREMENT_TYPE_LAST);
 
     measurement->sensor =
         (measurement->sensor & FCS_MEASUREMENT_SENSOR_ID_MASK) |
-        ((type & FCS_MEASUREMENT_SENSOR_TYPE_MASK)
-         << FCS_MEASUREMENT_SENSOR_TYPE_OFFSET);
+        ((type << FCS_MEASUREMENT_SENSOR_TYPE_OFFSET)
+         & FCS_MEASUREMENT_SENSOR_TYPE_MASK);
 }
 
-static inline enum fcs_calibration_type_t fcs_calibration_get_type(
-struct fcs_calibration_t *calibration) {
+void fcs_measurement_set_sensor_id(
+struct fcs_measurement_t *restrict measurement, uint8_t sensor_id) {
+    assert(measurement);
+    assert(sensor_id < FCS_MEASUREMENT_SENSOR_ID_MAX);
+
+    measurement->sensor =
+        ((sensor_id << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+         FCS_MEASUREMENT_SENSOR_ID_MASK) |
+        (measurement->sensor & FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+}
+
+enum fcs_calibration_type_t fcs_calibration_get_type(
+const struct fcs_calibration_t *restrict calibration) {
     assert(calibration);
 
     enum fcs_calibration_type_t type;
@@ -103,14 +118,14 @@ struct fcs_calibration_t *calibration) {
         >> FCS_CALIBRATION_TYPE_OFFSET
     );
 
-    assert(type >= FCS_CALIBRATION_TYPE_NONE);
-    assert(type < FCS_CALIBRATION_TYPE_LAST);
+    assert(type >= FCS_CALIBRATION_NONE);
+    assert(type < FCS_CALIBRATION_LAST);
 
     return type;
 }
 
 /* Initialize a log packet with a packet index of `frame_id` */
-void fcs_measurement_log_init(struct fcs_measurement_log_t *log_rec,
+void fcs_measurement_log_init(struct fcs_measurement_log_t *restrict log_rec,
 uint16_t frame_id) {
     assert(log_rec);
 
@@ -129,7 +144,7 @@ Serialize and add COBS-R + framing to log packet, and copy the result to
 Modifies `log_rec` to include a CRC16SBP.
 */
 size_t fcs_measurement_log_serialize(uint8_t *restrict out_buf,
-size_t out_buf_length, struct fcs_measurement_log_t *log_rec) {
+size_t out_buf_length, struct fcs_measurement_log_t *restrict log_rec) {
     assert(out_buf);
     assert(out_buf_length);
     assert(log_rec);
@@ -137,14 +152,14 @@ size_t out_buf_length, struct fcs_measurement_log_t *log_rec) {
     assert(out_buf_length >= log_rec->length + 2u + 3u);
 
     /* Calculate checksum and update the packet with the result */
-    uint16_t crc = fcs_crc16_sbp(log_rec->buf, log_rec->length, 0xFFFFu);
+    uint16_t crc = fcs_crc16_sbp(log_rec->data, log_rec->length, 0xFFFFu);
     log_rec->data[log_rec->length + 0] = (crc & 0x00FFu);
     log_rec->data[log_rec->length + 1u] = (crc & 0xFF00u) >> 8u;
 
     /* Write COBS-R encoded result to out_buf */
     struct fcs_cobsr_encode_result result;
-    result = fcs_cobsr_encode(&out_buf[1], out_buf_len - 2u, log_rec->data,
-                              log_rec->len + 2u);
+    result = fcs_cobsr_encode(&out_buf[1], out_buf_length - 2u, log_rec->data,
+                              log_rec->length + 2u);
     assert(result.status == FCS_COBSR_ENCODE_OK);
 
     /* Add NUL start/end bytes */
@@ -159,8 +174,8 @@ size_t out_buf_length, struct fcs_measurement_log_t *log_rec) {
 Add a sensor value entry to a log packet. Returns true if the sensor value
 could be added, or false if it couldn't.
 */
-bool fcs_measurement_log_add(struct fcs_measurement_log_t *log_rec,
-struct fcs_measurement_t *measurement) {
+bool fcs_measurement_log_add(struct fcs_measurement_log_t *restrict log_rec,
+struct fcs_measurement_t *restrict measurement) {
     assert(log_rec);
     /* Call these to validate sensor type and ID before copying */
     fcs_measurement_get_sensor_type(measurement);
@@ -194,9 +209,10 @@ to `out_measurement`.
 Returns true if a measurement with matching ID and type was found, and false
 if not.
 */
-bool fcs_measurement_log_find(const struct fcs_measurement_log_t *log_rec,
+bool fcs_measurement_log_find(
+const struct fcs_measurement_log_t *restrict log_rec,
 enum fcs_measurement_type_t type, uint8_t measurement_id,
-struct fcs_measurement_t *out_measurement) {
+struct fcs_measurement_t *restrict out_measurement) {
     assert(log_rec);
     assert(5u <= log_rec->length && log_rec->length <= 256u);
     assert(out_measurement);
@@ -215,7 +231,7 @@ struct fcs_measurement_t *out_measurement) {
              >> FCS_MEASUREMENT_HEADER_LENGTH_OFFSET) + 2u;
 
         if (log_rec->data[i + 1u] == search_key) {
-            memcpy(measurement, log_rec->data[i], measurement_length);
+            memcpy(out_measurement, &log_rec->data[i], measurement_length);
             return true;
         }
 
@@ -238,8 +254,8 @@ factor as the measurement, and the resulting offset is copied into
 Returns the number of raw measurements included in the output.
 */
 size_t fcs_measurement_log_get_calibrated_value(
-const struct fcs_measurement_log_t *log_rec,
-const struct fcs_calibration_map_t *calibration_map,
+const struct fcs_measurement_log_t *restrict log_rec,
+const struct fcs_calibration_map_t *restrict calibration_map,
 enum fcs_measurement_type_t type, double out_value[4], double *out_error,
 double out_offset[3]) {
     assert(log_rec);
@@ -267,7 +283,7 @@ double out_offset[3]) {
         if (measurement_type == type) {
             struct fcs_measurement_t measurement;
             /* Copy the measurement data to an actual measurement structure */
-            memcpy(&measurement, log_rec->data[i], measurement_length);
+            memcpy(&measurement, &log_rec->data[i], measurement_length);
             /* Process the reading and accumulate the output */
             fcs_measurement_calibrate(&measurement, calibration_map,
                                       temp_value, &temp_error, temp_offset);
@@ -312,58 +328,58 @@ double out_offset[3]) {
 Convert the values associated with a measurement into an array of doubles.
 Returns the number of values in the measurement.
 */
-size_t fcs_measurement_get_values(const struct fcs_measurement_t *measurement,
-double out_value[4]) {
+size_t fcs_measurement_get_values(
+const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
     assert(measurement);
     assert(out_value);
 
     size_t n;
-    memset(temp_value, 0, sizeof(double) * 4u);
+    memset(out_value, 0, sizeof(double) * 4u);
 
     /* Convert the raw sensor data to floating point */
     switch (fcs_measurement_get_sensor_type(measurement)) {
         case FCS_MEASUREMENT_TYPE_CONTROL_POS:
             /* 4x 16-bit signed values */
             n = 4u;
-            temp_value[3] = measurement->data.i16[3];
+            out_value[3] = measurement->data.i16[3];
         case FCS_MEASUREMENT_TYPE_ACCELEROMETER:
         case FCS_MEASUREMENT_TYPE_GYROSCOPE:
         case FCS_MEASUREMENT_TYPE_MAGNETOMETER:
-        case FCS_MEASUREMENT_TYPE_GPS_POSITION:
+        case FCS_MEASUREMENT_TYPE_GPS_VELOCITY:
             /* 3x 16-bit signed values */
             n = 3u;
-            temp_value[2] = measurement->data.i16[2];
+            out_value[2] = measurement->data.i16[2];
         case FCS_MEASUREMENT_TYPE_PRESSURE_TEMP:
         case FCS_MEASUREMENT_TYPE_IV:
             /* 2x 16-bit signed values */
             n = 2u;
-            temp_value[1] = measurement->data.i16[1];
+            out_value[1] = measurement->data.i16[1];
         case FCS_MEASUREMENT_TYPE_PITOT:
         case FCS_MEASUREMENT_TYPE_RANGEFINDER:
             /* 1x 16-bit signed values */
             n = 1u;
-            temp_value[0] = measurement->data.i16[0];
+            out_value[0] = measurement->data.i16[0];
             break;
         case FCS_MEASUREMENT_TYPE_GPS_POSITION:
             /* 3x 32-bit signed, with preset scaling */
             n = 3u;
-            temp_value[0] = measurement->data.i32[0] * 1e-7 * (M_PI/180.0);
-            temp_value[1] = measurement->data.i32[1] * 1e-7 * (M_PI/180.0);
-            temp_value[2] = measurement->data.i32[2] * 1e-2;
+            out_value[0] = measurement->data.i32[0] * 1e-7 * (M_PI/180.0);
+            out_value[1] = measurement->data.i32[1] * 1e-7 * (M_PI/180.0);
+            out_value[2] = measurement->data.i32[2] * 1e-2;
             break;
         case FCS_MEASUREMENT_TYPE_GPS_INFO:
             /* byte 0 7:4 fix mode, byte 0 3:0 num SVs, byte 1 dop */
             n = 3u;
-            temp_value[0] = measurement->data.u8[0] >> 4u;
-            temp_value[1] = measurement->data.u8[0] & 0xFu;
-            temp_value[2] = measurement->data.u8[1];
+            out_value[0] = measurement->data.u8[0] >> 4u;
+            out_value[1] = measurement->data.u8[0] & 0xFu;
+            out_value[2] = measurement->data.u8[1];
         case FCS_MEASUREMENT_TYPE_RADIO:
             /* 4x 8-bit signed */
             n = 4u;
-            temp_value[0] = measurement->data.i8[0];
-            temp_value[1] = measurement->data.i8[1];
-            temp_value[2] = measurement->data.i8[2];
-            temp_value[3] = measurement->data.i8[3];
+            out_value[0] = measurement->data.i8[0];
+            out_value[1] = measurement->data.i8[1];
+            out_value[2] = measurement->data.i8[2];
+            out_value[3] = measurement->data.i8[3];
             break;
         default:
             /*
@@ -380,9 +396,10 @@ double out_value[4]) {
 /*
 Calibrate a single measurement based on the calibration map parameters.
 */
-void fcs_measurement_calibrate(const struct fcs_measurement_t *measurement,
-const struct fcs_calibration_map_t *calibration_map, double out_value[4],
-double *out_error, double out_offset[3]) {
+void fcs_measurement_calibrate(
+const struct fcs_measurement_t *restrict measurement,
+const struct fcs_calibration_map_t *restrict calibration_map,
+double out_value[4], double *out_error, double out_offset[3]) {
     assert(measurement);
     assert(calibration_map);
     assert(out_value);
@@ -400,8 +417,8 @@ double *out_error, double out_offset[3]) {
     */
     uint8_t sensor_key = measurement->sensor &
         (FCS_MEASUREMENT_SENSOR_ID_MASK | FCS_MEASUREMENT_SENSOR_TYPE_MASK);
-    struct fcs_calibration_t *calibration =
-        calibration_map->sensor_calibration[sensor_key];
+    const struct fcs_calibration_t *calibration =
+        &calibration_map->sensor_calibration[sensor_key];
 
     if (!calibration->header || !calibration->sensor) {
         /*
@@ -414,11 +431,14 @@ double *out_error, double out_offset[3]) {
     } else {
         /* Set error and offset based on calibration values */
         *out_error = calibration->error;
-        memset(out_offset, calibration->offset, sizeof(double) * 3u);
+        out_offset[0] = calibration->offset[0];
+        out_offset[1] = calibration->offset[1];
+        out_offset[2] = calibration->offset[2];
 
         /* Run the appropriate calibration routine */
         uint8_t i;
-        float *restrict p = calibration->params;
+        const float *restrict p = calibration->params;
+        double c[3]; /* centered value */
 
         switch (fcs_calibration_get_type(calibration)) {
             case FCS_CALIBRATION_NONE:
@@ -452,7 +472,6 @@ double *out_error, double out_offset[3]) {
                 case the identity matrix is not added in to D before
                 multiplying it by B.
                 */
-                double c[3]; /* centered value */
                 c[0] = temp_value[0] - p[0];
                 c[1] = temp_value[1] - p[1];
                 c[2] = temp_value[2] - p[2];

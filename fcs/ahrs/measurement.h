@@ -88,8 +88,8 @@ struct fcs_measurement_t {
         int16_t i16[7];
         uint32_t u32[3];
         int32_t i32[3];
-    } data;
-};
+    } __attribute__ ((packed)) data;
+} __attribute__ ((packed));
 
 #define FCS_MEASUREMENT_LENGTH_MAX 14u
 #define FCS_MEASUREMENT_HEADER_LENGTH_MASK 0x0Fu
@@ -99,6 +99,23 @@ struct fcs_measurement_t {
 #define FCS_MEASUREMENT_SENSOR_ID_OFFSET 5u
 #define FCS_MEASUREMENT_SENSOR_TYPE_MASK 0x1Fu
 #define FCS_MEASUREMENT_SENSOR_TYPE_OFFSET 0
+
+/* Measurement field accessors */
+enum fcs_measurement_type_t fcs_measurement_get_sensor_type(
+const struct fcs_measurement_t *measurement);
+
+uint8_t fcs_measurement_get_sensor_id(
+const struct fcs_measurement_t *restrict measurement);
+
+size_t fcs_measurement_get_length(
+const struct fcs_measurement_t *restrict measurement);
+
+void fcs_measurement_set_sensor_type(
+struct fcs_measurement_t *restrict measurement,
+enum fcs_measurement_type_t type);
+
+void fcs_measurement_set_sensor_id(
+struct fcs_measurement_t *restrict measurement, uint8_t sensor_id);
 
 /*
 fcs_calibration_t specifies the calibration to be applied to a particular
@@ -126,7 +143,7 @@ struct fcs_calibration_t {
     float params[9];
     float orientation[4];
     float offset[3];
-};
+} __attribute__ ((packed));
 
 #define FCS_CALIBRATION_LENGTH_MAX 63u
 #define FCS_CALIBRATION_FLAGS_MASK 0xF0u
@@ -134,6 +151,10 @@ struct fcs_calibration_t {
 #define FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION 0x10u
 #define FCS_CALIBRATION_TYPE_MASK 0x0Fu
 #define FCS_CALIBRATION_TYPE_OFFSET 0
+
+/* Calibration field accessors */
+enum fcs_calibration_type_t fcs_calibration_get_type(
+const struct fcs_calibration_t *restrict calibration);
 
 /*
 fcs_calibration_map_t contains calibration data for all sensors permitted in
@@ -191,7 +212,7 @@ Measurement log packets -- used to send raw sensor data at 1000Hz
 */
 
 /* Initialize a measurement log packet with a packet index of `frame_id` */
-void fcs_measurement_log_init(struct fcs_measurement_log_t *log_rec,
+void fcs_measurement_log_init(struct fcs_measurement_log_t *restrict log_rec,
 uint16_t frame_id);
 
 /*
@@ -207,8 +228,8 @@ size_t out_buf_len, struct fcs_measurement_log_t *log_rec);
 Add a sensor value entry to a log packet. Returns true if the sensor value
 could be added, or false if it couldn't.
 */
-bool fcs_measurement_log_add(struct fcs_measurement_log_t *log_rec,
-struct fcs_measurement_t *measurement);
+bool fcs_measurement_log_add(struct fcs_measurement_log_t *restrict log_rec,
+struct fcs_measurement_t *restrict measurement);
 
 /*
 Finds a measurement with a given ID and type in the log, and copies the result
@@ -217,9 +238,10 @@ to `out_measurement`.
 Returns true if a measurement with matching ID and type was found, and false
 if not.
 */
-bool fcs_measurement_log_find(const struct fcs_measurement_log_t *log_rec,
+bool fcs_measurement_log_find(
+const struct fcs_measurement_log_t *restrict log_rec,
 enum fcs_measurement_type_t type, uint8_t measurement_id,
-struct fcs_measurement_t *out_measurement);
+struct fcs_measurement_t *restrict out_measurement);
 
 /*
 Retrieve a calibrated measurement for a given sensor. If multiple measurements
@@ -234,23 +256,24 @@ factor as the measurement, and the resulting offset is copied into
 Returns the number of raw measurements included in the output.
 */
 size_t fcs_measurement_log_get_calibrated_value(
-const struct fcs_measurement_log_t *log_rec,
-const struct fcs_calibration_map_t *calibration_map,
+const struct fcs_measurement_log_t *restrict log_rec,
+const struct fcs_calibration_map_t *restrict calibration_map,
 enum fcs_measurement_type_t type, double out_value[4], double *out_error,
 double out_offset[3]);
 
 /*
 Calibrate a single measurement based on the calibration map parameters.
 */
-void fcs_measurement_calibrate(struct fcs_measurement_t *measurement,
-const struct fcs_calibration_map_t *calibration_map, double out_value[4],
-double *out_error, double out_offset[3]);
+void fcs_measurement_calibrate(
+const struct fcs_measurement_t *restrict measurement,
+const struct fcs_calibration_map_t * restrict calibration_map,
+double out_value[4], double *out_error, double out_offset[3]);
 
 /*
 Convert the values associated with a measurement into an array of doubles.
 Returns the number of values in the measurement.
 */
-size_t fcs_measurement_get_values(const struct fcs_measurement_t *measurement,
-double out_value[4]);
+size_t fcs_measurement_get_values(
+const struct fcs_measurement_t *restrict measurement, double out_value[4]);
 
 #endif
