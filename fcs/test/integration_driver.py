@@ -131,7 +131,8 @@ class AHRSState(Structure):
         ("gyro_bias_covariance", c_double * 3),
 
         # Configuration
-        ("wmm_field", c_double * 3),
+        ("wmm_field_dir", c_double * 3),
+        ("wmm_field_norm", c_double),
         ("ukf_process_noise", c_double * 24),
         ("ukf_dynamics_model", c_uint),
         ("calibration", AHRSCalibrationMap),

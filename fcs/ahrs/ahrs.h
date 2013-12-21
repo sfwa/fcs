@@ -54,7 +54,8 @@ struct fcs_ahrs_state_t {
     double gyro_bias_covariance[3];
 
     /* Configuration */
-    double wmm_field[3];
+    double wmm_field_dir[3];
+    double wmm_field_norm;
     double ukf_process_noise[24];
     uint32_t ukf_dynamics_model;
     struct fcs_calibration_map_t calibration;

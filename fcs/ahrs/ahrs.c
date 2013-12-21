@@ -60,6 +60,8 @@ struct fcs_ahrs_state_t fcs_global_ahrs_state;
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
 
+static void _fcs_ahrs_update_wmm(void);
+
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
     assert(ukf_config_get_state_dim() == 24);
@@ -107,10 +109,8 @@ void fcs_ahrs_init(void) {
     covariance.barometer_amsl_covariance = 4.0;
     */
 
-    /* Set the default field value */
-    fcs_global_ahrs_state.wmm_field[0] = 1.0;
-    fcs_global_ahrs_state.wmm_field[1] = 0.0;
-    fcs_global_ahrs_state.wmm_field[2] = 0.0;
+    /* Calculate WMM field at current lat/lon/alt/time */
+    _fcs_ahrs_update_wmm();
 
     /* Set the UKF model */
     double default_process_noise[] = {
@@ -132,17 +132,14 @@ void fcs_ahrs_init(void) {
 
     /* Update the TRICAL instance parameters based on the UKF configuration */
     uint8_t i;
-    float default_scale = 1.0 / (float)INT16_MAX, *restrict instance_state;
     for (i = 0; i < FCS_AHRS_NUM_TRICAL_INSTANCES; i++) {
         TRICAL_init(&fcs_global_ahrs_state.trical_instances[i]);
 
         /*
-        Set the starting diagonal for the scale factor matrix to something
-        in a similar order of magnitude to the maximum value of the sensor
+        Set the norm to 1.0 because we pass a unit field vector to the UKF.
         */
-        instance_state = fcs_global_ahrs_state.trical_instances[i].state;
-        instance_state[3] = instance_state[6] = instance_state[8] =
-            default_scale;
+        TRICAL_norm_set(&fcs_global_ahrs_state.trical_instances[i], 1.0f);
+        TRICAL_noise_set(&fcs_global_ahrs_state.trical_instances[i], 1e-2f);
     }
 }
 
@@ -150,12 +147,7 @@ void fcs_ahrs_tick(void) {
     /* Increment solution time */
     fcs_global_ahrs_state.solution_time++;
 
-    /* Calculate WMM field at current lat/lon/alt/time */
-    bool result;
-    result = fcs_wmm_calculate_field(
-        fcs_global_ahrs_state.lat, fcs_global_ahrs_state.lon,
-        fcs_global_ahrs_state.alt, 2014.0, fcs_global_ahrs_state.wmm_field);
-    assert(result);
+    _fcs_ahrs_update_wmm();
 
     /* Handle magnetometer calibration update based on new readings */
     struct fcs_calibration_t *restrict sensor_calibration_map =
@@ -164,7 +156,6 @@ void fcs_ahrs_tick(void) {
     struct fcs_measurement_t mag_measurement;
     double mag_value[4];
     float mag_value_f[3];
-    float norm = (float)vector3_norm_d(fcs_global_ahrs_state.wmm_field);
     uint8_t i, j;
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(
@@ -183,14 +174,14 @@ void fcs_ahrs_tick(void) {
 
             /* Update TRICAL instance parameters with the latest results */
             instance = &fcs_global_ahrs_state.trical_instances[i];
-            TRICAL_norm_set(instance, norm);
-            TRICAL_noise_set(instance,
-                sensor_calibration_map[sensor_key].error *
-                sensor_calibration_map[sensor_key].error);
 
-            mag_value_f[0] = mag_value[0];
-            mag_value_f[1] = mag_value[1];
-            mag_value_f[2] = mag_value[2];
+            /*
+            FIXME: work out a better way to specify sensor sensitivity (or
+            get TRICAL working with measurements further from 1.0)
+            */
+            mag_value_f[0] = (mag_value[0] / 2048.0);
+            mag_value_f[1] = (mag_value[1] / 2048.0);
+            mag_value_f[2] = (mag_value[2] / 2048.0);
             TRICAL_estimate_update(instance, mag_value_f);
 
             for (j = 0; j < 9u; j++) {
@@ -226,9 +217,9 @@ void fcs_ahrs_tick(void) {
     };
 
     /* Use the latest WMM field vector */
-    params.mag_field[0] = fcs_global_ahrs_state.wmm_field[0];
-    params.mag_field[1] = fcs_global_ahrs_state.wmm_field[1];
-    params.mag_field[2] = fcs_global_ahrs_state.wmm_field[2];
+    params.mag_field[0] = fcs_global_ahrs_state.wmm_field_dir[0];
+    params.mag_field[1] = fcs_global_ahrs_state.wmm_field_dir[1];
+    params.mag_field[2] = fcs_global_ahrs_state.wmm_field_dir[2];
 
     /* Read sensor data from the measurement log, and pass it to the UKF */
     double v[4], err, offset[3];
@@ -353,4 +344,25 @@ void fcs_ahrs_tick(void) {
     /* Release the semaphore */
     semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
 #endif
+}
+
+static void _fcs_ahrs_update_wmm(void) {
+    /* Calculate WMM field at current lat/lon/alt/time */
+    bool result;
+    result = fcs_wmm_calculate_field(
+        fcs_global_ahrs_state.lat, fcs_global_ahrs_state.lon,
+        fcs_global_ahrs_state.alt, 2014.0,
+        fcs_global_ahrs_state.wmm_field_dir);
+    if (!result) {
+        fcs_global_counters.wmm_errors++;
+    } else {
+        fcs_global_ahrs_state.wmm_field_norm =
+            vector3_norm_d(fcs_global_ahrs_state.wmm_field_dir);
+
+        double norm_inv;
+        norm_inv = 1.0 / fcs_global_ahrs_state.wmm_field_norm;
+        fcs_global_ahrs_state.wmm_field_dir[0] *= norm_inv;
+        fcs_global_ahrs_state.wmm_field_dir[1] *= norm_inv;
+        fcs_global_ahrs_state.wmm_field_dir[2] *= norm_inv;
+    }
 }

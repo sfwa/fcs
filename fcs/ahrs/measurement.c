@@ -260,6 +260,10 @@ double out_offset[3]) {
     double temp_value[4], temp_error, temp_offset[3];
     size_t i, n_measurements, measurement_length, measurement_type;
 
+    memset(accum_value, 0, sizeof(accum_value));
+    memset(accum_offset, 0, sizeof(accum_offset));
+    accum_error = 0.0;
+
     /* Start scanning at index 5, first byte after the log record header */
     for (i = 5u, n_measurements = 0; i < log_rec->length;) {
         measurement_length =
@@ -338,7 +342,6 @@ const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
             /* 3x 16-bit signed values */
             n = n ? n : 3u;
             out_value[2] = measurement->data.i16[2];
-        case FCS_MEASUREMENT_TYPE_PRESSURE_TEMP:
         case FCS_MEASUREMENT_TYPE_IV:
             /* 2x 16-bit signed values */
             n = n ? n : 2u;
@@ -349,12 +352,18 @@ const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
             n = n ? n : 1u;
             out_value[0] = measurement->data.i16[0];
             break;
+        case FCS_MEASUREMENT_TYPE_PRESSURE_TEMP:
+        	/* 1x 16-bit unsigned, 1x 16-bit signed */
+        	n = n ? n : 2u;
+        	out_value[0] = measurement->data.u16[0];
+        	out_value[1] = measurement->data.i16[1];
+        	break;
         case FCS_MEASUREMENT_TYPE_GPS_POSITION:
             /* 3x 32-bit signed, with preset scaling */
             n = n ? n : 3u;
             out_value[0] = measurement->data.i32[0] * 1e-7 * (M_PI/180.0);
             out_value[1] = measurement->data.i32[1] * 1e-7 * (M_PI/180.0);
-            out_value[2] = measurement->data.i32[2] * 1e-2;
+            out_value[2] = measurement->data.i32[2] * 1e-3;
             break;
         case FCS_MEASUREMENT_TYPE_GPS_INFO:
             /* byte 0 7:4 fix mode, byte 0 3:0 num SVs, byte 1 dop */
@@ -461,9 +470,14 @@ double out_value[4], double *out_error, double out_offset[3]) {
                 (and for magnetometers we use the TRICAL calibration state
                 estimate directly).
                 */
-                c[0] = temp_value[0] - p[0];
-                c[1] = temp_value[1] - p[1];
-                c[2] = temp_value[2] - p[2];
+
+                /*
+                FIXME: work out a better way to specify sensor sensitivity (or
+                get TRICAL working with measurements further from 1.0)
+                */
+                c[0] = (temp_value[0] / 2048.0) - p[0];
+                c[1] = (temp_value[1] / 2048.0) - p[1];
+                c[2] = (temp_value[2] / 2048.0) - p[2];
 
                 /* Symmetric matrix multiply */
                 temp_value[0] = c[0] * p[3] + c[1] * p[4] + c[2] * p[5];

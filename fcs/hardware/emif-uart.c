@@ -605,7 +605,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     divisor = (166666666.67f / (float)uart_baud[uart_idx]) * 16.0;
 
     /* This more than covers the range from 2400-3Mbaud */
-    assert(8000.0f <= divisor && divisor <= 2000000.0f);
+    assert(800.0f <= divisor && divisor <= 2000000.0f);
 
     timer[uart_idx]->PRDHI = 0;
     timer[uart_idx]->PRDLO = (uint32_t)divisor;

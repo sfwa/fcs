@@ -44,6 +44,9 @@ struct fcs_stats_counter_t {
     /* UKF counters */
     uint64_t ukf_resets;
 
+    /* WMM errors */
+    uint64_t wmm_errors;
+
     /* Stream byte, reset and error counters */
     uint64_t stream_rx_byte[5];
     uint64_t stream_rx_err[5];
