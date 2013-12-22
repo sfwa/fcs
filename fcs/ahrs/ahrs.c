@@ -69,6 +69,14 @@ void fcs_ahrs_init(void) {
     assert(ukf_config_get_measurement_dim() == 20);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
 
+
+#ifdef __TI_COMPILER_VERSION__
+    /* Release the global state semaphore */
+    volatile CSL_SemRegs *const semaphore =
+            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
+#endif
+
     fcs_wmm_init();
 
     /*
@@ -323,27 +331,76 @@ void fcs_ahrs_tick(void) {
     ukf_set_params(&params);
     ukf_iterate(AHRS_DELTA, fcs_global_ahrs_state.control_pos);
 
+    /* Copy the global state out of the UKF and validate it */
+    bool ukf_valid = true;
 
+    double state_values[25], covariance[24];
+    ukf_get_state((struct ukf_state_t*)state_values);
+    ukf_get_state_covariance_diagonal(covariance);
+
+    #pragma MUST_ITERATE(24, 24);
+    for (i = 0; i < 24u; i++) {
+        if (isnan(state_values[i]) || isnan(covariance[i])) {
+            ukf_valid = false;
+        }
+    }
+    if (isnan(state_values[24])) {
+        ukf_valid = false;
+    }
+
+    if (ukf_valid) {
 #ifdef __TI_COMPILER_VERSION__
-    /*
-    Use a semaphore to prevent the NMPC code accessing the state while we're
-    updating it.
-    */
-    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
-    assert(sem_val == 1u);
+        /*
+        Use a semaphore to prevent the NMPC code accessing the state while we're
+        updating it.
+        */
+        volatile CSL_SemRegs *const semaphore =
+            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+        uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
+        assert(sem_val == 1u);
 #endif
 
-    /* Write current state to global state store */
-    ukf_get_state((struct ukf_state_t*)&fcs_global_ahrs_state.lat);
-
-    /* Get the state covariance matrix */
-    ukf_get_state_covariance_diagonal(&fcs_global_ahrs_state.lat_covariance);
+        /* If that's all OK, update the global state */
+        memcpy(&fcs_global_ahrs_state.lat, state_values,
+               sizeof(state_values));
+        memcpy(&fcs_global_ahrs_state.lat_covariance, covariance,
+               sizeof(covariance));
 
 #ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
+        /* Release the semaphore */
+        semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
 #endif
+    } else {
+        struct ukf_state_t reset_state = {
+            {0, 0, 0},
+            {0, 0, 0},
+            {0, 0, 0},
+            {0, 0, 0, 1},
+            {0, 0, 0},
+            {0, 0, 0},
+            {0, 0, 0},
+            {0, 0, 0}
+        };
+
+        /* Copy the last position and attitude */
+        reset_state.position[0] = fcs_global_ahrs_state.lat;
+        reset_state.position[1] = fcs_global_ahrs_state.lon;
+        reset_state.position[2] = fcs_global_ahrs_state.alt;
+        memcpy(reset_state.attitude, fcs_global_ahrs_state.attitude,
+               sizeof(double) * 4u);
+
+        /* TODO: if gyro bias is sane, copy that too */
+
+        fcs_global_counters.ukf_resets++;
+        ukf_init();
+        ukf_set_state(&reset_state);
+
+        /* Update the output state and covariance with the latest values */
+        memcpy(&fcs_global_ahrs_state.lat, &state_values,
+               sizeof(state_values));
+        ukf_get_state_covariance_diagonal(
+            &fcs_global_ahrs_state.lat_covariance);
+    }
 }
 
 static void _fcs_ahrs_update_wmm(void) {

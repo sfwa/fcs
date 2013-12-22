@@ -51,7 +51,7 @@ void fcs_comms_init(void) {
 
     /* Open the RFD900 comms stream */
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 230400u) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 57600u) == FCS_STREAM_OK);
     assert(fcs_stream_open(FCS_STREAM_UART_EXT1) == FCS_STREAM_OK);
 }
 
@@ -238,6 +238,7 @@ const struct fcs_ahrs_state_t *ahrs_state) {
         out_status->main_loop_cycle_max[i] =
             fcs_global_counters.main_loop_cycle_max[i] & 0x0FFFFFFFu;
     }
+    out_status->ukf_resets = fcs_global_counters.ukf_resets;
 
     out_status->cpu_packet_rx =
         fcs_global_counters.cpu_packet_rx & 0x0FFFFFFFu;

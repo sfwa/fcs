@@ -89,9 +89,6 @@ int main(void) {
     if (core == FCS_CORE_COMMS) {
         fcs_comms_init();
     }
-    if (core == FCS_CORE_PIKSI) {
-        fcs_piksi_init();
-    }
     if (core == FCS_CORE_AHRS) {
         fcs_ahrs_init();
     }
@@ -119,9 +116,6 @@ int main(void) {
 
         if (core == FCS_CORE_PLATFORM) {
             fcs_board_tick();
-        }
-        if (core == FCS_CORE_PIKSI) {
-            fcs_piksi_tick();
         }
         if (core == FCS_CORE_AHRS) {
             fcs_ahrs_tick();
