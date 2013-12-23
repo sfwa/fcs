@@ -123,8 +123,8 @@ module cpld_top(
 	input cpu_resetout,
 	output cpu_pmic_reset_INV,
 	output cpu_pmic_pwron,
-	output reg cpu_reset_INV,
-	output reg cpu_wreset_INV,
+	output cpu_reset_INV,
+	output cpu_wreset_INV,
 	output[5:0] cpu_bootmode, /* open drain */
 	inout[23:0] cpu_gpio,
 	input cpu_ext_uart0_tx,
@@ -140,9 +140,8 @@ assign cpu_gpio[23:0] = 24'bz;
 assign dsp_usb_reset_INV = 1'b1;
 assign dsp_ext_uart_reset = ~dsp_bank_enable;
 assign dsp_ext_uart_en = 1'b1;
-assign cpu_bootmode = 6'b000101; /*6'b101001 for eMMC, 6'b000101 for MicroSD*/
 
-wire osc_clk, osc_clk_1600us, dsp_enable, cpu_enable, io1_enable, io2_enable,
+wire osc_clk, osc_clk_1600us, dsp_enable, io1_enable, io2_enable,
      dsp_bootmode_enable, pg_ddr3, pg_1v8, sys_enable, cpu_bank_enable,
      dsp_bank_enable, en_1v8_dsp;
 wire[15:0] dsp_bootmode;
@@ -180,7 +179,12 @@ assign smbus_cntrl = 1'bz;
 assign smbus_clk = 1'bz;
 assign smbus_data = 1'bz;
 
-assign cpu_enable = 1'b0;
+assign cpu_pmic_reset_INV = 1'b0;
+assign cpu_pmic_pwron = 1'b1;
+assign cpu_reset_INV = 1'bz;
+assign cpu_wreset_INV = 1'bz;
+assign cpu_bootmode = 6'b000101; /*6'b101001 for eMMC, 6'b000101 for MicroSD*/
+
 assign dsp_enable = 1'b1;
 
 /*

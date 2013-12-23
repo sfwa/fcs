@@ -391,3 +391,5 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW "MINIMUM CURRENT" -to pll_spi
 set_instance_assignment -name CURRENT_STRENGTH_NEW "MINIMUM CURRENT" -to pll_spi_cs_INV
 set_instance_assignment -name CURRENT_STRENGTH_NEW "MINIMUM CURRENT" -to pll_spi_mosi
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to gpio[0]
+
+set_global_assignment -name CDF_FILE output_files/Chain2.cdf
