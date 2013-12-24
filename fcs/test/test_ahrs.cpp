@@ -91,14 +91,14 @@ TEST(MeasurementLog, AddSensorMultiple) {
     bool result;
     struct fcs_measurement_t measurement;
 
-    measurement.header = sizeof(int16_t);
+    fcs_measurement_set_header(&measurement, 16u, 1u);
     fcs_measurement_set_sensor(&measurement, 2u, FCS_MEASUREMENT_TYPE_PITOT);
     measurement.data.i16[0] = 1234;
     result = fcs_measurement_log_add(&packet, &measurement);
 
     ASSERT_EQ(true, result);
 
-    measurement.header = sizeof(int16_t) * 3u;
+    fcs_measurement_set_header(&measurement, 16u, 3u);
     fcs_measurement_set_sensor(&measurement, 0,
                                FCS_MEASUREMENT_TYPE_ACCELEROMETER);
     measurement.data.i16[0] = 0;
@@ -108,11 +108,11 @@ TEST(MeasurementLog, AddSensorMultiple) {
 
     EXPECT_EQ(true, result);
 
-    EXPECT_EQ(0x02u, packet.data[5]);
+    EXPECT_EQ(0x18u, packet.data[5]);
     EXPECT_EQ(0x44u, packet.data[6]);
     EXPECT_EQ(1234, (int16_t)((packet.data[8] << 8u) + packet.data[7]));
 
-    EXPECT_EQ(0x06u, packet.data[9]);
+    EXPECT_EQ(0x1Au, packet.data[9]);
     EXPECT_EQ(0x01u, packet.data[10]);
     EXPECT_EQ(0, (int16_t)((packet.data[12] << 8u) + packet.data[11]));
     EXPECT_EQ(1, (int16_t)((packet.data[14] << 8u) + packet.data[13]));
@@ -126,11 +126,11 @@ TEST(MeasurementLog, AddSensorTooMany) {
     bool result;
     struct fcs_measurement_t measurement;
 
-    measurement.header = sizeof(int16_t) * 7u;
-    measurement.sensor = FCS_MEASUREMENT_TYPE_PITOT;
+    fcs_measurement_set_header(&measurement, 16u, 7u);
+    fcs_measurement_set_sensor(&measurement, 2u, FCS_MEASUREMENT_TYPE_PITOT);
 
     uint8_t i;
-    for (i = 0; i < 15; i++) {
+    for (i = 0; i < 15u; i++) {
         result = fcs_measurement_log_add(&packet, &measurement);
         EXPECT_EQ(true, result);
     }
@@ -145,7 +145,7 @@ TEST(MeasurementLog, AddSensorInvalidType) {
         fcs_measurement_log_init(&packet, 1u);
 
         struct fcs_measurement_t measurement;
-        measurement.header = sizeof(int16_t);
+        fcs_measurement_set_header(&measurement, 16u, 1u);
         measurement.sensor = FCS_MEASUREMENT_TYPE_LAST;
         measurement.data.i16[0] = 1234;
         fcs_measurement_log_add(&packet, &measurement);
@@ -158,7 +158,7 @@ TEST(MeasurementLog, AddSensorTooLong) {
         fcs_measurement_log_init(&packet, 1u);
 
         struct fcs_measurement_t measurement;
-        measurement.header = 0x0Fu;
+        measurement.header = 0x3Fu;
         measurement.sensor = 0x01u;
         measurement.data.i16[0] = 1234;
         fcs_measurement_log_add(&packet, &measurement);
@@ -171,21 +171,8 @@ TEST(MeasurementLog, AddSensorInvalidID) {
         fcs_measurement_log_init(&packet, 1u);
 
         struct fcs_measurement_t measurement;
-        measurement.header = sizeof(int16_t);
+        fcs_measurement_set_header(&measurement, 16u, 1u);
         measurement.sensor = 0xE1u;
-        measurement.data.i16[0] = 1234;
-        fcs_measurement_log_add(&packet, &measurement);
-    }, "Assertion.*failed");
-}
-
-TEST(MeasurementLog, AddSensorNoLength) {
-    EXPECT_DEATH({
-        struct fcs_measurement_log_t packet;
-        fcs_measurement_log_init(&packet, 1u);
-
-        struct fcs_measurement_t measurement;
-        measurement.header = 0;
-        measurement.sensor = 0x01u;
         measurement.data.i16[0] = 1234;
         fcs_measurement_log_add(&packet, &measurement);
     }, "Assertion.*failed");
@@ -198,14 +185,14 @@ TEST(MeasurementLog, SerializePacket) {
     bool result;
     struct fcs_measurement_t measurement;
 
-    measurement.header = sizeof(int16_t);
+    fcs_measurement_set_header(&measurement, 16u, 1u);
     fcs_measurement_set_sensor(&measurement, 2u, FCS_MEASUREMENT_TYPE_PITOT);
     measurement.data.i16[0] = 1234;
     result = fcs_measurement_log_add(&packet, &measurement);
 
     ASSERT_EQ(true, result);
 
-    measurement.header = sizeof(int16_t) * 3u;
+    fcs_measurement_set_header(&measurement, 16u, 3u);
     fcs_measurement_set_sensor(&measurement, 0,
                                FCS_MEASUREMENT_TYPE_ACCELEROMETER);
     measurement.data.i16[0] = 0;
@@ -222,6 +209,6 @@ TEST(MeasurementLog, SerializePacket) {
     EXPECT_EQ(0, out_buf[0]);
     EXPECT_EQ(0, out_buf[len + 1u]);
     EXPECT_STREQ(
-        "\x2\x1\x1\x2\x1\a\x2" "D\xD2\x4\x6\x1\x1\x2\x1\xAC\xFF\xFF\xDB",
+        "\x2\x1\x1\x2\x1\a\x18" "D\xD2\x4\x1A\x1\x1\x2\x1\xAA\xFF\xFF\xCA",
         (char*)&out_buf[1]);
 }

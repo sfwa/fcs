@@ -183,13 +183,9 @@ void fcs_ahrs_tick(void) {
             /* Update TRICAL instance parameters with the latest results */
             instance = &fcs_global_ahrs_state.trical_instances[i];
 
-            /*
-            FIXME: work out a better way to specify sensor sensitivity (or
-            get TRICAL working with measurements further from 1.0)
-            */
-            mag_value_f[0] = (mag_value[0] / 2048.0);
-            mag_value_f[1] = (mag_value[1] / 2048.0);
-            mag_value_f[2] = (mag_value[2] / 2048.0);
+            mag_value_f[0] = mag_value[0];
+            mag_value_f[1] = mag_value[1];
+            mag_value_f[2] = mag_value[2];
             TRICAL_estimate_update(instance, mag_value_f);
 
             for (j = 0; j < 9u; j++) {
@@ -318,9 +314,9 @@ void fcs_ahrs_tick(void) {
                       * INT16_MAX);
     }
 
-    control_log.header = (8u << FCS_MEASUREMENT_HEADER_LENGTH_OFFSET)
-                         & FCS_MEASUREMENT_HEADER_LENGTH_MASK;
-    control_log.sensor = FCS_MEASUREMENT_TYPE_CONTROL_POS;
+    fcs_measurement_set_header(&control_log, 16u, 4u);
+    fcs_measurement_set_sensor(&control_log, 0,
+                               FCS_MEASUREMENT_TYPE_CONTROL_POS);
     fcs_measurement_log_add(&fcs_global_ahrs_state.measurements,
                             &control_log);
 

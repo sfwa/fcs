@@ -202,8 +202,8 @@ void fcs_board_init_platform(void) {
                 FCS_CALIBRATION_BIAS_SCALE_3D,
         .error = 9.0f, /* about 1g */
         .params = {
-            0.0f, 0.0f, 0.0f, G / ACCEL_SENSITIVITY,
-            G / ACCEL_SENSITIVITY, G / ACCEL_SENSITIVITY
+            0.0f, 0.0f, 0.0f, G / ACCEL_SENSITIVITY * 65535.0f,
+            G / ACCEL_SENSITIVITY * 65535.0f, G / ACCEL_SENSITIVITY * 65535.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f }
@@ -215,8 +215,10 @@ void fcs_board_init_platform(void) {
                 FCS_CALIBRATION_BIAS_SCALE_3D,
         .error = 0.0935, /* approx 5.35 degrees */
         .params = {
-            0.0f, 0.0f, 0.0f, (M_PI/180.0f) / GYRO_SENSITIVITY,
-            (M_PI/180.0f) / GYRO_SENSITIVITY, (M_PI/180.0f) / GYRO_SENSITIVITY
+            0.0f, 0.0f, 0.0f,
+            (M_PI/180.0f) / GYRO_SENSITIVITY * 65535.0f,
+            (M_PI/180.0f) / GYRO_SENSITIVITY * 65535.0f,
+            (M_PI/180.0f) / GYRO_SENSITIVITY * 65535.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f }
@@ -228,6 +230,10 @@ void fcs_board_init_platform(void) {
                 FCS_CALIBRATION_BIAS_SCALE_3X3,
         .error = 500.0f,
         .params = {
+            /*
+            Don't bother multiplying these back out by the full-scale rating,
+            as the actual scale is compensated for by TRICAL
+            */
             0.0f, 0.0f, 0.0f, 1.0f / MAG_SENSITIVITY, 0.0f, 0.0f,
             1.0f / MAG_SENSITIVITY, 0.0f, 1.0f / MAG_SENSITIVITY
         },
@@ -245,7 +251,8 @@ void fcs_board_init_platform(void) {
         .sensor = FCS_MEASUREMENT_TYPE_GPS_VELOCITY,
         .type = FCS_CALIBRATION_BIAS_SCALE_3D,
         .error = 3.0f,
-        .params = { 0.0f, 0.0f, 0.0f, 1e-3f, 1e-3f, 1e-3f }
+        .params = { 0.0f, 0.0f, 0.0f,
+                    1e-3f * 32767.0f, 1e-3f  * 32767.0f, 1e-3f * 32767.0f }
     };
     struct fcs_calibration_t pitot_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
@@ -263,7 +270,7 @@ void fcs_board_init_platform(void) {
         5000.0 would be the GCS pressure; 0.02 is the sensor scale factor and
         0.12mbar is the change in pressure per meter altitude
         */
-        .params = { 50000.0f, 0.02f / 0.12f }
+        .params = { (50000.0 / 65535.0f), (0.02f / 0.12f) * 65535.0f }
     };
 
     /*
@@ -434,7 +441,7 @@ struct fcs_measurement_log_t *out_measurements) {
     struct fcs_measurement_t measurement;
 
     if (packet.sensor_update_flags & UPDATED_ACCEL) {
-        measurement.header = 6u;
+        fcs_measurement_set_header(&measurement, 16u, 3u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_ACCELEROMETER);
 
@@ -445,7 +452,7 @@ struct fcs_measurement_log_t *out_measurements) {
     }
 
     if (packet.sensor_update_flags & UPDATED_GYRO) {
-        measurement.header = 6u;
+        fcs_measurement_set_header(&measurement, 16u, 3u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_GYROSCOPE);
 
@@ -456,7 +463,7 @@ struct fcs_measurement_log_t *out_measurements) {
     }
 
     if (packet.sensor_update_flags & UPDATED_BAROMETER) {
-        measurement.header = 4u;
+        fcs_measurement_set_header(&measurement, 16u, 2u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_PRESSURE_TEMP);
 
@@ -467,7 +474,7 @@ struct fcs_measurement_log_t *out_measurements) {
 
     if (packet.sensor_update_flags & UPDATED_ADC_GPIO) {
         /* Update the pitot */
-        measurement.header = 2u;
+        fcs_measurement_set_header(&measurement, 16u, 1u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_PITOT);
 
@@ -475,7 +482,7 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_log_add(out_measurements, &measurement);
 
         /* Update current/voltage */
-        measurement.header = 4u;
+        fcs_measurement_set_header(&measurement, 16u, 2u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_IV);
 
@@ -484,7 +491,7 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_log_add(out_measurements, &measurement);
 
         /* Update ultransonic rangefinder */
-        measurement.header = 2u;
+        fcs_measurement_set_header(&measurement, 16u, 1u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_RANGEFINDER);
 
@@ -493,7 +500,7 @@ struct fcs_measurement_log_t *out_measurements) {
     }
 
     if (packet.sensor_update_flags & UPDATED_MAG) {
-        measurement.header = 6u;
+        fcs_measurement_set_header(&measurement, 12u, 3u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_MAGNETOMETER);
 
@@ -504,7 +511,7 @@ struct fcs_measurement_log_t *out_measurements) {
     }
 
     if (packet.sensor_update_flags & UPDATED_GPS_POS) {
-        measurement.header = 12u;
+        fcs_measurement_set_header(&measurement, 32u, 3u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_GPS_POSITION);
 
@@ -513,7 +520,7 @@ struct fcs_measurement_log_t *out_measurements) {
         measurement.data.i32[2] = swap_int32(packet.gps.position.alt);
         fcs_measurement_log_add(out_measurements, &measurement);
 
-        measurement.header = 6u;
+        fcs_measurement_set_header(&measurement, 16u, 3u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_GPS_VELOCITY);
 

@@ -56,8 +56,10 @@ fcs_measurement_t is a record of a single measurement, including a sensor ID
 and type, as well as the raw measurement data.
 
 Measurement header:
-7:4 = reserved (0s)
-3:0 = length in bytes
+7:6 = reserved (0)
+5:3 = precision of data in nibbles (4 bits), 0-7 correspond to 4-32 bits
+      (i.e. add 1 and multiply by 4)
+2:0 = number of values in data (0-7 corresponds to 1-8 data values)
 
 Measurement sensor:
 7:5 = sensor ID (0-3, 4+ reserved)
@@ -79,7 +81,8 @@ Data:
 - radio: 4x int8 (RSSI, noise, # packets rx, # errors rx)
 */
 struct fcs_measurement_t {
-    uint8_t header; /* 7:4 = reserved; 3:0 = length of data in bytes */
+    uint8_t header; /* 7 = reserved; 6:4 = data precision in nibbles;
+                       3:0 = length of data in bytes */
     uint8_t sensor; /* 7:5 = sensor ID (0-3), 4:0 = sensor type */
     union { /* The data type is implicit based on sensor type */
         uint8_t u8[14];
@@ -91,9 +94,12 @@ struct fcs_measurement_t {
     } __attribute__ ((packed)) data;
 } __attribute__ ((packed));
 
-#define FCS_MEASUREMENT_LENGTH_MAX 14u
-#define FCS_MEASUREMENT_HEADER_LENGTH_MASK 0x0Fu
-#define FCS_MEASUREMENT_HEADER_LENGTH_OFFSET 0
+#define FCS_MEASUREMENT_PRECISION_BITS_MAX 32u
+#define FCS_MEASUREMENT_HEADER_PRECISION_BITS_MASK 0x38u
+#define FCS_MEASUREMENT_HEADER_PRECISION_BITS_OFFSET 3u
+#define FCS_MEASUREMENT_NUM_VALUES_MAX 8u
+#define FCS_MEASUREMENT_HEADER_NUM_VALUES_MASK 0x07u
+#define FCS_MEASUREMENT_HEADER_NUM_VALUES_OFFSET 0
 #define FCS_MEASUREMENT_SENSOR_ID_MAX 3u
 #define FCS_MEASUREMENT_SENSOR_ID_MASK 0xE0u
 #define FCS_MEASUREMENT_SENSOR_ID_OFFSET 5u
@@ -107,8 +113,18 @@ const struct fcs_measurement_t *measurement);
 uint8_t fcs_measurement_get_sensor_id(
 const struct fcs_measurement_t *restrict measurement);
 
+size_t fcs_measurement_get_num_values(
+const struct fcs_measurement_t *restrict measurement);
+
+size_t fcs_measurement_get_precision_bits(
+const struct fcs_measurement_t *restrict measurement);
+
 size_t fcs_measurement_get_length(
 const struct fcs_measurement_t *restrict measurement);
+
+void fcs_measurement_set_header(
+struct fcs_measurement_t *restrict measurement, size_t precision_bits,
+size_t num_values);
 
 void fcs_measurement_set_sensor(
 struct fcs_measurement_t *restrict measurement, uint8_t sensor_id,
@@ -125,6 +141,7 @@ Calibration header:
 Calibration sensor: same as "Measurement sensor" above
 
 Type:
+5 = ignore sensor value
 4 = transform by orientation quaternion?
 3:0 = calibration type (see enum fcs_calibration_type_t)
 
