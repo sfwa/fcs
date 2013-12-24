@@ -59,6 +59,7 @@ ADD_EXECUTABLE(unittest
     ../comms/waypoint.c
     test_comms.cpp
     ../drivers/stream.c
+    ../drivers/peripheral.c
     test_stream.cpp
     ../ahrs/wmm.c
     test_wmm.cpp
@@ -105,6 +106,7 @@ ADD_LIBRARY(fcs SHARED
     ../nmpc/nmpc.c
     ../piksi/piksi.c
     ../drivers/stream.c
+    ../drivers/peripheral.c
     ../comms/comms.c
     ../comms/config.c
     ../comms/gcs.c

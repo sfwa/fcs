@@ -31,11 +31,25 @@ SOFTWARE.
 #include "../util/3dmath.h"
 #include "../util/util.h"
 #include "../drivers/stream.h"
+#include "../drivers/peripheral.h"
 #include "comms.h"
 #include "../TRICAL/TRICAL.h"
 #include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
+
+struct fcs_rfd900_status_packet_t {
+    uint8_t type; /* always 0x11 */
+    uint8_t length; /* always 12 */
+    uint8_t crc; /* always 0 */
+    uint8_t rssi;
+    uint8_t remote_rssi;
+    uint8_t tx_buffer_length;
+    uint8_t noise;
+    uint8_t remote_noise;
+    uint16_t rx_errors;
+    uint16_t rx_errors_fixed;
+};
 
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
 void _fcs_comms_generate_status_packet(struct fcs_packet_status_t *out_status,
@@ -111,8 +125,8 @@ void fcs_comms_tick(void) {
     }
 
     /*
-    Write the log values to stream 1 -- the CPLD will route this to the CPU
-    UART
+    Write the log values to internal stream 1 -- the CPLD will route this to
+    the CPU UART
     */
     comms_buf_len = fcs_measurement_log_serialize(
         comms_buf, sizeof(comms_buf), &fcs_global_ahrs_state.measurements);
@@ -122,7 +136,30 @@ void fcs_comms_tick(void) {
     comms_buf_len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, comms_buf);
     assert(comms_buf_len < 256u);
 
-    if (comms_buf_len >= FCS_COMMS_MIN_PACKET_SIZE) {
+    if (comms_buf_len && comms_buf[0] == 0) {
+        /* Initial byte is NUL, so this is an RFD900 status packet */
+        struct fcs_rfd900_status_packet_t packet;
+        struct fcs_cobsr_decode_result result;
+
+        result = fcs_cobsr_decode((uint8_t*)&packet, sizeof(packet),
+                                  &comms_buf[1], comms_buf_len - 2u);
+
+        /* If decode is successful, update the counters */
+        if (result.status == FCS_COBSR_DECODE_OK &&
+                result.out_len == sizeof(packet)) {
+            fcs_global_peripheral_state.telemetry_rssi = packet.rssi;
+            fcs_global_peripheral_state.telemetry_noise = packet.noise;
+
+            /*
+            FIXME: is errors a delta, or a count wrapping to 16-bit? Also,
+            check endianness.
+            */
+            fcs_global_peripheral_state.telemetry_errors += packet.rx_errors;
+            fcs_global_peripheral_state.telemetry_errors_corrected +=
+                packet.rx_errors_fixed;
+        }
+    } else if (comms_buf_len && comms_buf[0] == '$') {
+        /* Initial byte is '$', so this is a control packet */
         enum fcs_deserialization_result_t result;
 
         /* TODO: do something with incoming packets */
@@ -180,39 +217,58 @@ void fcs_comms_tick(void) {
 Read a full message from `dev`, starting with $ and ending with \n. Neither
 of those characters can appear in the message itself, so we don't need to do
 any message parsing at this level.
+
+The complication is that the RFD900 can inject NUL-terminated packets
+containing link status information. That means we need to check for $ and \n
+as well as NUL and NUL.
 */
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
     assert(buf);
 
-    uint8_t i = 0;
+    uint8_t i = 0, ch;
     uint32_t nbytes;
 
     nbytes = fcs_stream_bytes_available(dev);
 
     /*
-    If the initial byte is not $, we haven't synchronised with the start of a
-    message -- try to do that now by skipping until we see a \n (which should
-    be the end of \r\n).
+    If the initial byte is not $ or NUL, we haven't synchronised with the
+    start of a message -- try to do that now by skipping until we see a \n
+    (which should be the end of \r\n), or a NUL (which would be the end of an
+    RFD900 status packet).
 
     Give up after 4 tries.
     */
-    while (i < 4u && fcs_stream_peek(dev) != '$' &&
+    ch = fcs_stream_peek(dev);
+    while (i < 4u && (ch != '$' &&  ch != 0) &&
            nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
-        fcs_stream_skip_until_after(dev, (uint8_t)'\n');
+        /* Try to skip to the end of the next control packet */
+        nbytes = fcs_stream_skip_until_after(dev, (uint8_t)'\n');
+        if (!nbytes) {
+            /*
+            That didn't work, so try to skip to the end of the next RFD900
+            status packet
+            */
+            fcs_stream_skip_until_after(dev, 0);
+        }
         nbytes = fcs_stream_bytes_available(dev);
+        ch = fcs_stream_peek(dev);
         i++;
     }
 
     /*
     Give up if there aren't enough bytes remaining, or we're not currently at
-    a '$' character
+    a '$'/NUL character
     */
     if (nbytes < FCS_COMMS_MIN_PACKET_SIZE || i == 4) {
         return false;
     }
 
-    /* Read until after the next (terminating) '\n' */
-    nbytes = fcs_stream_read_until_after(dev, (uint8_t)'\n', buf, 255u);
+    /*
+    Read until after the next (terminating) '\n' or NUL, depending on whether
+    the packet start character was a '$' or NUL
+    */
+    nbytes = fcs_stream_read_until_after(
+        dev, (uint8_t)ch == '$' ? (uint8_t)'\n' : 0, buf, 255u);
     if (nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
         return nbytes;
     } else {
@@ -244,11 +300,39 @@ const struct fcs_ahrs_state_t *ahrs_state) {
         fcs_global_counters.cpu_packet_rx & 0x0FFFFFFFu;
     out_status->cpu_packet_rx_err =
         fcs_global_counters.cpu_packet_rx_err & 0x0FFFFFFFu;
-    out_status->gps_num_svs = 0; /* TODO */
-    out_status->telemetry_signal_db = 0; /* TODO */
-    out_status->telemetry_noise_db = 0; /* TODO */
-    out_status->telemetry_packet_rx = 0; /* TODO */
-    out_status->telemetry_packet_rx_err = 0; /* TODO */
+
+    /*
+    Work out the maximum number of SVs tracked by any of the GPS units
+    connected
+    */
+    uint8_t gps_num_svs = 0;
+    struct fcs_measurement_t gps_info_measurement;
+    double value[4];
+    bool result;
+
+    for (i = 0; i < 4u; i++) {
+        result = fcs_measurement_log_find(
+            &fcs_global_ahrs_state.measurements,
+            FCS_MEASUREMENT_TYPE_GPS_INFO, i, &gps_info_measurement);
+        if (result) {
+            fcs_measurement_get_values(&gps_info_measurement, value);
+            if (0.0 <= value[0] && value[0] < 16.0) {
+                gps_num_svs = max(gps_num_svs, (uint8_t)value[0]);
+            }
+        }
+    }
+    assert(gps_num_svs <= 0xFu);
+
+    out_status->gps_num_svs = gps_num_svs;
+
+    out_status->telemetry_signal_db =
+        fcs_global_peripheral_state.telemetry_rssi;
+    out_status->telemetry_noise_db =
+        fcs_global_peripheral_state.telemetry_noise;
+    out_status->telemetry_packet_rx =
+        fcs_global_peripheral_state.telemetry_packets;
+    out_status->telemetry_packet_rx_err =
+        fcs_global_peripheral_state.telemetry_errors;
 }
 
 void _fcs_comms_generate_state_packet(struct fcs_packet_state_t *out_state,
