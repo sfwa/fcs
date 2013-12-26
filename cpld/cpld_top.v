@@ -201,7 +201,7 @@ assign ext_spi_cs_INV = pll_spi_cs_INV;
 /*
 Global system enable -- wait until the board power supplies are good
 */
-assign sys_enable = pg_5v & pg_3v3;
+assign sys_enable = pg_3v3 & pg_5v;
 
 assign gpio[4:0] = 5'bz;
 assign smbus_cntrl = 1'bz;

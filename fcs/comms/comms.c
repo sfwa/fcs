@@ -51,6 +51,7 @@ struct fcs_rfd900_status_packet_t {
     uint16_t rx_errors_fixed;
 };
 
+void _fcs_comms_parse_packets(enum fcs_stream_device_t dev);
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
 void _fcs_comms_generate_status_packet(struct fcs_packet_status_t *out_status,
 const struct fcs_ahrs_state_t *ahrs_state);
@@ -132,8 +133,28 @@ void fcs_comms_tick(void) {
         comms_buf, sizeof(comms_buf), &fcs_global_ahrs_state.measurements);
     fcs_stream_write(FCS_STREAM_UART_INT1, comms_buf, comms_buf_len);
 
-    /* Check for packets */
-    comms_buf_len = _fcs_comms_read_packet(FCS_STREAM_UART_EXT0, comms_buf);
+    /* Check for packets from both the CPU and comms UARTs */
+    _fcs_comms_parse_packets(FCS_STREAM_UART_EXT0);
+    _fcs_comms_parse_packets(FCS_STREAM_UART_EXT1);
+
+    /*
+    Increment tick, but wrap to 0 at a (decimal) round number in order to keep
+    the output packet rate steady.
+    */
+    tick++;
+    if (tick == 4000000000u) {
+        tick = 0;
+    }
+}
+
+/*
+Receive and parse all comms packets received on the UART identified by `dev`.
+*/
+void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
+    uint8_t comms_buf[256];
+    size_t comms_buf_len;
+
+    comms_buf_len = _fcs_comms_read_packet(dev, comms_buf);
     assert(comms_buf_len < 256u);
 
     if (comms_buf_len && comms_buf[0] == 0) {
@@ -147,8 +168,14 @@ void fcs_comms_tick(void) {
         /* If decode is successful, update the counters */
         if (result.status == FCS_COBSR_DECODE_OK &&
                 result.out_len == sizeof(packet)) {
-            fcs_global_peripheral_state.telemetry_rssi = packet.rssi;
-            fcs_global_peripheral_state.telemetry_noise = packet.noise;
+            /*
+            RSSI/noise calcs per
+            http://code.google.com/p/ardupilot-mega/wiki/3DRadio
+            */
+            fcs_global_peripheral_state.telemetry_rssi =
+                (float)packet.rssi / 1.9f - 127.0f;
+            fcs_global_peripheral_state.telemetry_noise =
+                (float)packet.noise / 1.9f - 127.0f;
 
             /*
             FIXME: is errors a delta, or a count wrapping to 16-bit? Also,
@@ -202,15 +229,6 @@ void fcs_comms_tick(void) {
                 break;
         }
     }
-
-    /*
-    Increment tick, but wrap to 0 at a (decimal) round number in order to keep
-    the output packet rate steady.
-    */
-    tick++;
-    if (tick == 4000000000u) {
-        tick = 0;
-    }
 }
 
 /*
@@ -225,54 +243,53 @@ as well as NUL and NUL.
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
     assert(buf);
 
-    uint8_t i = 0, ch;
+    uint8_t ch;
     uint32_t nbytes;
 
     nbytes = fcs_stream_bytes_available(dev);
 
     /*
     If the initial byte is not $ or NUL, we haven't synchronised with the
-    start of a message -- try to do that now by skipping until we see a \n
-    (which should be the end of \r\n), or a NUL (which would be the end of an
-    RFD900 status packet).
-
-    Give up after 4 tries.
+    start of a message -- try to do that now by finding the first of \n (which
+    should be the end of \r\n), or a NUL (which would be the end of an RFD900
+    status packet).
     */
     ch = fcs_stream_peek(dev);
-    while (i < 4u && (ch != '$' &&  ch != 0) &&
-           nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
-        /* Try to skip to the end of the next control packet */
-        nbytes = fcs_stream_skip_until_after(dev, (uint8_t)'\n');
-        if (!nbytes) {
-            /*
-            That didn't work, so try to skip to the end of the next RFD900
-            status packet
-            */
-            fcs_stream_skip_until_after(dev, 0);
-        }
-        nbytes = fcs_stream_bytes_available(dev);
+    while ((ch != '$' && ch != 0) && nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
+        fcs_stream_read(dev, &ch, 1u);
         ch = fcs_stream_peek(dev);
-        i++;
+        nbytes = fcs_stream_bytes_available(dev);
     }
 
     /*
     Give up if there aren't enough bytes remaining, or we're not currently at
     a '$'/NUL character
     */
-    if (nbytes < FCS_COMMS_MIN_PACKET_SIZE || i == 4) {
+    if (nbytes < FCS_COMMS_MIN_PACKET_SIZE) {
         return false;
     }
 
-    /*
-    Read until after the next (terminating) '\n' or NUL, depending on whether
-    the packet start character was a '$' or NUL
-    */
-    nbytes = fcs_stream_read_until_after(
-        dev, (uint8_t)ch == '$' ? (uint8_t)'\n' : 0, buf, 255u);
-    if (nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
+    if (ch == 0) {
+        /*
+        If this was an RFD900 packet, read the initial NUL, the COBS-R byte,
+        and the terminating NUL (packet size + 3). If there are two NULs in a
+        row, ignore the first one.
+        */
+        fcs_stream_read(dev, buf, 1u);
+        if (fcs_stream_peek(dev) == 0) {
+            nbytes = fcs_stream_read(
+                dev, buf, sizeof(struct fcs_rfd900_status_packet_t) + 3u);
+        } else {
+            nbytes = fcs_stream_read(
+                dev, &buf[1], sizeof(struct fcs_rfd900_status_packet_t) + 2u);
+        }
         return nbytes;
     } else {
-        return 0;
+        /*
+        Not an RFD900 packet, so read until after the next (terminating) '\n'
+        */
+        nbytes = fcs_stream_read_until_after(dev, (uint8_t)'\n', buf, 255u);
+        return (nbytes >= FCS_COMMS_MIN_PACKET_SIZE - 1u) ? nbytes : 0;
     }
 }
 

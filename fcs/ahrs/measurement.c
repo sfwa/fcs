@@ -113,8 +113,8 @@ static inline size_t _fcs_extract_measurement_length(const uint8_t *buf) {
 
 static inline uint8_t _fcs_make_measurement_header(size_t precision_bits,
 size_t num_values) {
-    assert(precision_bits < FCS_MEASUREMENT_PRECISION_BITS_MAX);
-    assert(num_values < FCS_MEASUREMENT_NUM_VALUES_MAX);
+    assert(precision_bits <= FCS_MEASUREMENT_PRECISION_BITS_MAX);
+    assert(num_values <= FCS_MEASUREMENT_NUM_VALUES_MAX);
 
     size_t length;
     length = 2u + num_values * ((precision_bits + 7u) >> 3u);

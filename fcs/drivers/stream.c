@@ -262,7 +262,8 @@ uint32_t nbytes) {
     }
 
     size_t i;
-    for (i = 0; i < nbytes && rx_read_idx[dev] - rx_write_idx[dev];
+    for (i = 0; i < nbytes &&
+            ((rx_read_idx[dev] - rx_write_idx[dev]) & 0xFFu);
             rx_read_idx[dev]++, i++) {
         buf[i] = rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
     }
@@ -291,7 +292,7 @@ uint8_t ch) {
 
     uint8_t cur_ch;
     size_t i, initial_read_idx = rx_read_idx[dev];
-    for (i = 0; rx_read_idx[dev] - rx_write_idx[dev];
+    for (i = 0; (rx_read_idx[dev] - rx_write_idx[dev]) & 0xFFu;
             rx_read_idx[dev]++, i++) {
         cur_ch = rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
         if (cur_ch == ch) {
@@ -331,7 +332,8 @@ uint8_t ch, uint8_t *restrict buf, uint32_t nbytes) {
 
     uint8_t cur_ch;
     size_t i, initial_read_idx = rx_read_idx[dev];
-    for (i = 0; i < nbytes && rx_read_idx[dev] - rx_write_idx[dev];
+    for (i = 0; i < nbytes &&
+            ((rx_read_idx[dev] - rx_write_idx[dev]) & 0xFFu);
             rx_read_idx[dev]++, i++) {
         cur_ch = rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
         buf[i] = cur_ch;

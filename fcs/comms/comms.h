@@ -188,6 +188,17 @@ struct fcs_packet_status_t {
     uint32_t crc32;
 };
 
+/*
+Sensor calibration information (CPU->FCS, FCS->CPU): $PSFWAL
+- Sensor type -- 1 char (lookup table)
+- Sensor ID -- 1 char (0-3)
+- Flags -- 4 chars
+- Calibration type -- 1 char (lookup table)
+- Error -- 8 chars
+- Params * 9 -- 8 chars * 9
+-
+*/
+
 /* Init functions for comms module */
 void fcs_comms_init(void);
 void fcs_comms_tick(void);
