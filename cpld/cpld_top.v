@@ -209,7 +209,7 @@ assign smbus_clk = 1'bz;
 assign smbus_data = 1'bz;
 
 assign cpu_pmic_reset_INV = 1'b1;
-assign cpu_pmic_pwron = 1'b0;
+assign cpu_pmic_pwron = ~led[0] ? 1'b1 : 1'bz; /* Pull PWRON high briefly */
 assign cpu_reset_INV = 1'bz;
 assign cpu_wreset_INV = 1'bz;
 assign cpu_bootmode = 6'b100111; /* 6'b100111 for eMMC via CH0 then SD,
