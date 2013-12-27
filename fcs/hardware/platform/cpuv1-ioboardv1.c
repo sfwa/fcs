@@ -411,7 +411,8 @@ struct fcs_measurement_log_t *out_measurements) {
 
     /* Read until after the next (terminating) NUL */
     nbytes = fcs_stream_read_until_after(dev, (uint8_t)0, buf, 64u);
-    if (nbytes < sizeof(struct sensor_packet_t)) {
+    if (nbytes < sizeof(struct sensor_packet_t) ||
+            nbytes > sizeof(struct sensor_packet_t) + 2u) {
         goto invalid;
     }
 

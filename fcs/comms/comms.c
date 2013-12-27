@@ -58,6 +58,10 @@ const struct fcs_ahrs_state_t *ahrs_state);
 void _fcs_comms_generate_state_packet(struct fcs_packet_state_t *out_state,
 const struct fcs_ahrs_state_t *ahrs_state);
 
+static inline uint16_t swap_uint16(uint16_t val) {
+    return (val << 8) | ((val >> 8) & 0xFF);
+}
+
 void fcs_comms_init(void) {
     /* Open the CPU comms stream */
     assert(
@@ -157,7 +161,7 @@ void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
     comms_buf_len = _fcs_comms_read_packet(dev, comms_buf);
     assert(comms_buf_len < 256u);
 
-    if (comms_buf_len && comms_buf[0] == 0) {
+    if (comms_buf_len > 3u && comms_buf[0] == 0) {
         /* Initial byte is NUL, so this is an RFD900 status packet */
         struct fcs_rfd900_status_packet_t packet;
         struct fcs_cobsr_decode_result result;
@@ -178,12 +182,12 @@ void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
                 (float)packet.noise / 1.9f - 127.0f;
 
             /*
-            FIXME: is errors a delta, or a count wrapping to 16-bit? Also,
-            check endianness.
+            FIXME: is errors a delta, or a count wrapping to 16-bit?
             */
-            fcs_global_peripheral_state.telemetry_errors += packet.rx_errors;
+            fcs_global_peripheral_state.telemetry_errors +=
+                swap_uint16(packet.rx_errors);
             fcs_global_peripheral_state.telemetry_errors_corrected +=
-                packet.rx_errors_fixed;
+                swap_uint16(packet.rx_errors_fixed);
         }
     } else if (comms_buf_len && comms_buf[0] == '$') {
         /* Initial byte is '$', so this is a control packet */
@@ -266,7 +270,7 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
     a '$'/NUL character
     */
     if (nbytes < FCS_COMMS_MIN_PACKET_SIZE) {
-        return false;
+        return 0;
     }
 
     if (ch == 0) {
@@ -283,7 +287,8 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
             nbytes = fcs_stream_read(
                 dev, &buf[1], sizeof(struct fcs_rfd900_status_packet_t) + 2u);
         }
-        return nbytes;
+        return
+            (nbytes > sizeof(struct fcs_rfd900_status_packet_t)) ? nbytes : 0;
     } else {
         /*
         Not an RFD900 packet, so read until after the next (terminating) '\n'
@@ -295,6 +300,9 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
 
 void _fcs_comms_generate_status_packet(struct fcs_packet_status_t *out_status,
 const struct fcs_ahrs_state_t *ahrs_state) {
+    static uint64_t last_ioboard_resets[2], last_trical_resets[2],
+                    last_ukf_resets;
+
     assert(out_status);
 
     out_status->solution_time = ahrs_state->solution_time;
@@ -304,14 +312,19 @@ const struct fcs_ahrs_state_t *ahrs_state) {
 
     uint8_t i;
     for (i = 0; i < 2; i++) {
-        out_status->ioboard_resets[i] =
-            fcs_global_counters.ioboard_resets[i] & 0x0FFFFFFFu;
-        out_status->trical_resets[i] =
-            fcs_global_counters.trical_resets[i] & 0x0FFFFFFFu;
+        out_status->ioboard_resets[i] = (fcs_global_counters.ioboard_resets[i]
+            - last_ioboard_resets[i]) & 0x0FFFFFFFu;
+        out_status->trical_resets[i] = (fcs_global_counters.trical_resets[i]
+            - last_trical_resets[i]) & 0x0FFFFFFFu;
         out_status->main_loop_cycle_max[i] =
             fcs_global_counters.main_loop_cycle_max[i] & 0x0FFFFFFFu;
+
+        last_ioboard_resets[i] = fcs_global_counters.ioboard_resets[i];
+        last_trical_resets[i] = fcs_global_counters.trical_resets[i];
     }
-    out_status->ukf_resets = fcs_global_counters.ukf_resets;
+    out_status->ukf_resets =
+        (fcs_global_counters.ukf_resets - last_ukf_resets) & 0x0FFFFFFFu;
+    last_ukf_resets = fcs_global_counters.ukf_resets;
 
     out_status->cpu_packet_rx =
         fcs_global_counters.cpu_packet_rx & 0x0FFFFFFFu;
