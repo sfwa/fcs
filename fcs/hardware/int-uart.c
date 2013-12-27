@@ -365,26 +365,32 @@ uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
     */
 
     /* Error if RXFIFOE, BI, FE or OE was set */
-    uint8_t lsr = uart[uart_idx]->LSR & 0x9Au;
-    if (lsr) {
-    	/* Clear the RX FIFO: DMAMODE + RXCLR + FIFOEN */
-    	uart[uart_idx]->FCR = 0x9u;
-
-        /* Reset the EDMA status for this channel */
+    uint8_t orig_lsr = uart[uart_idx]->LSR & 0x9Au;
+    if (orig_lsr) {
+        uint8_t i, lsr = orig_lsr;
         volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-        edma3->TPCC_SECR = 1u << rx_edma_event[uart_idx];
-        edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
-        edma3->TPCC_EMCR = 1u << rx_edma_event[uart_idx];
 
-        /* Read out RBR and LSR to reset error status */
-        uint8_t dummy = uart[uart_idx]->RBR;
-        dummy = uart[uart_idx]->LSR;
-        #pragma unused(dummy);
+        for (i = 0; i < 64u && lsr; i++) {
+            /* Clear the RX FIFO: DMAMODE + RXCLR + FIFOEN */
+            uart[uart_idx]->FCR = 0x9u;
 
-        /* Clear the RX FIFO again: DMAMODE + RXCLR + FIFOEN */
-        uart[uart_idx]->FCR = 0x9u;
+            /* Reset the EDMA status for this channel */
 
-        return lsr;
+            edma3->TPCC_SECR = 1u << rx_edma_event[uart_idx];
+            edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
+            edma3->TPCC_EMCR = 1u << rx_edma_event[uart_idx];
+
+            /* Read out RBR and LSR to reset error status */
+            uint8_t dummy = uart[uart_idx]->RBR;
+            #pragma unused(dummy);
+
+            lsr = uart[uart_idx]->LSR;
+
+            /* Clear the RX FIFO again: DMAMODE + RXCLR + FIFOEN */
+            uart[uart_idx]->FCR = 0x9u;
+        }
+
+        return orig_lsr;
     } else {
         return 0;
     }
