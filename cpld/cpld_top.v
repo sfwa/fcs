@@ -60,7 +60,7 @@ module cpld_top(
 	output cpu_usbhub_reset_INV,
 	input cell_wake_INV,
 	output reg cell_gps_en_INV,
-	output reg cell_disable_INV,
+	output cell_disable_INV,
 	output[3:0] led,
 	inout[4:0] gpio,
 	/* BANK 2 -- DSP 1V8 */
@@ -139,6 +139,7 @@ assign dsp_i2c_1v8_sda = 1'bz;
 assign dsp_usb_reset_INV = 1'b1;
 assign dsp_ext_uart_reset = ~dsp_bank_enable;
 assign dsp_ext_uart_en = 1'b1;
+assign cell_disable_INV = 1'b1;
 
 wire osc_clk, osc_clk_1600us, dsp_enable, io1_enable, io2_enable,
      dsp_bootmode_enable, pg_ddr3, pg_1v8, sys_enable, cpu_bank_enable,
