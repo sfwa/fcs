@@ -57,7 +57,7 @@ module cpld_top(
 	input ioboard_2_reset_in,
 	output reg ioboard_1_reset_out,
 	input ioboard_1_reset_in,
-	output reg cpu_usbhub_reset_INV,
+	output cpu_usbhub_reset_INV,
 	input cell_wake_INV,
 	output reg cell_gps_en_INV,
 	output reg cell_disable_INV,
@@ -136,36 +136,6 @@ module cpld_top(
 /* Defaults */
 assign dsp_i2c_1v8_scl = 1'bz;
 assign dsp_i2c_1v8_sda = 1'bz;
-/*
-The GPIO functions may have assignments in the bootloader -- keep this as
-close as possible to the ODROID-X2
-*/
-assign cpu_gpio[23:0] = {
-	1'b0, /* XE_INT31 -- I / HOTPLUG_DET_OUT on HDMI */
-	1'bz, /* XE_INT30 */
-	1'b0, /* XE_INT27 -- I / INT on CON_LCD_MODULE */
-	1'bz, /* XE_INT25 -- O / MIPI-CSI_RSTn on CAMERA */
-	1'bz, /* XE_INT23 */
-	1'bz, /* XE_INT22 */
-	1'b0, /* XE_INT18 -- I / USER_SW*/
-	1'bz, /* XE_INT17 -- O / RST on CON_LCD_MODULE */
-	1'bz, /* XE_INT16 */
-	1'bz, /* XE_INT15 */
-	1'b0, /* XE_INT14 -- I / VBUS_DET on USB_OTG */
-	1'bz, /* XE_INT13 */
-	1'bz, /* XE_INT12 */
-	1'bz, /* XE_INT10 */
-	1'bz, /* XE_INT9 */
-	1'bz, /* XE_INT8 */
-	1'bz, /* XE_INT7 */
-	1'bz, /* XE_INT6 */
-	1'bz, /* XE_INT5 */
-	1'bz, /* XE_INT4 */
-	1'b0, /* XE_INT3 -- O / MODE_SW */
-	1'bz, /* XE_INT2 */
-	1'bz, /* XE_INT1 */
-	1'b0 /* XE_INT0 -- I / AUDIO_NIRQ on AUDIO_CODEC */
-};
 assign dsp_usb_reset_INV = 1'b1;
 assign dsp_ext_uart_reset = ~dsp_bank_enable;
 assign dsp_ext_uart_en = 1'b1;
@@ -188,7 +158,7 @@ wire[3:0] c66x_state;
 assign led[0] = (c66x_state == 4'b1001);
 assign led[1] = dsp_resetfull_INV;
 assign led[2] = pll_locked;
-assign led[3] = 1'b1;
+assign led[3] = cpu_pmic_pwron;
 
 /*
 Break out the CDCE62002 SPI signals to the external SPI connector to enable
@@ -207,14 +177,6 @@ assign gpio[4:0] = 5'bz;
 assign smbus_cntrl = 1'bz;
 assign smbus_clk = 1'bz;
 assign smbus_data = 1'bz;
-
-assign cpu_pmic_reset_INV = 1'b1;
-assign cpu_pmic_pwron = ~led[0] ? 1'b1 : 1'bz; /* Pull PWRON high briefly */
-assign cpu_reset_INV = 1'bz;
-assign cpu_wreset_INV = 1'bz;
-assign cpu_bootmode = 6'b100111; /* 6'b100111 for eMMC via CH0 then SD,
-                                    6'b000101 for MicroSD then USB*/
-
 assign dsp_enable = 1'b1;
 
 /*
@@ -304,6 +266,54 @@ always @(*) begin
 		ext_uart1_tx = 1'b0;
 	end
 end
+
+/* CPU power sequencing */
+reg[23:0] cpu_pwron_timer;
+
+always @(posedge osc_clk) begin
+    cpu_pwron_timer <= ~(c66x_state == 4'b1001) || cpu_pwron_timer != 24'b0 ?
+                       cpu_pwron_timer + 24'b1 : cpu_pwron_timer;
+end
+
+assign cpu_pmic_reset_INV = 1'bZ;
+assign cpu_pmic_pwron = cpu_pwron_timer[23] & cpu_pwron_timer[22] ? 1'b1 : 1'bZ; /* Pull PWRON high briefly */
+assign cpu_reset_INV = 1'bZ;
+assign cpu_wreset_INV = 1'bZ;
+assign cpu_usbhub_reset_INV = 1'b1;
+assign cpu_bootmode = 6'b000101;
+                                 /* 6'b100111 for eMMC via CH0 then SD,
+                                    6'b000101 for MicroSD then USB*/
+
+/*
+The GPIO functions may have assignments in the bootloader -- keep this as
+close as possible to the ODROID-X2
+*/
+assign cpu_gpio[23:0] = {
+	1'b0, /* XE_INT31 -- I / HOTPLUG_DET_OUT on HDMI */
+	1'bz, /* XE_INT30 */
+	1'b0, /* XE_INT27 -- I / INT on CON_LCD_MODULE */
+	1'bz, /* XE_INT25 -- O / MIPI-CSI_RSTn on CAMERA */
+	1'bz, /* XE_INT23 */
+	1'bz, /* XE_INT22 */
+	1'b0, /* XE_INT18 -- I / USER_SW*/
+	1'bz, /* XE_INT17 -- O / RST on CON_LCD_MODULE */
+	1'bz, /* XE_INT16 */
+	1'bz, /* XE_INT15 */
+	1'b0, /* XE_INT14 -- I / VBUS_DET on USB_OTG */
+	1'bz, /* XE_INT13 */
+	1'bz, /* XE_INT12 */
+	1'bz, /* XE_INT10 */
+	1'bz, /* XE_INT9 */
+	1'bz, /* XE_INT8 */
+	1'bz, /* XE_INT7 */
+	1'bz, /* XE_INT6 */
+	1'bz, /* XE_INT5 */
+	1'bz, /* XE_INT4 */
+	1'b0, /* XE_INT3 -- O / MODE_SW */
+	1'bz, /* XE_INT2 */
+	1'bz, /* XE_INT1 */
+	1'b0 /* XE_INT0 -- I / AUDIO_NIRQ on AUDIO_CODEC */
+};
 
 endmodule
 
