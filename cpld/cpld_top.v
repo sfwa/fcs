@@ -289,8 +289,8 @@ assign cpu_pmic_reset_INV = 1'bZ;
 assign cpu_pmic_pwron = cpu_pwron_timer[23] & cpu_pwron_timer[22] ? 1'b1 : 1'bZ; /* Pull PWRON high briefly */
 assign cpu_reset_INV = 1'bZ;
 assign cpu_wreset_INV = 1'bZ;
-assign cpu_usbhub_reset_INV = 1'b1;
-assign cpu_bootmode = 6'b000101;
+assign cpu_usbhub_reset_INV = (cpu_pwron_timer[23] & cpu_pwron_timer[22]) ? 1'b0 : 1'b1;
+assign cpu_bootmode = 6'b100111;
                                  /* 6'b100111 for eMMC via CH0 then SD,
                                     6'b000101 for MicroSD then USB*/
 
