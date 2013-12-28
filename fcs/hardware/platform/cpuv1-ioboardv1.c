@@ -37,7 +37,6 @@ SOFTWARE.
 #include "../board.h"
 #include "../../util/util.h"
 #include "../../util/3dmath.h"
-#include "../../comms/comms.h"
 #include "../../ukf/cukf.h"
 #include "../../drivers/stream.h"
 #include "../../stats/stats.h"

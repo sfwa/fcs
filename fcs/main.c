@@ -67,8 +67,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "nmpc/nmpc.h"
 #include "util/util.h"
 #include "piksi/piksi.h"
-#include "comms/comms.h"
+#include "drivers/peripheral.h"
 #include "stats/stats.h"
+#include "comms/comms.h"
 
 int main(void);
 

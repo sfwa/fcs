@@ -31,7 +31,6 @@ SOFTWARE.
 #include "../util/3dmath.h"
 #include "../util/util.h"
 #include "../drivers/stream.h"
-#include "../comms/comms.h"
 #include "../stats/stats.h"
 #include "../TRICAL/TRICAL.h"
 #include "measurement.h"

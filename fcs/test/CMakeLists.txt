@@ -52,12 +52,8 @@ ADD_EXECUTABLE(unittest
     ../util/util.c
     test_util.cpp
     ../comms/comms.c
-    ../comms/config.c
-    ../comms/gcs.c
     ../comms/state.c
     ../comms/status.c
-    ../comms/waypoint.c
-    ../comms/calibration.c
     test_comms.cpp
     ../drivers/stream.c
     ../drivers/peripheral.c
@@ -109,12 +105,8 @@ ADD_LIBRARY(fcs SHARED
     ../drivers/stream.c
     ../drivers/peripheral.c
     ../comms/comms.c
-    ../comms/config.c
-    ../comms/gcs.c
     ../comms/state.c
     ../comms/status.c
-    ../comms/waypoint.c
-    ../comms/calibration.c
     ../hardware/platform/cpuv1-ioboardv1.c
     ../ahrs/measurement.c
     ../ahrs/wmm.c

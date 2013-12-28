@@ -25,77 +25,136 @@ SOFTWARE.
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
 #include "../config/config.h"
 #include "../util/util.h"
-#include "comms.h"
+#include "../util/3dmath.h"
+#include "../TRICAL/TRICAL.h"
+#include "../ahrs/measurement.h"
+#include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
+#include "../drivers/peripheral.h"
+#include "comms.h"
 
 size_t fcs_comms_serialize_status(uint8_t *restrict buf,
-const struct fcs_packet_status_t *restrict status) {
-    assert(buf);
-    assert(status);
-    assert(fcs_comms_validate_status(status) == FCS_VALIDATION_OK);
+const struct fcs_ahrs_state_t *restrict state,
+const struct fcs_stats_counter_t *restrict counters,
+const struct fcs_peripheral_state_t *restrict peripheral_state) {
+    static uint64_t last_ioboard_resets[2], last_trical_resets[2],
+                    last_ukf_resets;
 
-    size_t index = 0;
+    assert(buf);
+    assert(state);
+    assert(counters);
+    assert(peripheral_state);
+
+    uint64_t count;
+    size_t index = 0, i;
 
     memcpy(buf, "$PSFWAT,", 8u);
     index += 8u;
 
-    index += fcs_ascii_from_int32(&buf[index], status->solution_time, 9u);
+    index += fcs_ascii_from_int32(
+        &buf[index], (int32_t)(state->solution_time & 0x3FFFFFFFu), 9u);
     buf[index++] = ',';
 
-    memcpy(&buf[index], status->flags, 4u);
+    memset(&buf[index], '-', 4u);
     index += 4u;
     buf[index++] = ',';
 
-    index += fcs_ascii_from_int32(&buf[index], status->ioboard_resets[0], 3u);
+    /*
+    Output the change in I/O board count since the last packet was generated
+    */
+    for (i = 0; i < 2u; i++) {
+        count = counters->ioboard_resets[i] - last_ioboard_resets[i];
+        index += fcs_ascii_from_int32(
+            &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
+        buf[index++] = ',';
+
+        last_ioboard_resets[i] = counters->ioboard_resets[i];
+    }
+
+    /*
+    Same, but for TRICAL resets
+    */
+    for (i = 0; i < 2u; i++) {
+        count = counters->trical_resets[i] - last_trical_resets[i];
+        index += fcs_ascii_from_int32(
+            &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
+        buf[index++] = ',';
+
+        last_trical_resets[i] = counters->trical_resets[i];
+    }
+
+    /* And again, for UKF resets */
+    count = counters->ukf_resets - last_ukf_resets;
+    index += fcs_ascii_from_int32(
+        &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
+    buf[index++] = ',';
+
+    last_ukf_resets = counters->ukf_resets;
+
+    /* Output the peak core cycle counts */
+    for (i = 0; i < 2u; i++) {
+        index += fcs_ascii_from_int32(
+            &buf[index],
+            (int32_t)(counters->main_loop_cycle_max[i] & 0x0FFFFFFFu), 8u);
+        buf[index++] = ',';
+    }
+
+    /* Output CPU packet status */
+    index += fcs_ascii_from_int32(
+        &buf[index], (int32_t)(counters->cpu_packet_rx & 0x0FFFFFFFu), 9u);
     buf[index++] = ',';
 
     index += fcs_ascii_from_int32(
-        &buf[index], status->ioboard_resets[1], 3u);
+        &buf[index], (int32_t)(counters->cpu_packet_rx_err & 0x0FFFFFFFu),
+        9u);
     buf[index++] = ',';
 
-    index += fcs_ascii_from_int32(&buf[index], status->trical_resets[0], 3u);
+    /*
+    Work out the maximum number of SVs tracked by any of the GPS units
+    connected
+    */
+    uint8_t gps_num_svs = 0;
+    struct fcs_measurement_t gps_info_measurement;
+    double value[4];
+    bool result;
+
+    for (i = 0; i < 4u; i++) {
+        result = fcs_measurement_log_find(
+            &state->measurements, FCS_MEASUREMENT_TYPE_GPS_INFO, i,
+            &gps_info_measurement);
+        if (result) {
+            fcs_measurement_get_values(&gps_info_measurement, value);
+            if (0.0 <= value[0] && value[0] < 16.0) {
+                gps_num_svs = max(gps_num_svs, (uint8_t)value[0]);
+            }
+        }
+    }
+    assert(gps_num_svs <= 0xFu);
+
+    index += fcs_ascii_from_int32(&buf[index], (int32_t)gps_num_svs, 2u);
     buf[index++] = ',';
 
-    index += fcs_ascii_from_int32(&buf[index], status->trical_resets[1], 3u);
-    buf[index++] = ',';
-
-    index += fcs_ascii_from_int32(&buf[index], status->ukf_resets, 3u);
+    /* Output the telemetry status */
+    index += fcs_ascii_from_int32(
+        &buf[index], (int32_t)peripheral_state->telemetry_rssi, 3u);
     buf[index++] = ',';
 
     index += fcs_ascii_from_int32(
-        &buf[index], status->main_loop_cycle_max[0], 8u);
+        &buf[index], (int32_t)peripheral_state->telemetry_noise, 3u);
     buf[index++] = ',';
 
     index += fcs_ascii_from_int32(
-        &buf[index], status->main_loop_cycle_max[1], 8u);
-    buf[index++] = ',';
-
-    index += fcs_ascii_from_int32(&buf[index], status->cpu_packet_rx, 9u);
-    buf[index++] = ',';
-
-    index += fcs_ascii_from_int32(&buf[index], status->cpu_packet_rx_err, 9u);
-    buf[index++] = ',';
-
-    index += fcs_ascii_from_int32(&buf[index], status->gps_num_svs, 2u);
+        &buf[index],
+        (int32_t)(peripheral_state->telemetry_packets & 0x7FFFFFFFu), 6u);
     buf[index++] = ',';
 
     index += fcs_ascii_from_int32(
-        &buf[index], status->telemetry_signal_db, 3u);
-    buf[index++] = ',';
-
-    index += fcs_ascii_from_int32(
-        &buf[index], status->telemetry_noise_db, 3u);
-    buf[index++] = ',';
-
-    index += fcs_ascii_from_int32(
-        &buf[index], status->telemetry_packet_rx, 6u);
-    buf[index++] = ',';
-
-    index += fcs_ascii_from_int32(
-        &buf[index], status->telemetry_packet_rx_err, 6u);
+        &buf[index],
+        (int32_t)(peripheral_state->telemetry_errors & 0x7FFFFFFFu), 6u);
     buf[index++] = ',';
 
     /*
@@ -115,28 +174,4 @@ const struct fcs_packet_status_t *restrict status) {
     buf[index++] = '\n';
 
     return index;
-}
-
-enum fcs_validation_result_t fcs_comms_validate_status(
-const struct fcs_packet_status_t *restrict status) {
-    assert(status);
-
-    if (0 <= status->solution_time && 0 <= status->ioboard_resets[0] &&
-            0 <= status->ioboard_resets[1] &&
-            0 <= status->trical_resets[0] &&
-            0 <= status->trical_resets[1] && 0 <= status->ukf_resets &&
-            0 <= status->main_loop_cycle_max[0] &&
-            0 <= status->main_loop_cycle_max[1] &&
-            0 <= status->cpu_packet_rx && 0 <= status->cpu_packet_rx_err &&
-            0 <= status->gps_num_svs && status->gps_num_svs <= 99u &&
-            -200 <= status->telemetry_signal_db &&
-            status->telemetry_signal_db <= 100 &&
-            -200 <= status->telemetry_noise_db &&
-            status->telemetry_noise_db <= 100 &&
-            0 <= status->telemetry_packet_rx &&
-            0 <= status->telemetry_packet_rx_err) {
-        return FCS_VALIDATION_OK;
-    } else {
-        return FCS_VALIDATION_ERROR;
-    }
 }
