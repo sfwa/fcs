@@ -192,12 +192,28 @@ struct fcs_packet_status_t {
 Sensor calibration information (CPU->FCS, FCS->CPU): $PSFWAL
 - Sensor type -- 1 char (lookup table)
 - Sensor ID -- 1 char (0-3)
-- Flags -- 4 chars
+- Flags -- 5 chars
 - Calibration type -- 1 char (lookup table)
 - Error -- 8 chars
 - Params * 9 -- 8 chars * 9
--
+- Orientation * 4 -- 8 chars * 4
+- Offset * 3 -- 8 chars * 3
+- CRC32 -- 8 chars
+
+=> 155 bytes + 22 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   185 bytes
 */
+struct fcs_packet_calibration_t {
+    uint8_t sensor_type;
+    uint8_t sensor_id;
+    uint8_t flags[5];
+    uint8_t calibration_type;
+    double error;
+    double params[9];
+    double orientation[4];
+    double offset[3];
+    uint32_t crc32;
+};
 
 /* Init functions for comms module */
 void fcs_comms_init(void);
@@ -247,6 +263,17 @@ size_t len);
 
 enum fcs_validation_result_t fcs_comms_validate_config(
 const struct fcs_packet_config_t *restrict config);
+
+/* Calibration serialization/deserialization */
+size_t fcs_comms_serialize_calibration(uint8_t *restrict buf,
+const struct fcs_packet_calibration_t *restrict calibration);
+
+enum fcs_deserialization_result_t fcs_comms_deserialize_calibration(
+struct fcs_packet_calibration_t *restrict calibration, uint8_t *restrict buf,
+size_t len);
+
+enum fcs_validation_result_t fcs_comms_validate_calibration(
+const struct fcs_packet_calibration_t *restrict calibration);
 
 /* GCS deserialization */
 enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
