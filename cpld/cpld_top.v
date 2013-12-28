@@ -247,14 +247,21 @@ end
 /* Handle DSP UART connections */
 always @(*) begin
 	if (dsp_bank_enable) begin
+		/*
+		Map DSP UART0 TX to both I/O boards, since it's fine to send them an
+		identical stream. DSP UART1 TX goes to the CPU's UART2 for measurement
+		logging.
+		*/
 		dsp_int_uart0_rx = ioboard_uart0_rx;
 		ioboard_uart0_tx = dsp_int_uart0_tx;
 
 		dsp_int_uart1_rx = ioboard_uart1_rx;
-		ioboard_uart1_tx = dsp_int_uart1_tx;
+		ioboard_uart1_tx = dsp_int_uart0_tx;
 
 		dsp_ext_uart_rx = ext_uart1_rx;
 		ext_uart1_tx = dsp_ext_uart_tx;
+
+		cpu_ext_uart0_rx = dsp_int_uart1_tx;
 	end else begin
 		dsp_int_uart0_rx = 1'b0;
 		ioboard_uart0_tx = 1'b0;
@@ -264,6 +271,8 @@ always @(*) begin
 
 		dsp_ext_uart_rx = 1'b0;
 		ext_uart1_tx = 1'b0;
+
+		cpu_ext_uart0_rx = 1'b0;
 	end
 end
 
