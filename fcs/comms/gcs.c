@@ -28,7 +28,6 @@ SOFTWARE.
 
 #include "../config/config.h"
 #include "../util/util.h"
-#include "../drivers/stream.h"
 #include "comms.h"
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(

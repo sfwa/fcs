@@ -28,7 +28,6 @@ SOFTWARE.
 
 #include "../config/config.h"
 #include "../util/util.h"
-#include "../drivers/stream.h"
 #include "comms.h"
 
 size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
