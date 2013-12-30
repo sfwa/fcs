@@ -39,7 +39,7 @@ struct fcs_stats_counter_t {
     uint64_t piksi_packet_rx_err;
 
     /* TRICAL counters */
-    uint64_t trical_resets[2];
+    uint64_t trical_resets[4];
 
     /* UKF counters */
     uint64_t ukf_resets;

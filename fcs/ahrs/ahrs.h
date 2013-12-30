@@ -23,7 +23,24 @@ SOFTWARE.
 #ifndef _FCS_AHRS_H
 #define _FCS_AHRS_H
 
-#define FCS_AHRS_NUM_TRICAL_INSTANCES 2u
+#define FCS_AHRS_NUM_TRICAL_INSTANCES 4u
+
+/*
+The "no velocity" constraint requires that velocity be 0, and acceleration
+average to 0 over a 'short' time period (e.g. a few seconds).
+*/
+#define FCS_AHRS_DYNAMICS_CONSTRAINT_NO_VELOCITY 0x1u
+/*
+The "no rotation" constraint requires that angular velocity be 0, and angular
+acceleration average to 0 over a short time period.
+*/
+#define FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION 0x2u
+/*
+The 2D constraint requires that the UAV not be moving under its own power
+(i.e. motion described by a flight dynamics model); this can be used when the
+UAV is being held or transported.
+*/
+#define FCS_AHRS_DYNAMICS_CONSTRAINT_2D 0x4u
 
 /*
 AHRS global state
@@ -58,12 +75,19 @@ struct fcs_ahrs_state_t {
     double wmm_field_norm;
     double ukf_process_noise[24];
     uint32_t ukf_dynamics_model;
+    uint32_t dynamics_constraints;
     struct fcs_calibration_map_t calibration;
     TRICAL_instance_t trical_instances[FCS_AHRS_NUM_TRICAL_INSTANCES];
 };
 
 void fcs_ahrs_init(void);
 void fcs_ahrs_tick(void);
+
+/*
+Configure the AHRS' dynamics constraints based on the value of the
+`constraints` bitfield. Setting constraints allows sensors to be calibrated.
+*/
+void fcs_ahrs_set_constraints(uint32_t constraints);
 
 /*
 Updated every AHRS tick -- contains the current state and uncertainty

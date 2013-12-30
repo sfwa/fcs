@@ -118,7 +118,6 @@ struct sensor_packet_t {
 #define ACCEL_SENSITIVITY 4096.0 /* LSB/g @ ±8g FS */
 #define GYRO_SENSITIVITY 65.5 /* LSB/(deg/s) @ 500deg/s FS */
 #define MAG_SENSITIVITY 1090.0 /* LSB/G @ ±2G FS */
-#define G 9.80665
 
 #define CMD_KEY_LEN 8u
 #define TICK_MAX 65535u
@@ -187,7 +186,7 @@ void fcs_board_init_platform(void) {
     using GPIOs 2 and 3 for IOBOARD_1_RESET_OUT and IOBOARD_2_RESET_OUT
     respectively.
     */
-    gpio->BANK_REGISTERS[0].DIR &= ~0xFFFFFFFCu;
+    gpio->BANK_REGISTERS[0].DIR &= 0xFFFFFFFCu;
 #endif
 
     /* TODO: set up default sensor calibration */
@@ -201,8 +200,9 @@ void fcs_board_init_platform(void) {
                 FCS_CALIBRATION_BIAS_SCALE_3D,
         .error = 9.0f, /* about 1g */
         .params = {
-            0.0f, 0.0f, 0.0f, G / ACCEL_SENSITIVITY * 65535.0f,
-            G / ACCEL_SENSITIVITY * 65535.0f, G / ACCEL_SENSITIVITY * 65535.0f
+            0.0f, 0.0f, 0.0f, G_ACCEL / ACCEL_SENSITIVITY * 32767.0f,
+            G_ACCEL / ACCEL_SENSITIVITY * 32767.0f,
+            G_ACCEL / ACCEL_SENSITIVITY * 32767.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f }
@@ -215,9 +215,9 @@ void fcs_board_init_platform(void) {
         .error = 0.0935, /* approx 5.35 degrees */
         .params = {
             0.0f, 0.0f, 0.0f,
-            (M_PI/180.0f) / GYRO_SENSITIVITY * 65535.0f,
-            (M_PI/180.0f) / GYRO_SENSITIVITY * 65535.0f,
-            (M_PI/180.0f) / GYRO_SENSITIVITY * 65535.0f
+            (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f,
+            (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f,
+            (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f }
@@ -227,14 +227,15 @@ void fcs_board_init_platform(void) {
         .sensor = FCS_MEASUREMENT_TYPE_MAGNETOMETER,
         .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 500.0f,
+        .error = 0.01f, /* approx 10mG */
         .params = {
             /*
             Don't bother multiplying these back out by the full-scale rating,
             as the actual scale is compensated for by TRICAL
             */
-            0.0f, 0.0f, 0.0f, 1.0f / MAG_SENSITIVITY, 0.0f, 0.0f,
-            1.0f / MAG_SENSITIVITY, 0.0f, 1.0f / MAG_SENSITIVITY
+            0.0f, 0.0f, 0.0f, 1.0f / MAG_SENSITIVITY * 2047.0f, 0.0f, 0.0f,
+            1.0f / MAG_SENSITIVITY * 2047.0, 0.0f,
+            1.0f / MAG_SENSITIVITY * 2047.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f }
@@ -258,7 +259,7 @@ void fcs_board_init_platform(void) {
         .sensor = FCS_MEASUREMENT_TYPE_PITOT,
         .type = FCS_CALIBRATION_BIAS_SCALE_1D,
         .error = 10.0f,
-        .params = { 0.0f, 0.0f }
+        .params = { 0.2533f, -6.514f }
     };
     struct fcs_calibration_t barometer_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
@@ -527,6 +528,27 @@ struct fcs_measurement_log_t *out_measurements) {
         measurement.data.i16[0] = swap_int16(packet.gps.velocity.n);
         measurement.data.i16[1] = swap_int16(packet.gps.velocity.e);
         measurement.data.i16[2] = swap_int16(packet.gps.velocity.d);
+        fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    /* FIXME: TESTING */
+    if (true) {
+        fcs_measurement_set_header(&measurement, 32u, 3u);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_GPS_POSITION);
+
+        measurement.data.i32[0] = -370000000;
+        measurement.data.i32[1] = 1450000000;
+        measurement.data.i32[2] = 60000;
+        fcs_measurement_log_add(out_measurements, &measurement);
+
+        fcs_measurement_set_header(&measurement, 16u, 3u);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_GPS_VELOCITY);
+
+        measurement.data.i16[0] = 0;
+        measurement.data.i16[1] = 0;
+        measurement.data.i16[2] = 0;
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 

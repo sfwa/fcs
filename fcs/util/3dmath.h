@@ -28,6 +28,8 @@ SOFTWARE.
 #define Z 2
 #define W 3
 
+#define G_ACCEL 9.80665
+
 #ifndef absval
 #define absval(x) ((x) < 0 ? -x : x)
 #endif

@@ -555,7 +555,8 @@ double out_value[4], double *out_error, double out_offset[3]) {
                     temp_value[0] = 0.0;
                 } else {
                     temp_value[0] = sqrt(
-                        2.0 * ((p[1] * temp_value[0] + 3.3) / 3.3 - 0.5) *
+                        2.0 *
+                        ((p[1] * temp_value[0] + 3.3) / 3.3 - 0.5) *
                         5000 / 1.225
                     );
                 }

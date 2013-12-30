@@ -742,6 +742,8 @@ uint32_t _fcs_init_core0(void) {
     */
     _fcs_enable_edc();
 
+    KICK_UNLOCK();
+
     /*
     EMIF16 fix recommended here:
     http://e2e.ti.com/support/dsp/c6000_multi-core_dsps/f/639/t/248412.aspx
