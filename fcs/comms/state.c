@@ -81,16 +81,23 @@ const struct fcs_ahrs_state_t *restrict state) {
         buf[index++] = ',';
     }
 
-    /* Convert attitude to yaw/pitch/roll, in degrees */
-    double yaw, pitch, roll;
+    /*
+    Convert attitude to yaw/pitch/roll in degrees. Order of rotations is
+    conventional aeronautic ZYX (yaw, pitch, roll).
 
-    #define q state->attitude
-    yaw = atan2(2.0f * (q[W] * q[Z] + q[X] * q[Y]),
-                1.0f - 2.0f * (q[Y] * q[Y] + q[Z] * q[Z])) * (180.0/M_PI);
-    pitch = asin(2.0f * (q[W] * q[X] - q[Z] * q[X])) * (180.0/M_PI);
-    roll = atan2(2.0f * (q[W] * q[X] + q[Y] * q[Z]),
-                 1.0f - 2.0f * (q[X] * q[X] + q[Y] * q[Y])) * (180.0/M_PI);
-    #undef q
+    See http://www.vectornav.com/Downloads/Support/AN002.pdf for more details.
+    */
+    double yaw, pitch, roll, qx, qy, qz, qw;
+    qx = -state->attitude[X];
+    qy = -state->attitude[Y];
+    qz = -state->attitude[Z];
+    qw = state->attitude[W];
+
+    yaw = atan2(2.0f * (qx * qy + qw * qz),
+                qw * qw - qz * qz - qy * qy + qx * qx) * (180.0/M_PI);
+    pitch = asin(-2.0f * (qx * qz - qy * qw)) * (180.0/M_PI);
+    roll = atan2(2.0f * (qy * qz + qx * qw),
+                 qw * qw + qz * qz - qy * qy - qx * qx) * (180.0/M_PI);
 
     if (yaw < 0.0) {
         yaw += 360.0;
