@@ -48,6 +48,8 @@ enum fcs_calibration_type_t {
     FCS_CALIBRATION_BIAS_SCALE_3X3, /* params[0:3] are bias, [3:9] specify a
                                        symmetric 3x3 matrix of scale factors
                                        */
+    FCS_CALIBRATION_BIAS_SCALE_PITOT, /* params[0] is 0-pressure reading,
+                                         params[1] is scale factor */
     FCS_CALIBRATION_LAST
 };
 
