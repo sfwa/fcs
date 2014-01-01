@@ -318,12 +318,30 @@ factor as the measurement, and the resulting offset is copied into
 `out_offset`.
 
 Returns the number of raw measurements included in the output.
+
+Just calls the pre-scaled version of the function with prescale = 1.0.
 */
 size_t fcs_measurement_log_get_calibrated_value(
 const struct fcs_measurement_log_t *restrict log_rec,
 const struct fcs_calibration_map_t *restrict calibration_map,
 enum fcs_measurement_type_t type, double out_value[4], double *out_error,
 double out_offset[3]) {
+    return fcs_measurement_log_get_calibrated_value_prescale(
+        log_rec, calibration_map, type, out_value, out_error, out_offset,
+        1.0);
+}
+
+/*
+As above, but pre-scale the raw readings by a certain amount.
+
+Can be used for variable-range sensors, or for sensors measuring time-varying
+(but theoretically known) fields, like magnetometers.
+*/
+size_t fcs_measurement_log_get_calibrated_value_prescale(
+const struct fcs_measurement_log_t *restrict log_rec,
+const struct fcs_calibration_map_t *restrict calibration_map,
+enum fcs_measurement_type_t type, double out_value[4], double *out_error,
+double out_offset[3], double prescale) {
     assert(log_rec);
     assert(5u <= log_rec->length && log_rec->length <= 256u);
     assert(calibration_map);
@@ -353,8 +371,9 @@ double out_offset[3]) {
             memcpy(&measurement, &log_rec->data[i], measurement_length);
 
             /* Process the reading and accumulate the output */
-            fcs_measurement_calibrate(&measurement, calibration_map,
-                                      temp_value, &temp_error, temp_offset);
+            fcs_measurement_calibrate_prescale(
+                &measurement, calibration_map, temp_value, &temp_error,
+                temp_offset, prescale);
 
             accum_value[0] += temp_value[0];
             accum_value[1] += temp_value[1];
@@ -448,11 +467,25 @@ const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
 
 /*
 Calibrate a single measurement based on the calibration map parameters.
+
+Just calles the prescaled version of the function with prescale = 1.0
 */
 void fcs_measurement_calibrate(
 const struct fcs_measurement_t *restrict measurement,
-const struct fcs_calibration_map_t *restrict calibration_map,
+const struct fcs_calibration_map_t * restrict calibration_map,
 double out_value[4], double *out_error, double out_offset[3]) {
+    fcs_measurement_calibrate_prescale(
+        measurement, calibration_map, out_value, out_error, out_offset, 1.0);
+}
+
+/*
+Calibrate a single measurement based on the calibration map parameters.
+*/
+void fcs_measurement_calibrate_prescale(
+const struct fcs_measurement_t *restrict measurement,
+const struct fcs_calibration_map_t *restrict calibration_map,
+double out_value[4], double *out_error, double out_offset[3],
+double prescale) {
     assert(measurement);
     assert(calibration_map);
     assert(out_value);
@@ -482,6 +515,13 @@ double out_value[4], double *out_error, double out_offset[3]) {
         out_offset[0] = out_offset[1] = out_offset[2] = 0.0;
         memcpy(out_value, temp_value, sizeof(double) * 4u);
     } else {
+        /* Apply prescaling and scale factor */
+        prescale *= calibration->scale_factor;
+        temp_value[0] *= prescale;
+        temp_value[1] *= prescale;
+        temp_value[2] *= prescale;
+        temp_value[3] *= prescale;
+
         /* Set error and offset based on calibration values */
         *out_error = calibration->error;
         out_offset[0] = calibration->offset[0];
@@ -511,15 +551,9 @@ double out_value[4], double *out_error, double out_offset[3]) {
                 Implements
                 B' = DB - b
 
-                where B' is the calibrated measurement, D is the (symmetric)
-                scale calibration matrix, B is the raw measurement, and b is
+                where B' is the calibrated measurement, D is the scale
+                calibration matrix, B is the raw measurement, and b is
                 the bias vector.
-
-                We only store D's upper triangle values in the calibration
-                params, like this:
-                3  4  5
-                   6  7
-                      8
 
                 This is exactly the same as the equivalent TRICAL function
                 (and for magnetometers we use the TRICAL calibration state
@@ -530,9 +564,12 @@ double out_value[4], double *out_error, double out_offset[3]) {
                 c[2] = temp_value[2] - p[2];
 
                 /* Symmetric matrix multiply */
-                temp_value[0] = c[0] * p[3] + c[1] * p[4] + c[2] * p[5];
-                temp_value[1] = c[0] * p[4] + c[1] * p[6] + c[2] * p[7];
-                temp_value[2] = c[0] * p[5] + c[1] * p[7] + c[2] * p[8];
+                temp_value[0] =
+                    c[0] * (p[3] + 1.0) + c[1] * p[4] + c[2] * p[5];
+                temp_value[1] =
+                    c[0] * p[6] + c[1] * (p[7] + 1.0) + c[2] * p[8];
+                temp_value[2] =
+                    c[0] * p[9] + c[1] * p[10] + c[2] * (p[11] + 1.0);
                 break;
             case FCS_CALIBRATION_BIAS_SCALE_PITOT:
                 /*
@@ -575,7 +612,6 @@ double out_value[4], double *out_error, double out_offset[3]) {
             orientation[3] = calibration->orientation[3];
             quaternion_vector3_multiply_d(
                 out_value, orientation, temp_value);
-            out_value[3] = 0.0;
         } else {
             out_value[0] = temp_value[0];
             out_value[1] = temp_value[1];

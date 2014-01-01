@@ -45,9 +45,8 @@ enum fcs_calibration_type_t {
     FCS_CALIBRATION_NONE,
     FCS_CALIBRATION_BIAS_SCALE_1D, /* params[0] is bias, params[1] is scale */
     FCS_CALIBRATION_BIAS_SCALE_3D, /* params[0:3] are bias, [3:6] are scale */
-    FCS_CALIBRATION_BIAS_SCALE_3X3, /* params[0:3] are bias, [3:9] specify a
-                                       symmetric 3x3 matrix of scale factors
-                                       */
+    FCS_CALIBRATION_BIAS_SCALE_3X3, /* params[0:3] are bias, [3:11] specify a
+                                       3x3 matrix of scale factors */
     FCS_CALIBRATION_BIAS_SCALE_PITOT, /* params[0] is 0-pressure reading,
                                          params[1] is scale factor */
     FCS_CALIBRATION_LAST
@@ -156,9 +155,10 @@ struct fcs_calibration_t {
     uint8_t type;   /* 7:4 = flags, 3:0 = calibration type */
     uint8_t reserved; /* set to 0 */
     float error;
-    float params[9];
+    float params[12];
     float orientation[4];
     float offset[3];
+    float scale_factor;
 } __attribute__ ((packed));
 
 #define FCS_CALIBRATION_LENGTH_MAX 63u
@@ -210,10 +210,9 @@ Max usage:
 8 gps velocity 1 n, e, d
 4 gps fix mode, num SVs, error
 10 control pos
-6 radio
 2 bytes CRC16
 
-Total: 136 + COBS-R + NUL + NUL = 139
+Total: 130 + COBS-R + NUL + NUL = 133
 */
 struct fcs_measurement_log_t {
     uint8_t data[256];
@@ -278,12 +277,33 @@ enum fcs_measurement_type_t type, double out_value[4], double *out_error,
 double out_offset[3]);
 
 /*
+As above, but pre-scale the raw readings by a certain amount.
+
+Can be used for variable-range sensors, or for sensors measuring time-varying
+(but theoretically known) fields, like magnetometers.
+*/
+size_t fcs_measurement_log_get_calibrated_value_prescale(
+const struct fcs_measurement_log_t *restrict log_rec,
+const struct fcs_calibration_map_t *restrict calibration_map,
+enum fcs_measurement_type_t type, double out_value[4], double *out_error,
+double out_offset[3], double prescale);
+
+/*
 Calibrate a single measurement based on the calibration map parameters.
 */
 void fcs_measurement_calibrate(
 const struct fcs_measurement_t *restrict measurement,
 const struct fcs_calibration_map_t * restrict calibration_map,
 double out_value[4], double *out_error, double out_offset[3]);
+
+/*
+As above, but with sensor values pre-scaled.
+*/
+void fcs_measurement_calibrate_prescale(
+const struct fcs_measurement_t *restrict measurement,
+const struct fcs_calibration_map_t * restrict calibration_map,
+double out_value[4], double *out_error, double out_offset[3],
+double prescale);
 
 /*
 Convert the values associated with a measurement into an array of doubles.
