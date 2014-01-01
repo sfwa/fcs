@@ -200,8 +200,8 @@ void fcs_ahrs_tick(void) {
         expected_field, fcs_global_ahrs_state.attitude,
         fcs_global_ahrs_state.wmm_field_dir);
     expected_field_f[0] = expected_field[0];
-    expected_field_f[1] = expected_field[1];
-    expected_field_f[2] = expected_field[2];
+    expected_field_f[1] = -expected_field[1];
+    expected_field_f[2] = -expected_field[2];
 
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(
@@ -235,8 +235,8 @@ void fcs_ahrs_tick(void) {
             scale_factor = field_norm_inv *
                 sensor_calibration_map[sensor_key].scale_factor;
             mag_value_f[0] = mag_value[0] * scale_factor;
-            mag_value_f[1] = -mag_value[1] * scale_factor;
-            mag_value_f[2] = -mag_value[2] * scale_factor;
+            mag_value_f[1] = mag_value[1] * scale_factor;
+            mag_value_f[2] = mag_value[2] * scale_factor;
 
             TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
 
@@ -318,7 +318,7 @@ void fcs_ahrs_tick(void) {
         The calibration scales the magnetometer value to unity expectation.
         Scale error by the same amount, so the units of error are Gauss.
         */
-        //ukf_sensor_set_magnetometer(v[0], -v[1], -v[2]);
+        ukf_sensor_set_magnetometer(v[0], -v[1], -v[2]);
         err *= field_norm_inv;
         params.mag_covariance[0] = params.mag_covariance[1] =
             params.mag_covariance[2] = err * err;
@@ -389,6 +389,7 @@ void fcs_ahrs_tick(void) {
     account
     */
     ukf_set_params(&params);
+    ukf_set_process_noise(fcs_global_ahrs_state.ukf_process_noise);
     ukf_iterate(AHRS_DELTA, fcs_global_ahrs_state.control_pos);
 
     /* Copy the global state out of the UKF */
@@ -418,9 +419,9 @@ void fcs_ahrs_tick(void) {
         double g_field[] = { 0.0, 0.0, 1.0 };
         quaternion_vector3_multiply_d(
             expected_field, fcs_global_ahrs_state.attitude, g_field);
-        expected_field_f[0] = expected_field[1];
-        expected_field_f[1] = expected_field[0];
-        expected_field_f[2] = -expected_field[2];
+        expected_field_f[0] = expected_field[0];
+        expected_field_f[1] = expected_field[1];
+        expected_field_f[2] = expected_field[2];
 
         double accel_value[4];
         float accel_value_f[3];
@@ -504,6 +505,18 @@ void fcs_ahrs_tick(void) {
                        instance->state, 9u * sizeof(float));
             }
         }
+
+        /*
+        If there's no velocity, trust the kinematic model of angular velocity
+        less when updating attitude.
+        */
+        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-6;
+        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-6;
+        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-6;
+    } else {
+        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-9;
+        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-9;
+        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-9;
     }
 
     if (fcs_global_ahrs_state.dynamics_constraints &
@@ -516,12 +529,28 @@ void fcs_ahrs_tick(void) {
         Angular velocity is 13, 14, 15 and angular acceleration is 16, 17, 18;
         gyro bias is 22, 23, 24.
         */
-        state_values[22] += state_values[13];
-        state_values[23] += state_values[14];
-        state_values[24] += state_values[15];
-
         state_values[13] = state_values[14] = state_values[15] =
             state_values[16] = state_values[17] = state_values[18] = 0.0;
+
+        /*
+        Trust the model for angular velocity more, and the gyro bias estimate
+        less.
+        */
+        fcs_global_ahrs_state.ukf_process_noise[12] = 3e-3;
+        fcs_global_ahrs_state.ukf_process_noise[13] = 3e-3;
+        fcs_global_ahrs_state.ukf_process_noise[14] = 3e-3;
+
+        fcs_global_ahrs_state.ukf_process_noise[21] = 1e-9;
+        fcs_global_ahrs_state.ukf_process_noise[22] = 1e-9;
+        fcs_global_ahrs_state.ukf_process_noise[23] = 1e-9;
+    } else {
+        fcs_global_ahrs_state.ukf_process_noise[12] = 3e-3;
+        fcs_global_ahrs_state.ukf_process_noise[13] = 3e-3;
+        fcs_global_ahrs_state.ukf_process_noise[14] = 3e-3;
+
+        fcs_global_ahrs_state.ukf_process_noise[21] = 1.5e-12;
+        fcs_global_ahrs_state.ukf_process_noise[22] = 1.5e-12;
+        fcs_global_ahrs_state.ukf_process_noise[23] = 1.5e-12;
     }
 
     /* Copy any updated values back to the state vector */
