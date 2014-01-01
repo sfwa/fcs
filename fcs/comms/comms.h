@@ -27,7 +27,7 @@ SOFTWARE.
 
 /*
 State (FCS->CPU): $PSFWAS
-- time of solution (ms) -- 9 chars
+- packet time (ms) -- 9 chars
 - next waypoint ID -- 4 chars
 - lat (deg to 7dp) -- 11 chars
 - lon (deg to 7dp) -- 12 chars
@@ -65,6 +65,7 @@ State (FCS->CPU): $PSFWAS
 
 
 Waypoint information (CPU->FCS, FCS->CPU): $PSFWAP
+- packet time (ms) -- 9 chars
 - waypoint ID -- 4 chars
 - waypoint role ("H" for home, "R" for recovery, "M" for mission boundary,
   "C" for course, "I" for image) -- 1 char
@@ -81,7 +82,7 @@ Waypoint information (CPU->FCS, FCS->CPU): $PSFWAP
 
 
 GCS information (CPU->FCS): $PSFWAG
-- time of solution (ms) -- 9 chars
+- packet time (ms) -- 9 chars
 - flags -- 4 chars
 - lat (up to 7dp) -- 12 chars
 - lon (up to 7dp) -- 12 chars
@@ -95,7 +96,7 @@ GCS information (CPU->FCS): $PSFWAG
 
 
 Status information (FCS->CPU): $PSFWAT
-- time of status (ms) -- 9 chars
+- packet time (ms) -- 9 chars
 - flags -- 4 chars
 - I/O board resets -- 2x 3 chars
 - TRICAL resets -- 2x 3 chars
@@ -115,6 +116,7 @@ Status information (FCS->CPU): $PSFWAT
 
 
 Sensor calibration information (CPU->FCS, FCS->CPU): $PSFWAL
+- packet time (ms) -- 9 chars
 - Sensor type -- 1 char (lookup table)
 - Sensor ID -- 1 char (0-3)
 - Flags -- 5 chars
@@ -125,8 +127,18 @@ Sensor calibration information (CPU->FCS, FCS->CPU): $PSFWAL
 - Offset * 3 -- 8 chars * 3
 - CRC32 -- 8 chars
 
-=> 155 bytes + 22 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   185 bytes
+=> 164 bytes + 21 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   195 bytes
+
+Config information (CPU->FCS, FCS->CPU): $PSFWAC
+- packet time (ms) -- 9 chars
+- config key -- up to 24 chars
+- config value count -- up to 16 (2 chars)
+- config value(s) -- up to 128 chars total
+- CRC32 -- 8 chars
+
+=> 171 bytes + 6 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   189 bytes
 */
 
 /* Init functions for comms module */

@@ -174,9 +174,9 @@ void fcs_board_init_platform(void) {
     ensure we get a clean start.
     */
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 2604166u) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 868056u) == FCS_STREAM_OK);
     assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 2604166u) == FCS_STREAM_OK);
+        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 868056u) == FCS_STREAM_OK);
 
 #ifdef __TI_COMPILER_VERSION__
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
@@ -197,54 +197,54 @@ void fcs_board_init_platform(void) {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_ACCELEROMETER,
         .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                FCS_CALIBRATION_BIAS_SCALE_3D,
-        .error = 9.0f, /* about 1g */
+                FCS_CALIBRATION_BIAS_SCALE_3X3,
+        .error = 0.98f, /* about 0.1g */
         .params = {
-            0.0f, 0.0f, 0.0f, G_ACCEL / ACCEL_SENSITIVITY * 32767.0f,
-            G_ACCEL / ACCEL_SENSITIVITY * 32767.0f,
-            G_ACCEL / ACCEL_SENSITIVITY * 32767.0f
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
-        .offset = { 0.0f, 0.0f, 0.0f }
+        .offset = { 0.0f, 0.0f, 0.0f },
+        .scale_factor = 1.0 / ACCEL_SENSITIVITY * 32767.0f
     };
     struct fcs_calibration_t gyro_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_GYROSCOPE,
         .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                 FCS_CALIBRATION_BIAS_SCALE_3D,
-        .error = 0.0935, /* approx 5.35 degrees */
+        .error = 0.0349, /* approx 2 degrees */
         .params = {
             0.0f, 0.0f, 0.0f,
-            (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f,
-            (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f,
-            (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f
+            1.0f, 1.0f, 1.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
-        .offset = { 0.0f, 0.0f, 0.0f }
+        .offset = { 0.0f, 0.0f, 0.0f },
+        .scale_factor = (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f
     };
     struct fcs_calibration_t mag_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_MAGNETOMETER,
         .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 0.01f, /* approx 10mG */
+        .error = 0.3f, /* = 0.3G */
         .params = {
-            /*
-            Don't bother multiplying these back out by the full-scale rating,
-            as the actual scale is compensated for by TRICAL
-            */
-            0.0f, 0.0f, 0.0f, 1.0f / MAG_SENSITIVITY * 2047.0f, 0.0f, 0.0f,
-            1.0f / MAG_SENSITIVITY * 2047.0, 0.0f,
-            1.0f / MAG_SENSITIVITY * 2047.0f
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
-        .offset = { 0.0f, 0.0f, 0.0f }
+        .offset = { 0.0f, 0.0f, 0.0f },
+        .scale_factor = 1.0f / MAG_SENSITIVITY * 2047.0f
     };
     struct fcs_calibration_t gps_position_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_GPS_POSITION,
         .type = FCS_CALIBRATION_NONE,
-        .error = 3.1623e-6f
+        .error = 3.1623e-6f,
+        .scale_factor = 1.0f
     };
     struct fcs_calibration_t gps_velocity_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
@@ -252,14 +252,16 @@ void fcs_board_init_platform(void) {
         .type = FCS_CALIBRATION_BIAS_SCALE_3D,
         .error = 3.0f,
         .params = { 0.0f, 0.0f, 0.0f,
-                    1e-3f * 32767.0f, 1e-3f  * 32767.0f, 1e-3f * 32767.0f }
+                    1.0f, 1.0f, 1.0f },
+        .scale_factor = 1e-3f * 32767.0f
     };
     struct fcs_calibration_t pitot_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_PITOT,
         .type = FCS_CALIBRATION_BIAS_SCALE_1D,
         .error = 10.0f,
-        .params = { 0.2533f, -6.514f }
+        .params = { 0.2533f, -6.514f },
+        .scale_factor = 1.0f
     };
     struct fcs_calibration_t barometer_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
@@ -270,7 +272,8 @@ void fcs_board_init_platform(void) {
         5000.0 would be the GCS pressure; 0.02 is the sensor scale factor and
         0.12mbar is the change in pressure per meter altitude
         */
-        .params = { (50000.0 / 65535.0f), (0.02f / 0.12f) * 65535.0f }
+        .params = { (50000.0 / 65535.0f), (0.02f / 0.12f) * 65535.0f },
+        .scale_factor = 1.0f
     };
 
     /*
@@ -537,8 +540,8 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_GPS_POSITION);
 
-        measurement.data.i32[0] = -370000000;
-        measurement.data.i32[1] = 1450000000;
+        measurement.data.i32[0] = -378136000;
+        measurement.data.i32[1] = 1449631000;
         measurement.data.i32[2] = 60000;
         fcs_measurement_log_add(out_measurements, &measurement);
 

@@ -38,6 +38,23 @@ SOFTWARE.
 #include "../stats/stats.h"
 #include "comms.h"
 
+#define UART0_RATE 921600u
+#define UART0_STATE_INTERVAL 20u
+#define UART0_STATUS_INTERVAL 100u
+#define UART0_STATUS_OFFSET 12u
+
+/*
+#define UART1_RATE 57600u
+#define UART1_STATE_INTERVAL 1000u
+#define UART1_STATUS_INTERVAL 1000u
+#define UART1_STATUS_OFFSET 500u
+*/
+
+#define UART1_RATE 921600u
+#define UART1_STATE_INTERVAL 20u
+#define UART1_STATUS_INTERVAL 100u
+#define UART1_STATUS_OFFSET 12u
+
 struct fcs_rfd900_status_packet_t {
     uint8_t type; /* always 0x11 */
     uint8_t length; /* always 12 */
@@ -60,13 +77,13 @@ static inline uint16_t swap_uint16(uint16_t val) {
 
 void fcs_comms_init(void) {
     /* Open the CPU comms stream */
-    assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 921600u) == FCS_STREAM_OK);
+    assert(fcs_stream_set_rate(FCS_STREAM_UART_EXT0, UART0_RATE) ==
+           FCS_STREAM_OK);
     assert(fcs_stream_open(FCS_STREAM_UART_EXT0) == FCS_STREAM_OK);
 
     /* Open the RFD900 comms stream */
-    assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 57600u) == FCS_STREAM_OK);
+    assert(fcs_stream_set_rate(FCS_STREAM_UART_EXT1, UART1_RATE) ==
+           FCS_STREAM_OK);
     assert(fcs_stream_open(FCS_STREAM_UART_EXT1) == FCS_STREAM_OK);
 }
 
@@ -82,7 +99,7 @@ void fcs_comms_tick(void) {
     assert(comms_buf_len && comms_buf_len < 256u);
 
     /* Send a state update packet to the CPU every 20ms (50Hz) */
-    if (tick % 20u == 0) {
+    if (tick % UART0_STATE_INTERVAL == 0) {
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
                                      comms_buf_len);
         fcs_global_counters.cpu_packet_tx++;
@@ -91,7 +108,7 @@ void fcs_comms_tick(void) {
     }
 
     /* Send a state update packet to the RFD900a every 1s */
-    if (tick % 1000u == 0) {
+    if (tick % UART1_STATE_INTERVAL == 0) {
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, comms_buf,
                                      comms_buf_len);
         assert(comms_buf_len == write_len);
@@ -107,7 +124,7 @@ void fcs_comms_tick(void) {
     Send a status update packet to the CPU every 100ms (10Hz), but long enough
     after the state update packet that the writes won't collide
     */
-    if (tick % 100u == 12u) {
+    if (tick % UART0_STATUS_INTERVAL == UART0_STATUS_OFFSET) {
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, comms_buf,
                                      comms_buf_len);
         fcs_global_counters.cpu_packet_tx++;
@@ -118,7 +135,7 @@ void fcs_comms_tick(void) {
     Send a status update packet to the RFD900a every 1s, 500ms after the state
     packet was sent
     */
-    if (tick % 1000u == 500u) {
+    if (tick % UART1_STATUS_INTERVAL == UART1_STATUS_OFFSET) {
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, comms_buf,
                                      comms_buf_len);
         assert(comms_buf_len == write_len);

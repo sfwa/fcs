@@ -34,6 +34,16 @@ SOFTWARE.
 #include "board.h"
 #include "int-uart.h"
 
+/* Return the difference between val and the closest int */
+static inline float approximation_error(float val) {
+    float result = val - (int)(val + 0.5f);
+    if (result < 0.0) {
+        return -result;
+    } else {
+        return result;
+    }
+}
+
 /*
 EDMA3 configuration
 
@@ -165,11 +175,25 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
         946970 = 166666667 / (11 * 16)
 
     for an error of 2.8%.
+
+    We try both
     */
     assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
-    float divisor = 166666666.67f / (float)(uart_baud[uart_idx] * 16);
-    uint16_t divisor_int = (uint16_t)(divisor + 0.5f);
+    float divisor16 = 166666666.67f / (float)(uart_baud[uart_idx] * 16);
+    float divisor13 = 166666666.67f / (float)(uart_baud[uart_idx] * 13);
+    uint16_t divisor_int, divisor_os;
+    /*
+    Use 13x or 16x oversampling depending on which gets us the closest to the
+    requested baud rate.
+    */
+    if (approximation_error(divisor16) < approximation_error(divisor13)) {
+        divisor_int = (uint16_t)(divisor16 + 0.5f);
+        divisor_os = 16u;
+    } else {
+        divisor_int = (uint16_t)(divisor13 + 0.5f);
+        divisor_os = 13u;
+    }
     uart[uart_idx]->DLL = divisor_int & 0xFFu;
     uart[uart_idx]->DLH = (divisor_int >> 8) & 0xFFu;
 
@@ -180,9 +204,10 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     0     OSM_SEL                      0 = 16x oversampling
                                        1 = 13x oversampling
 
-    Set to 0 for 16x oversampling.
+    Set based on divisor_os, so we get the closest possible rate to the
+    requested value
     */
-    uart[uart_idx]->MDR = 0;
+    uart[uart_idx]->MDR = divisor_os == 16u ? 0 : 1u;
 
     /*
     FCR: FIFO Control Register (section 3.5 in SPRUGP1)
