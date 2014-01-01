@@ -262,7 +262,8 @@ always @(*) begin
 		dsp_ext_uart_rx = ext_uart1_rx;
 		ext_uart1_tx = dsp_ext_uart_tx;
 
-		cpu_ext_uart0_rx = dsp_int_uart1_tx;
+		cpu_ext_uart0_rx = ioboard_uart0_rx;
+		cpu_ext_uart1_rx = ioboard_uart1_rx;
 		ext_uart0_tx = dsp_int_uart1_tx;
 	end else begin
 		dsp_int_uart0_rx = 1'b0;
@@ -275,6 +276,7 @@ always @(*) begin
 		ext_uart1_tx = 1'b0;
 
 		cpu_ext_uart0_rx = 1'b0;
+		cpu_ext_uart1_rx = 1'b0;
 		ext_uart0_tx = 1'b0;
 	end
 end
@@ -292,9 +294,8 @@ assign cpu_pmic_pwron = (c66x_state == 4'b1001) ? 1'bZ : 1'b1;
 assign cpu_reset_INV = 1'bZ;
 assign cpu_wreset_INV = 1'bZ;
 assign cpu_usbhub_reset_INV = (cpu_pwron_timer[23] & cpu_pwron_timer[22]) ? 1'b0 : 1'b1;
-assign cpu_bootmode = 6'b101001;
-                                 /* 6'b100111 for eMMC via CH0 then SD,
-                                    6'b000101 for MicroSD then USB*/
+assign cpu_bootmode = 6'b000101; /* 6'b101001 for eMMC,
+                                    6'b000101 for MicroSD */
 
 /*
 The GPIO functions may have assignments in the bootloader -- keep this as
