@@ -488,7 +488,9 @@ double *out_error, double out_offset[3], double prescale) {
 
     /* Set error and offset based on calibration values */
     *out_error = calibration->error;
-    memcpy(out_offset, calibration->offset, sizeof(double) * 3u);
+    out_offset[0] = calibration->offset[0];
+    out_offset[1] = calibration->offset[1];
+    out_offset[2] = calibration->offset[2];
 
     /* Run the appropriate calibration routine */
     switch (fcs_calibration_get_type(calibration)) {

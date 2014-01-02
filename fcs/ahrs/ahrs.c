@@ -108,6 +108,10 @@ void fcs_ahrs_init(void) {
     memcpy(fcs_global_ahrs_state.ukf_process_noise, default_process_noise,
            sizeof(default_process_noise));
 
+    fcs_global_ahrs_state.lat = -37.8136;
+    fcs_global_ahrs_state.lon = 144.9631;
+    fcs_global_ahrs_state.alt = 70.0;
+
     /*
     Initialize dynamics constraints
 
@@ -135,7 +139,7 @@ void fcs_ahrs_init(void) {
         */
         TRICAL_norm_set(&fcs_global_ahrs_state.trical_instances[i], 1.0f);
         TRICAL_noise_set(&fcs_global_ahrs_state.trical_instances[i],
-                         i < 2u ? 1e-4f : 10.0f);
+                         i < 2u ? 1e-2f : 10.0f);
     }
 }
 
@@ -237,7 +241,7 @@ void fcs_ahrs_tick(void) {
         ukf_sensor_set_gps_position(v[0], v[1], v[2]);
         params.gps_position_covariance[0] =
             params.gps_position_covariance[1] = err * err;
-        params.gps_position_covariance[2] = 1600.0;
+        params.gps_position_covariance[2] = 225.0;
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -294,55 +298,21 @@ void fcs_ahrs_tick(void) {
         We know that velocity = 0 and acceleration averages to 0 (but angular
         velocity and angular acceleration are non-zero in general).
 
-        Update those values in the state vector, and run TRICAL on the current
-        accelerometer results.
-
-        Velocity is 3, 4, 5 and acceleration is 6, 7, 8.
+        Run TRICAL on the current accelerometer results.
         */
-        memset(&state_values[3], 0, sizeof(double) * 6u);
-
         _fcs_ahrs_accelerometer_calibration();
-
-        /*
-        If there's no velocity, trust the kinematic model of angular velocity
-        less when updating attitude.
-        */
-        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-6;
-        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-6;
-        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-6;
-    } else {
-        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-9;
-        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-9;
-        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-9;
     }
 
     if (fcs_global_ahrs_state.dynamics_constraints &
             FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION) {
-        /*
-        If we know we're not rotating, we can assume any angular velocity is
-        actually the difference between the gyro bias estimate and true gyro
-        bias.
-
-        Angular velocity is 13, 14, 15 and angular acceleration is 16, 17, 18;
-        gyro bias is 22, 23, 24.
-        */
-        memset(&state_values[13], 0, sizeof(double) * 6u);
-
-        /*
-        Trust the model for angular velocity more, and the gyro bias estimate
-        less.
-        */
-        #pragma MUST_ITERATE(3, 3);
-        for (i = 0; i < 3u; i++) {
-            fcs_global_ahrs_state.ukf_process_noise[12u + i] = 3e-3;
-            fcs_global_ahrs_state.ukf_process_noise[21u + i] = 1e-9;
-        }
+        /* Trust the gyro bias estimate less.  */
+        fcs_global_ahrs_state.ukf_process_noise[21] = 1e-9;
+        fcs_global_ahrs_state.ukf_process_noise[22] = 1e-9;
+        fcs_global_ahrs_state.ukf_process_noise[23] = 1e-9;
     } else {
-        #pragma MUST_ITERATE(3, 3);
-        for (i = 0; i < 3u; i++) {
-            fcs_global_ahrs_state.ukf_process_noise[12u + i] = 3e-3;
-            fcs_global_ahrs_state.ukf_process_noise[21u + i] = 1.5e-12;
-        }
+        fcs_global_ahrs_state.ukf_process_noise[21] = 1.5e-12;
+        fcs_global_ahrs_state.ukf_process_noise[22] = 1.5e-12;
+        fcs_global_ahrs_state.ukf_process_noise[23] = 1.5e-12;
     }
 
     /* Validate the UKF state; if it's invalid, reset it */
@@ -359,9 +329,6 @@ void fcs_ahrs_tick(void) {
     }
 
     if (ukf_valid) {
-        /* Copy any updated values back to the state vector */
-        ukf_set_state((struct ukf_state_t*)state_values);
-
         /* Update the global state structure */
         _fcs_ahrs_update_global_state(state_values, covariance);
     } else {
@@ -382,9 +349,12 @@ static void _fcs_ahrs_reset_state(void) {
     /*
     Copy the last position and attitude; if gyro bias is sane, copy that too
     */
+    reset_state.position[0] = fcs_global_ahrs_state.lat;
+    reset_state.position[1] = fcs_global_ahrs_state.lon;
+    reset_state.position[2] = fcs_global_ahrs_state.alt;
+
     #pragma MUST_ITERATE(3, 3);
     for (i = 0; i < 3u; i++) {
-        reset_state.position[i] = (&fcs_global_ahrs_state.lat)[i];
         reset_state.attitude[i] = fcs_global_ahrs_state.attitude[i];
 
         if (fabs(fcs_global_ahrs_state.gyro_bias[i]) < M_PI / 10.0) {
@@ -545,7 +515,7 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
     Rotate the gravitational field by the current attitude to get the
     expected field direction for these readings
     */
-    double g_field[] = { 0.0, 0.0, 1.0 };
+    double g_field[] = { 0.0, 0.0, -1.0 };
     quaternion_vector3_multiply_d(
         expected_field, fcs_global_ahrs_state.attitude, g_field);
     expected_field_f[0] = expected_field[0];
@@ -590,7 +560,7 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
 
             /*
             If the vehicle is level, we can assume that bias accounts for
-            essentially the entire deviation from a reading of (0, 0, 1).
+            essentially the entire deviation from a reading of (0, 0, -1).
 
             Strictly that's not quite true, as the Z-axis may have scale
             error, but it'll get us pretty close.
@@ -602,11 +572,11 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
                 FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL) {
                 instance->state[0] = accel_value_f[0];
                 instance->state[1] = accel_value_f[1];
-                instance->state[2] = accel_value_f[2] - 1.0f;
+                instance->state[2] = accel_value_f[2] + 1.0f;
 
                 expected_field_f[0] = 0.0;
                 expected_field_f[1] = 0.0;
-                expected_field_f[2] = 1.0;
+                expected_field_f[2] = -1.0;
             }
 
             TRICAL_estimate_update(instance, accel_value_f,
