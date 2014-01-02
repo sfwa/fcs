@@ -226,23 +226,23 @@ Measurement log packets -- used to send raw sensor data at 1000Hz
 */
 
 /* Initialize a measurement log packet with a packet index of `frame_id` */
-void fcs_measurement_log_init(struct fcs_measurement_log_t *restrict log_rec,
+void fcs_measurement_log_init(struct fcs_measurement_log_t *restrict mlog,
 uint16_t frame_id);
 
 /*
 Serialize and add COBS-R + framing to log packet, and copy the result to
 `out_buf`. Returns the length of the serialized data.
 
-Modifies `log_rec` to include a CRC16SBP.
+Modifies `mlog` to include a CRC16SBP.
 */
 size_t fcs_measurement_log_serialize(uint8_t *restrict out_buf,
-size_t out_buf_len, struct fcs_measurement_log_t *log_rec);
+size_t out_buf_len, struct fcs_measurement_log_t *mlog);
 
 /*
 Add a sensor value entry to a log packet. Returns true if the sensor value
 could be added, or false if it couldn't.
 */
-bool fcs_measurement_log_add(struct fcs_measurement_log_t *restrict log_rec,
+bool fcs_measurement_log_add(struct fcs_measurement_log_t *restrict mlog,
 struct fcs_measurement_t *restrict measurement);
 
 /*
@@ -253,7 +253,7 @@ Returns true if a measurement with matching ID and type was found, and false
 if not.
 */
 bool fcs_measurement_log_find(
-const struct fcs_measurement_log_t *restrict log_rec,
+const struct fcs_measurement_log_t *restrict mlog,
 enum fcs_measurement_type_t type, uint8_t measurement_id,
 struct fcs_measurement_t *restrict out_measurement);
 
@@ -261,6 +261,11 @@ struct fcs_measurement_t *restrict out_measurement);
 Retrieve a calibrated measurement for a given sensor. If multiple measurements
 are available, they are individually calibrated and then averaged based on the
 error of each sensor.
+
+Raw readings are scaled by `prescale` prior to calibration parameters being
+applied. This can be used for variable-range sensors, or for sensors measuring
+time-varying (but theoretically known) fields, like magnetometers. If
+prescaling is not required, pass 1.0 for this value.
 
 If the sensor calibration includes an offset component and `out_offset` is not
 NULL, the offsets of the sensors are averaged based on the same weighting
@@ -270,38 +275,20 @@ factor as the measurement, and the resulting offset is copied into
 Returns the number of raw measurements included in the output.
 */
 size_t fcs_measurement_log_get_calibrated_value(
-const struct fcs_measurement_log_t *restrict log_rec,
-const struct fcs_calibration_map_t *restrict calibration_map,
+const struct fcs_measurement_log_t *restrict mlog,
+const struct fcs_calibration_map_t *restrict cmap,
 enum fcs_measurement_type_t type, double out_value[4], double *out_error,
-double out_offset[3]);
+double *restrict out_offset, double prescale);
 
 /*
-As above, but pre-scale the raw readings by a certain amount.
-
-Can be used for variable-range sensors, or for sensors measuring time-varying
-(but theoretically known) fields, like magnetometers.
-*/
-size_t fcs_measurement_log_get_calibrated_value_prescale(
-const struct fcs_measurement_log_t *restrict log_rec,
-const struct fcs_calibration_map_t *restrict calibration_map,
-enum fcs_measurement_type_t type, double out_value[4], double *out_error,
-double out_offset[3], double prescale);
-
-/*
-Calibrate a single measurement based on the calibration map parameters.
+Calibrate a single measurement based on the calibration map parameters, with
+sensor readings scaled by `prescale` prior to calibration parameters being
+applied.
 */
 void fcs_measurement_calibrate(
 const struct fcs_measurement_t *restrict measurement,
-const struct fcs_calibration_map_t * restrict calibration_map,
-double out_value[4], double *out_error, double out_offset[3]);
-
-/*
-As above, but with sensor values pre-scaled.
-*/
-void fcs_measurement_calibrate_prescale(
-const struct fcs_measurement_t *restrict measurement,
-const struct fcs_calibration_map_t * restrict calibration_map,
-double out_value[4], double *out_error, double out_offset[3],
+const struct fcs_calibration_map_t * restrict cmap,
+double out_value[4], double *out_error, double *restrict out_offset,
 double prescale);
 
 /*

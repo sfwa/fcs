@@ -200,41 +200,41 @@ const struct fcs_calibration_t *restrict calibration) {
 }
 
 /* Initialize a log packet with a packet index of `frame_id` */
-void fcs_measurement_log_init(struct fcs_measurement_log_t *restrict log_rec,
+void fcs_measurement_log_init(struct fcs_measurement_log_t *restrict mlog,
 uint16_t frame_id) {
-    assert(log_rec);
+    assert(mlog);
 
-    log_rec->data[0] = FCS_MEASUREMENT_LOG_TYPE;
-    log_rec->data[1] = 0;
-    log_rec->data[2] = 0;
-    log_rec->data[3] = (frame_id & 0x00FFu);
-    log_rec->data[4] = (frame_id & 0xFF00u) >> 8u;
-    log_rec->length = 5u;
+    mlog->data[0] = FCS_MEASUREMENT_LOG_TYPE;
+    mlog->data[1] = 0;
+    mlog->data[2] = 0;
+    mlog->data[3] = (frame_id & 0x00FFu);
+    mlog->data[4] = (frame_id & 0xFF00u) >> 8u;
+    mlog->length = 5u;
 }
 
 /*
 Serialize and add COBS-R + framing to log packet, and copy the result to
 `out_buf`. Returns the length of the serialized data.
 
-Modifies `log_rec` to include a CRC16SBP.
+Modifies `mlog` to include a CRC16SBP.
 */
 size_t fcs_measurement_log_serialize(uint8_t *restrict out_buf,
-size_t out_buf_length, struct fcs_measurement_log_t *restrict log_rec) {
+size_t out_buf_length, struct fcs_measurement_log_t *restrict mlog) {
     assert(out_buf);
     assert(out_buf_length);
-    assert(log_rec);
+    assert(mlog);
     /* 2 bytes for CRC, 3 bytes for COBS-R + NUL start/end */
-    assert(out_buf_length >= log_rec->length + 2u + 3u);
+    assert(out_buf_length >= mlog->length + 2u + 3u);
 
     /* Calculate checksum and update the packet with the result */
-    uint16_t crc = fcs_crc16_sbp(log_rec->data, log_rec->length, 0xFFFFu);
-    log_rec->data[log_rec->length + 0] = (crc & 0x00FFu);
-    log_rec->data[log_rec->length + 1u] = (crc & 0xFF00u) >> 8u;
+    uint16_t crc = fcs_crc16_sbp(mlog->data, mlog->length, 0xFFFFu);
+    mlog->data[mlog->length + 0] = (crc & 0x00FFu);
+    mlog->data[mlog->length + 1u] = (crc & 0xFF00u) >> 8u;
 
     /* Write COBS-R encoded result to out_buf */
     struct fcs_cobsr_encode_result result;
-    result = fcs_cobsr_encode(&out_buf[1], out_buf_length - 2u, log_rec->data,
-                              log_rec->length + 2u);
+    result = fcs_cobsr_encode(&out_buf[1], out_buf_length - 2u, mlog->data,
+                              mlog->length + 2u);
     assert(result.status == FCS_COBSR_ENCODE_OK);
 
     /* Add NUL start/end bytes */
@@ -249,9 +249,9 @@ size_t out_buf_length, struct fcs_measurement_log_t *restrict log_rec) {
 Add a sensor value entry to a log packet. Returns true if the sensor value
 could be added, or false if it couldn't.
 */
-bool fcs_measurement_log_add(struct fcs_measurement_log_t *restrict log_rec,
+bool fcs_measurement_log_add(struct fcs_measurement_log_t *restrict mlog,
 struct fcs_measurement_t *restrict measurement) {
-    assert(log_rec);
+    assert(mlog);
     /* Call these to validate sensor type and ID before copying */
     fcs_measurement_get_sensor_type(measurement);
     fcs_measurement_get_sensor_id(measurement);
@@ -262,12 +262,12 @@ struct fcs_measurement_t *restrict measurement) {
     two NUL bytes within a 256-byte packet.
     */
     size_t length = fcs_measurement_get_length(measurement);
-    if (log_rec->length + length > 250u) {
+    if (mlog->length + length > 250u) {
         return false;
     }
 
-    memcpy(&log_rec->data[log_rec->length], measurement, length);
-    log_rec->length += length;
+    memcpy(&mlog->data[mlog->length], measurement, length);
+    mlog->length += length;
 
     return true;
 }
@@ -280,11 +280,11 @@ Returns true if a measurement with matching ID and type was found, and false
 if not.
 */
 bool fcs_measurement_log_find(
-const struct fcs_measurement_log_t *restrict log_rec,
+const struct fcs_measurement_log_t *restrict mlog,
 enum fcs_measurement_type_t type, uint8_t measurement_id,
 struct fcs_measurement_t *restrict out_measurement) {
-    assert(log_rec);
-    assert(5u <= log_rec->length && log_rec->length <= 256u);
+    assert(mlog);
+    assert(5u <= mlog->length && mlog->length <= 256u);
     assert(out_measurement);
 
     uint8_t search_key;
@@ -292,12 +292,10 @@ struct fcs_measurement_t *restrict out_measurement) {
 
     search_key = _fcs_make_measurement_sensor(measurement_id, type);
 
-    for (i = 5u; i < log_rec->length;) {
-        measurement_length = _fcs_extract_measurement_length(
-            &log_rec->data[i]);
-
-        if (log_rec->data[i + 1u] == search_key) {
-            memcpy(out_measurement, &log_rec->data[i], measurement_length);
+    for (i = 5u; i < mlog->length;) {
+        measurement_length = _fcs_extract_measurement_length(&mlog->data[i]);
+        if (mlog->data[i + 1u] == search_key) {
+            memcpy(out_measurement, &mlog->data[i], measurement_length);
             return true;
         }
 
@@ -312,39 +310,26 @@ Retrieve a calibrated measurement for a given sensor. If multiple measurements
 are available, they are individually calibrated and then averaged based on the
 error of each sensor.
 
+Raw readings are scaled by `prescale` prior to calibration parameters being
+applied. This can be used for variable-range sensors, or for sensors measuring
+time-varying (but theoretically known) fields, like magnetometers. If
+prescaling is not required, pass 1.0 for this value.
+
 If the sensor calibration includes an offset component and `out_offset` is not
 NULL, the offsets of the sensors are averaged based on the same weighting
 factor as the measurement, and the resulting offset is copied into
 `out_offset`.
 
 Returns the number of raw measurements included in the output.
-
-Just calls the pre-scaled version of the function with prescale = 1.0.
 */
 size_t fcs_measurement_log_get_calibrated_value(
-const struct fcs_measurement_log_t *restrict log_rec,
-const struct fcs_calibration_map_t *restrict calibration_map,
+const struct fcs_measurement_log_t *restrict mlog,
+const struct fcs_calibration_map_t *restrict cmap,
 enum fcs_measurement_type_t type, double out_value[4], double *out_error,
-double out_offset[3]) {
-    return fcs_measurement_log_get_calibrated_value_prescale(
-        log_rec, calibration_map, type, out_value, out_error, out_offset,
-        1.0);
-}
-
-/*
-As above, but pre-scale the raw readings by a certain amount.
-
-Can be used for variable-range sensors, or for sensors measuring time-varying
-(but theoretically known) fields, like magnetometers.
-*/
-size_t fcs_measurement_log_get_calibrated_value_prescale(
-const struct fcs_measurement_log_t *restrict log_rec,
-const struct fcs_calibration_map_t *restrict calibration_map,
-enum fcs_measurement_type_t type, double out_value[4], double *out_error,
-double out_offset[3], double prescale) {
-    assert(log_rec);
-    assert(5u <= log_rec->length && log_rec->length <= 256u);
-    assert(calibration_map);
+double *out_offset, double prescale) {
+    assert(mlog);
+    assert(5u <= mlog->length && mlog->length <= 256u);
+    assert(cmap);
     assert(out_value);
     assert(out_error);
     assert(out_value != out_error);
@@ -353,41 +338,38 @@ double out_offset[3], double prescale) {
 
     double accum_value[4], accum_error, accum_offset[3];
     double temp_value[4], temp_error, temp_offset[3];
-    size_t i, n_measurements, measurement_length, measurement_type;
+    size_t i, j, n_measurements, measurement_length, measurement_type;
+    struct fcs_measurement_t measurement;
 
     memset(accum_value, 0, sizeof(accum_value));
     memset(accum_offset, 0, sizeof(accum_offset));
     accum_error = 0.0;
 
     /* Start scanning at index 5, first byte after the log record header */
-    for (i = 5u, n_measurements = 0; i < log_rec->length;) {
-        measurement_length = _fcs_extract_measurement_length(
-            &log_rec->data[i]);
-        measurement_type = _fcs_extract_sensor_type(&log_rec->data[i]);
+    for (i = 5u, n_measurements = 0; i < mlog->length;
+            i += measurement_length) {
+        measurement_length = _fcs_extract_measurement_length(&mlog->data[i]);
+        measurement_type = _fcs_extract_sensor_type(&mlog->data[i]);
 
-        if (measurement_type == type) {
-            struct fcs_measurement_t measurement;
-            /* Copy the measurement data to an actual measurement structure */
-            memcpy(&measurement, &log_rec->data[i], measurement_length);
-
-            /* Process the reading and accumulate the output */
-            fcs_measurement_calibrate_prescale(
-                &measurement, calibration_map, temp_value, &temp_error,
-                temp_offset, prescale);
-
-            accum_value[0] += temp_value[0];
-            accum_value[1] += temp_value[1];
-            accum_value[2] += temp_value[2];
-            accum_value[3] += temp_value[3];
-            accum_error += temp_error;
-            accum_offset[0] += temp_offset[0];
-            accum_offset[1] += temp_offset[1];
-            accum_offset[2] += temp_offset[2];
-
-            n_measurements++;
+        if (measurement_type != type) {
+            continue;
         }
 
-        i += measurement_length;
+        /* Copy the measurement data to an actual measurement structure */
+        memcpy(&measurement, &mlog->data[i], measurement_length);
+
+        /* Process the reading and accumulate the output */
+        fcs_measurement_calibrate(&measurement, cmap, temp_value, &temp_error,
+                                  temp_offset, prescale);
+
+        for (j = 0; j < 3u; j++) {
+            accum_value[j] += temp_value[j];
+            accum_offset[j] += temp_offset[j];
+        }
+        accum_value[3] += temp_value[3];
+        accum_error += temp_error;
+
+        n_measurements++;
     }
 
     if (n_measurements > 0) {
@@ -395,17 +377,17 @@ double out_offset[3], double prescale) {
 
         /* Get the mean of the results */
         scale = 1.0 / (double)n_measurements;
-        out_value[0] = accum_value[0] * scale;
-        out_value[1] = accum_value[1] * scale;
-        out_value[2] = accum_value[2] * scale;
-        out_value[3] = accum_value[3] * scale;
-        *out_error = accum_error * scale;
+        for (i = 0; i < 3u; i++) {
+            accum_value[i] *= scale;
+            accum_offset[i] *= scale;
+        }
+        accum_value[3] *= scale;
 
         if (out_offset) {
-            out_offset[0] = accum_offset[0] * scale;
-            out_offset[1] = accum_offset[1] * scale;
-            out_offset[2] = accum_offset[2] * scale;
+            memcpy(out_offset, accum_offset, sizeof(double) * 3u);
         }
+        memcpy(out_value, accum_value, sizeof(double) * 4u);
+        *out_error = accum_error * scale;
     }
 
     return n_measurements;
@@ -466,35 +448,24 @@ const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
 }
 
 /*
-Calibrate a single measurement based on the calibration map parameters.
-
-Just calles the prescaled version of the function with prescale = 1.0
+Calibrate a single measurement based on the calibration map parameters, with
+sensor readings scaled by `prescale` prior to calibration parameters being
+applied.
 */
 void fcs_measurement_calibrate(
 const struct fcs_measurement_t *restrict measurement,
-const struct fcs_calibration_map_t * restrict calibration_map,
-double out_value[4], double *out_error, double out_offset[3]) {
-    fcs_measurement_calibrate_prescale(
-        measurement, calibration_map, out_value, out_error, out_offset, 1.0);
-}
-
-/*
-Calibrate a single measurement based on the calibration map parameters.
-*/
-void fcs_measurement_calibrate_prescale(
-const struct fcs_measurement_t *restrict measurement,
-const struct fcs_calibration_map_t *restrict calibration_map,
-double out_value[4], double *out_error, double out_offset[3],
-double prescale) {
+const struct fcs_calibration_map_t *restrict cmap, double out_value[4],
+double *out_error, double out_offset[3], double prescale) {
     assert(measurement);
-    assert(calibration_map);
+    assert(cmap);
     assert(out_value);
     assert(out_error);
     assert(out_value != out_error);
     assert(out_value != out_offset);
     assert(out_error != out_offset);
 
-    double temp_value[4];
+    size_t i;
+    double temp_value[4], c[3], orientation[4];
     fcs_measurement_get_values(measurement, temp_value);
 
     /*
@@ -504,113 +475,91 @@ double prescale) {
     uint8_t sensor_key = measurement->sensor &
         (FCS_MEASUREMENT_SENSOR_ID_MASK | FCS_MEASUREMENT_SENSOR_TYPE_MASK);
     const struct fcs_calibration_t *calibration =
-        &calibration_map->sensor_calibration[sensor_key];
+        &cmap->sensor_calibration[sensor_key];
+    const float *restrict p = calibration->params;
 
-    if (!calibration->header || !calibration->sensor) {
-        /*
-        header or sensor = 0 means there is no calibration for this sensor --
-        return the raw measurement values
-        */
-        *out_error = 0.0;
-        out_offset[0] = out_offset[1] = out_offset[2] = 0.0;
-        memcpy(out_value, temp_value, sizeof(double) * 4u);
-    } else {
-        /* Apply prescaling and scale factor */
-        prescale *= calibration->scale_factor;
-        temp_value[0] *= prescale;
-        temp_value[1] *= prescale;
-        temp_value[2] *= prescale;
-        temp_value[3] *= prescale;
+    assert(calibration->header || calibration->sensor);
 
-        /* Set error and offset based on calibration values */
-        *out_error = calibration->error;
-        out_offset[0] = calibration->offset[0];
-        out_offset[1] = calibration->offset[1];
-        out_offset[2] = calibration->offset[2];
+    /* Apply prescaling and scale factor */
+    prescale *= calibration->scale_factor;
+    for (i = 0; i < 4u; i++) {
+        temp_value[i] *= prescale;
+    }
 
-        /* Run the appropriate calibration routine */
-        uint8_t i;
-        const float *restrict p = calibration->params;
-        double c[3]; /* centered value */
+    /* Set error and offset based on calibration values */
+    *out_error = calibration->error;
+    memcpy(out_offset, calibration->offset, sizeof(double) * 3u);
 
-        switch (fcs_calibration_get_type(calibration)) {
-            case FCS_CALIBRATION_NONE:
-                break;
-            case FCS_CALIBRATION_BIAS_SCALE_1D:
-                temp_value[0] -= p[0];
-                temp_value[0] *= p[1];
-                break;
-            case FCS_CALIBRATION_BIAS_SCALE_3X3:
-                /*
-                Implements
-                B' = (I_{3x3} + D)B - b
+    /* Run the appropriate calibration routine */
+    switch (fcs_calibration_get_type(calibration)) {
+        case FCS_CALIBRATION_NONE:
+            break;
+        case FCS_CALIBRATION_BIAS_SCALE_1D:
+            temp_value[0] -= p[0];
+            temp_value[0] *= p[1];
+            break;
+        case FCS_CALIBRATION_BIAS_SCALE_3X3:
+            /*
+            Implements
+            B' = (I_{3x3} + D)B - b
 
-                where B' is the calibrated measurement, I_{3x3} is the 3x3
-                identity matrix, D is the scale calibration matrix, B is the
-                raw measurement, and b is the bias vector.
+            where B' is the calibrated measurement, I_{3x3} is the 3x3
+            identity matrix, D is the scale calibration matrix, B is the
+            raw measurement, and b is the bias vector.
 
-                This is exactly the same as the equivalent TRICAL function
-                (and for magnetometers we use the TRICAL calibration state
-                estimate directly).
-                */
-                c[0] = temp_value[0] - p[0];
-                c[1] = temp_value[1] - p[1];
-                c[2] = temp_value[2] - p[2];
+            This is exactly the same as the equivalent TRICAL function
+            (and for magnetometers we use the TRICAL calibration state
+            estimate directly).
+            */
+            c[0] = temp_value[0] - p[0];
+            c[1] = temp_value[1] - p[1];
+            c[2] = temp_value[2] - p[2];
 
-                /* Symmetric matrix multiply */
-                temp_value[0] =
-                    c[0] * (p[3] + 1.0) + c[1] * p[4] + c[2] * p[5];
-                temp_value[1] =
-                    c[0] * p[6] + c[1] * (p[7] + 1.0) + c[2] * p[8];
-                temp_value[2] =
-                    c[0] * p[9] + c[1] * p[10] + c[2] * (p[11] + 1.0);
-                break;
-            case FCS_CALIBRATION_BIAS_SCALE_PITOT:
-                /*
-                FIXME: this is really hacky, clean it up.
+            /* Symmetric matrix multiply */
+            temp_value[0] = c[0] * (p[3] + 1.0) + c[1] * p[4] + c[2] * p[5];
+            temp_value[1] = c[0] * p[6] + c[1] * (p[7] + 1.0) + c[2] * p[8];
+            temp_value[2] = c[0] * p[9] + c[1] * p[10] + c[2] * (p[11] + 1.0);
+            break;
+        case FCS_CALIBRATION_BIAS_SCALE_PITOT:
+            /*
+            FIXME: this is really hacky, clean it up.
 
-                Convert pitot reading to kPa -- 0.2533 = 0 kPa, 0 = 2 kPa
-                From the datasheet, Vout = Vs * (0.2 * P + 0.5),
-                where Vs is 3.3V. At Vout = 1.65V (P = 0), the reading is
-                0.2533; at Vout = 3.3V, the reading is 0.
-                Vout = -6.514 * Rd + 3.3;
-                P = (Vout / Vs - 0.5) * 5
-                IAS = sqrt(2 * P / 1.225)
-                Thus:
-                IAS = sqrt(2 * (((-6.514 * Rd + 3.3) / 3.3 - 0.5) * 5) / 1.225)
+            Convert pitot reading to kPa -- 0.2533 = 0 kPa, 0 = 2 kPa
+            From the datasheet, Vout = Vs * (0.2 * P + 0.5),
+            where Vs is 3.3V. At Vout = 1.65V (P = 0), the reading is
+            0.2533; at Vout = 3.3V, the reading is 0.
+            Vout = -6.514 * Rd + 3.3;
+            P = (Vout / Vs - 0.5) * 5
+            IAS = sqrt(2 * P / 1.225)
+            Thus:
+            IAS = sqrt(2 * (((-6.514 * Rd + 3.3) / 3.3 - 0.5) * 5) / 1.225)
 
-                p[0] is the 0-pressure reading (0.2533); p[1] is the ADC scale
-                factor (-6.514).
-                */
-                if (temp_value[0] >= p[0]) {
-                    temp_value[0] = 0.0;
-                } else {
-                    temp_value[0] = sqrt(
-                        2.0 *
-                        ((p[1] * temp_value[0] + 3.3) / 3.3 - 0.5) *
-                        5000 / 1.225
-                    );
-                }
-            default:
-                /* Invalid calibration type */
-                assert(false);
-                break;
+            p[0] is the 0-pressure reading (0.2533); p[1] is the ADC scale
+            factor (-6.514).
+            */
+            if (temp_value[0] >= p[0]) {
+                temp_value[0] = 0.0;
+            } else {
+                temp_value[0] = sqrt(
+                    2.0 * ((p[1] * temp_value[0] + 3.3) / 3.3 - 0.5) *
+                    5000 / 1.225
+                );
+            }
+        default:
+            /* Invalid calibration type */
+            assert(false);
+            break;
+    }
+
+    if (calibration->type & FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION) {
+        /* Transform calibrated value based on sensor orientation */
+        for (i = 0; i < 4u; i++) {
+            orientation[i] = calibration->orientation[i];
         }
-
-        if (calibration->type & FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION) {
-            /* Transform calibrated value based on sensor orientation */
-            double orientation[4];
-            orientation[0] = calibration->orientation[0];
-            orientation[1] = calibration->orientation[1];
-            orientation[2] = calibration->orientation[2];
-            orientation[3] = calibration->orientation[3];
-            quaternion_vector3_multiply_d(
-                out_value, orientation, temp_value);
-        } else {
-            out_value[0] = temp_value[0];
-            out_value[1] = temp_value[1];
-            out_value[2] = temp_value[2];
-            out_value[3] = temp_value[3];
+        quaternion_vector3_multiply_d(out_value, orientation, temp_value);
+    } else {
+        for (i = 0; i < 4u; i++) {
+            out_value[i] = temp_value[i];
         }
     }
 }

@@ -174,4 +174,8 @@ const struct fcs_ahrs_state_t *restrict state,
 const struct fcs_stats_counter_t *restrict counters,
 const struct fcs_peripheral_state_t *restrict peripheral_state);
 
+/* Config deserialization */
+enum fcs_deserialization_result_t fcs_comms_deserialize_config(
+const uint8_t *restrict packet, size_t packet_length);
+
 #endif

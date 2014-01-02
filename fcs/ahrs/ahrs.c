@@ -63,14 +63,17 @@ struct fcs_ahrs_state_t fcs_global_ahrs_state;
 static void _fcs_ahrs_update_wmm(void);
 static void _fcs_ahrs_magnetometer_calibration(void);
 static void _fcs_ahrs_accelerometer_calibration(void);
+static void _fcs_ahrs_reset_state(void);
+static void _fcs_ahrs_update_global_state(double *restrict state,
+double *restrict covariance);
+static bool _fcs_ahrs_trical_is_valid(TRICAL_instance_t *instance);
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
-    assert(ukf_config_get_state_dim() == 24);
-    assert(ukf_config_get_control_dim() == 4);
-    assert(ukf_config_get_measurement_dim() == 20);
+    assert(ukf_config_get_state_dim() == 24u);
+    assert(ukf_config_get_control_dim() == 4u);
+    assert(ukf_config_get_measurement_dim() == 20u);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
-
 
 #ifdef __TI_COMPILER_VERSION__
     /* Release the global state semaphore */
@@ -81,30 +84,12 @@ void fcs_ahrs_init(void) {
 
     fcs_wmm_init();
 
-    /*
-    TODO: read state back from fcs_global_ahrs_state, just in case we're
-    booting up after an in-flight reset
-    */
-    struct ukf_state_t initial_state = {
-        {-37.0 * (M_PI/180.0), 145.0 * (M_PI/180.0), 10.0},
-        {0, 0, 0},
-        {0, 0, 0},
-        {0, 0, 0, 1},
-        {0, 0, 0},
-        {0, 0, 0},
-        {0, 0, 0},
-        {0, 0, 0}
-    };
+    /* TODO: don't reset attitude if any of the entries are non-zero */
+    memset(fcs_global_ahrs_state.attitude, 0, sizeof(double) * 4u);
+    fcs_global_ahrs_state.attitude[3] = 1.0;
 
-    /* Set up UKF */
-    ukf_init();
-    ukf_set_state(&initial_state);
-
-    /*
-    Copy the UKF default state to the global AHRS state structure to make sure
-    everything's in sync
-    */
-    ukf_get_state((struct ukf_state_t*)&fcs_global_ahrs_state.lat);
+    /* Reset/init the UKF */
+    _fcs_ahrs_reset_state();
 
     /* Calculate WMM field at current lat/lon/alt/time */
     _fcs_ahrs_update_wmm();
@@ -122,21 +107,22 @@ void fcs_ahrs_init(void) {
     };
     memcpy(fcs_global_ahrs_state.ukf_process_noise, default_process_noise,
            sizeof(default_process_noise));
-    fcs_global_ahrs_state.ukf_dynamics_model = UKF_MODEL_X8;
 
-    ukf_set_process_noise(fcs_global_ahrs_state.ukf_process_noise);
-    ukf_choose_dynamics(0);
+    /*
+    Initialize dynamics constraints
 
-    /* Initialize dynamics constraints */
+    TODO: don't do this if this isn't a cold start
+    */
     fcs_global_ahrs_state.dynamics_constraints =
         FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL |
         FCS_AHRS_DYNAMICS_CONSTRAINT_NO_VELOCITY |
         FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION |
         FCS_AHRS_DYNAMICS_CONSTRAINT_2D;
+    fcs_global_ahrs_state.ukf_dynamics_model = UKF_MODEL_X8;
 
     /*
-    Update the TRICAL instance parameters based on the UKF configuration.
-    Instances 0 and 1 are magnetometers; instances 2 and 3 are accelerometers.
+    Update the TRICAL instance parameters. Instances 0 and 1 are
+    magnetometers; instances 2 and 3 are accelerometers.
     */
     uint8_t i;
     for (i = 0; i < FCS_AHRS_NUM_TRICAL_INSTANCES; i++) {
@@ -180,33 +166,33 @@ void fcs_ahrs_tick(void) {
     };
 
     /* Use the latest WMM field vector (unit length) */
-    params.mag_field[0] = fcs_global_ahrs_state.wmm_field_dir[0];
-    params.mag_field[1] = fcs_global_ahrs_state.wmm_field_dir[1];
-    params.mag_field[2] = fcs_global_ahrs_state.wmm_field_dir[2];
+    memcpy(params.mag_field, fcs_global_ahrs_state.wmm_field_dir,
+           sizeof(double) * 3u);
 
     /* Read sensor data from the measurement log, and pass it to the UKF */
-    double v[4], err, offset[3];
+    double v[4], err;
+    bool got_values;
+    struct fcs_measurement_log_t *restrict mlog =
+        &fcs_global_ahrs_state.measurements;
+    const struct fcs_calibration_map_t *restrict cmap =
+        &fcs_global_ahrs_state.calibration;
 
     ukf_sensor_clear();
 
-    if (fcs_measurement_log_get_calibrated_value(
-            &fcs_global_ahrs_state.measurements,
-            &fcs_global_ahrs_state.calibration,
-            FCS_MEASUREMENT_TYPE_ACCELEROMETER, v, &err, offset)) {
+    got_values = fcs_measurement_log_get_calibrated_value(
+        mlog, cmap, FCS_MEASUREMENT_TYPE_ACCELEROMETER, v, &err,
+        params.accel_offset, 1.0);
+    if (got_values) {
         /* Accelerometer output is in g, convert to m/s^2 */
         ukf_sensor_set_accelerometer(v[0] * G_ACCEL, v[1] * G_ACCEL,
                                      v[2] * G_ACCEL);
         params.accel_covariance[0] = params.accel_covariance[1] =
             params.accel_covariance[2] = err * err;
-        params.accel_offset[0] = offset[0];
-        params.accel_offset[1] = offset[1];
-        params.accel_offset[2] = offset[2];
     }
 
-    if (fcs_measurement_log_get_calibrated_value(
-            &fcs_global_ahrs_state.measurements,
-            &fcs_global_ahrs_state.calibration,
-            FCS_MEASUREMENT_TYPE_GYROSCOPE, v, &err, offset)) {
+    got_values = fcs_measurement_log_get_calibrated_value(
+        mlog, cmap, FCS_MEASUREMENT_TYPE_GYROSCOPE, v, &err, NULL, 1.0);
+    if (got_values) {
         ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
         params.gyro_covariance[0] = params.gyro_covariance[1] =
             params.gyro_covariance[2] = err * err;
@@ -216,12 +202,11 @@ void fcs_ahrs_tick(void) {
     We need to pre-scale the sensor reading by the current WMM field magnitude
     to work with the calibration params.
     */
-    double field_norm_inv = 1.0f / fcs_global_ahrs_state.wmm_field_norm;
-    if (fcs_measurement_log_get_calibrated_value_prescale(
-            &fcs_global_ahrs_state.measurements,
-            &fcs_global_ahrs_state.calibration,
-            FCS_MEASUREMENT_TYPE_MAGNETOMETER, v, &err, offset,
-            field_norm_inv)) {
+    double field_norm_inv = 1.0 / fcs_global_ahrs_state.wmm_field_norm;
+    got_values = fcs_measurement_log_get_calibrated_value(
+        mlog, cmap, FCS_MEASUREMENT_TYPE_MAGNETOMETER, v, &err, NULL,
+        field_norm_inv);
+    if (got_values) {
         /*
         The calibration scales the magnetometer value to unity expectation.
         Scale error by the same amount, so the units of error are Gauss.
@@ -232,36 +217,32 @@ void fcs_ahrs_tick(void) {
             params.mag_covariance[2] = err * err;
     }
 
-    if (fcs_measurement_log_get_calibrated_value(
-            &fcs_global_ahrs_state.measurements,
-            &fcs_global_ahrs_state.calibration,
-            FCS_MEASUREMENT_TYPE_PITOT, v, &err, offset)) {
+    got_values = fcs_measurement_log_get_calibrated_value(
+        mlog, cmap, FCS_MEASUREMENT_TYPE_PITOT, v, &err, NULL, 1.0);
+    if (got_values) {
         ukf_sensor_set_pitot_tas(0.0 /* v[0] */);
         params.pitot_covariance = err * err;
     }
 
-    if (fcs_measurement_log_get_calibrated_value(
-            &fcs_global_ahrs_state.measurements,
-            &fcs_global_ahrs_state.calibration,
-            FCS_MEASUREMENT_TYPE_PRESSURE_TEMP, v, &err, offset)) {
+    got_values = fcs_measurement_log_get_calibrated_value(
+        mlog, cmap, FCS_MEASUREMENT_TYPE_PRESSURE_TEMP, v, &err, NULL, 1.0);
+    if (got_values) {
         ukf_sensor_set_barometer_amsl(v[0]);
         params.barometer_amsl_covariance = err * err;
     }
 
-    if (fcs_measurement_log_get_calibrated_value(
-            &fcs_global_ahrs_state.measurements,
-            &fcs_global_ahrs_state.calibration,
-            FCS_MEASUREMENT_TYPE_GPS_POSITION, v, &err, offset)) {
+    got_values = fcs_measurement_log_get_calibrated_value(
+        mlog, cmap, FCS_MEASUREMENT_TYPE_GPS_POSITION, v, &err, NULL, 1.0);
+    if (got_values) {
         ukf_sensor_set_gps_position(v[0], v[1], v[2]);
         params.gps_position_covariance[0] =
             params.gps_position_covariance[1] = err * err;
         params.gps_position_covariance[2] = 1600.0;
     }
 
-    if (fcs_measurement_log_get_calibrated_value(
-            &fcs_global_ahrs_state.measurements,
-            &fcs_global_ahrs_state.calibration,
-            FCS_MEASUREMENT_TYPE_GPS_VELOCITY, v, &err, offset)) {
+    got_values = fcs_measurement_log_get_calibrated_value(
+        mlog, cmap, FCS_MEASUREMENT_TYPE_GPS_VELOCITY, v, &err, NULL, 1.0);
+    if (got_values) {
         ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
         params.gps_velocity_covariance[0] =
             params.gps_velocity_covariance[1] = err * err;
@@ -279,7 +260,7 @@ void fcs_ahrs_tick(void) {
     uint8_t i;
 
     #pragma MUST_ITERATE(4, 4)
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 4u; i++) {
         double delta = control_set[i] - fcs_global_ahrs_state.control_pos[i],
                limit = control_rate[i] * AHRS_DELTA;
         fcs_global_ahrs_state.control_pos[i] += limitabs(delta, limit);
@@ -291,8 +272,7 @@ void fcs_ahrs_tick(void) {
     fcs_measurement_set_header(&control_log, 16u, 4u);
     fcs_measurement_set_sensor(&control_log, 0,
                                FCS_MEASUREMENT_TYPE_CONTROL_POS);
-    fcs_measurement_log_add(&fcs_global_ahrs_state.measurements,
-                            &control_log);
+    fcs_measurement_log_add(mlog, &control_log);
 
     /*
     Run the UKF, taking sensor readings and current control position into
@@ -319,8 +299,7 @@ void fcs_ahrs_tick(void) {
 
         Velocity is 3, 4, 5 and acceleration is 6, 7, 8.
         */
-        state_values[3] = state_values[4] = state_values[5] = state_values[6]
-            = state_values[7] = state_values[8] = 0.0;
+        memset(&state_values[3], 0, sizeof(double) * 6u);
 
         _fcs_ahrs_accelerometer_calibration();
 
@@ -347,32 +326,24 @@ void fcs_ahrs_tick(void) {
         Angular velocity is 13, 14, 15 and angular acceleration is 16, 17, 18;
         gyro bias is 22, 23, 24.
         */
-        state_values[13] = state_values[14] = state_values[15] =
-            state_values[16] = state_values[17] = state_values[18] = 0.0;
+        memset(&state_values[13], 0, sizeof(double) * 6u);
 
         /*
         Trust the model for angular velocity more, and the gyro bias estimate
         less.
         */
-        fcs_global_ahrs_state.ukf_process_noise[12] = 3e-3;
-        fcs_global_ahrs_state.ukf_process_noise[13] = 3e-3;
-        fcs_global_ahrs_state.ukf_process_noise[14] = 3e-3;
-
-        fcs_global_ahrs_state.ukf_process_noise[21] = 1e-9;
-        fcs_global_ahrs_state.ukf_process_noise[22] = 1e-9;
-        fcs_global_ahrs_state.ukf_process_noise[23] = 1e-9;
+        #pragma MUST_ITERATE(3, 3);
+        for (i = 0; i < 3u; i++) {
+            fcs_global_ahrs_state.ukf_process_noise[12u + i] = 3e-3;
+            fcs_global_ahrs_state.ukf_process_noise[21u + i] = 1e-9;
+        }
     } else {
-        fcs_global_ahrs_state.ukf_process_noise[12] = 3e-3;
-        fcs_global_ahrs_state.ukf_process_noise[13] = 3e-3;
-        fcs_global_ahrs_state.ukf_process_noise[14] = 3e-3;
-
-        fcs_global_ahrs_state.ukf_process_noise[21] = 1.5e-12;
-        fcs_global_ahrs_state.ukf_process_noise[22] = 1.5e-12;
-        fcs_global_ahrs_state.ukf_process_noise[23] = 1.5e-12;
+        #pragma MUST_ITERATE(3, 3);
+        for (i = 0; i < 3u; i++) {
+            fcs_global_ahrs_state.ukf_process_noise[12u + i] = 3e-3;
+            fcs_global_ahrs_state.ukf_process_noise[21u + i] = 1.5e-12;
+        }
     }
-
-    /* Copy any updated values back to the state vector */
-    ukf_set_state((struct ukf_state_t*)state_values);
 
     /* Validate the UKF state; if it's invalid, reset it */
     bool ukf_valid = true;
@@ -388,63 +359,73 @@ void fcs_ahrs_tick(void) {
     }
 
     if (ukf_valid) {
-#ifdef __TI_COMPILER_VERSION__
-        /*
-        Use a semaphore to prevent the NMPC code accessing the state while we're
-        updating it.
-        */
-        volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-        uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
-        assert(sem_val == 1u);
-#endif
+        /* Copy any updated values back to the state vector */
+        ukf_set_state((struct ukf_state_t*)state_values);
 
-        /* If that's all OK, update the global state */
-        memcpy(&fcs_global_ahrs_state.lat, state_values,
-               sizeof(state_values));
-        memcpy(&fcs_global_ahrs_state.lat_covariance, covariance,
-               sizeof(covariance));
-
-#ifdef __TI_COMPILER_VERSION__
-        /* Release the semaphore */
-        semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
-#endif
+        /* Update the global state structure */
+        _fcs_ahrs_update_global_state(state_values, covariance);
     } else {
-        struct ukf_state_t reset_state = {
-            {0, 0, 0},
-            {0, 0, 0},
-            {0, 0, 0},
-            {0, 0, 0, 1},
-            {0, 0, 0},
-            {0, 0, 0},
-            {0, 0, 0},
-            {0, 0, 0}
-        };
-
-        /* Copy the last position and attitude */
-        reset_state.position[0] = fcs_global_ahrs_state.lat;
-        reset_state.position[1] = fcs_global_ahrs_state.lon;
-        reset_state.position[2] = fcs_global_ahrs_state.alt;
-        memcpy(reset_state.attitude, fcs_global_ahrs_state.attitude,
-               sizeof(double) * 4u);
-
-        /* If gyro bias is sane, copy that too */
-        for (i = 0; i < 3; i++) {
-            if (fabs(fcs_global_ahrs_state.gyro_bias[i]) < M_PI / 10.0) {
-                reset_state.gyro_bias[i] = fcs_global_ahrs_state.gyro_bias[i];
-            }
-        }
-
-        fcs_global_counters.ukf_resets++;
-        ukf_init();
-        ukf_set_state(&reset_state);
-
-        /* Update the output state and covariance with the latest values */
-        memcpy(&fcs_global_ahrs_state.lat, &state_values,
-               sizeof(state_values));
-        ukf_get_state_covariance_diagonal(
-            &fcs_global_ahrs_state.lat_covariance);
+        _fcs_ahrs_reset_state();
     }
+}
+
+static void _fcs_ahrs_reset_state(void) {
+    size_t i;
+
+    /*
+    Reset critical UKF parameters (position, attitude, gyro bias) based on
+    their previous values, and clear everything else.
+    */
+    struct ukf_state_t reset_state;
+    memset(&reset_state, 0, sizeof(reset_state));
+
+    /*
+    Copy the last position and attitude; if gyro bias is sane, copy that too
+    */
+    #pragma MUST_ITERATE(3, 3);
+    for (i = 0; i < 3u; i++) {
+        reset_state.position[i] = (&fcs_global_ahrs_state.lat)[i];
+        reset_state.attitude[i] = fcs_global_ahrs_state.attitude[i];
+
+        if (fabs(fcs_global_ahrs_state.gyro_bias[i]) < M_PI / 10.0) {
+            reset_state.gyro_bias[i] = fcs_global_ahrs_state.gyro_bias[i];
+        }
+    }
+    reset_state.attitude[3] = fcs_global_ahrs_state.attitude[3];
+
+    ukf_init();
+    ukf_set_state(&reset_state);
+
+    double covariance[24];
+    ukf_get_state_covariance_diagonal(covariance);
+
+    /* Update the output state and covariance with the latest values */
+    _fcs_ahrs_update_global_state((double*)&reset_state, covariance);
+
+    fcs_global_counters.ukf_resets++;
+}
+
+static void _fcs_ahrs_update_global_state(double *restrict state,
+double *restrict covariance) {
+#ifdef __TI_COMPILER_VERSION__
+    /*
+    Use a semaphore to prevent the NMPC code accessing the state while we're
+    updating it.
+    */
+    volatile CSL_SemRegs *const semaphore =
+        (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
+    assert(sem_val == 1u);
+#endif
+
+    memcpy(&fcs_global_ahrs_state.lat, state, sizeof(double) * 25u);
+    memcpy(&fcs_global_ahrs_state.lat_covariance, covariance,
+           sizeof(double) * 24u);
+
+#ifdef __TI_COMPILER_VERSION__
+    /* Release the semaphore */
+    semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
+#endif
 }
 
 static void _fcs_ahrs_update_wmm(void) {
@@ -460,8 +441,7 @@ static void _fcs_ahrs_update_wmm(void) {
         fcs_global_ahrs_state.wmm_field_norm =
             vector3_norm_d(fcs_global_ahrs_state.wmm_field_dir);
 
-        double norm_inv;
-        norm_inv = 1.0 / fcs_global_ahrs_state.wmm_field_norm;
+        double norm_inv = 1.0 / fcs_global_ahrs_state.wmm_field_norm;
         fcs_global_ahrs_state.wmm_field_dir[0] *= norm_inv;
         fcs_global_ahrs_state.wmm_field_dir[1] *= norm_inv;
         fcs_global_ahrs_state.wmm_field_dir[2] *= norm_inv;
@@ -487,7 +467,7 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
     double mag_value[4], expected_field[3], scale_factor,
            field_norm_inv = 1.0f / fcs_global_ahrs_state.wmm_field_norm;
     float mag_value_f[3], expected_field_f[3];
-    uint8_t i, j;
+    size_t i;
 
     /*
     Rotate the WMM field by the current attitude to get the expected field
@@ -537,16 +517,8 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
 
             TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
 
-            for (j = 0; j < 9u; j++) {
-                if (isnan(instance->state[j])) {
-                    /*
-                    TRICAL has blown up -- reset this instance and ignore the
-                    current reading.
-                    */
-                    TRICAL_reset(instance);
-                    fcs_global_counters.trical_resets[i]++;
-                    break;
-                }
+            if (!_fcs_ahrs_trical_is_valid(instance)) {
+                fcs_global_counters.trical_resets[i]++;
             }
 
             /*
@@ -567,7 +539,7 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
 
     double accel_value[4], expected_field[3], scale_factor;
     float accel_value_f[3], expected_field_f[3];
-    uint8_t i, j;
+    size_t i;
 
     /*
     Rotate the gravitational field by the current attitude to get the
@@ -640,16 +612,8 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
             TRICAL_estimate_update(instance, accel_value_f,
                                    expected_field_f);
 
-            for (j = 0; j < 9u; j++) {
-                if (isnan(instance->state[j])) {
-                    /*
-                    TRICAL has blown up -- reset this instance and ignore
-                    the current reading.
-                    */
-                    TRICAL_reset(instance);
-                    fcs_global_counters.trical_resets[i + 2u]++;
-                    break;
-                }
+            if (!_fcs_ahrs_trical_is_valid(instance)) {
+                fcs_global_counters.trical_resets[i + 2u]++;
             }
 
             /*
@@ -660,6 +624,19 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
                    instance->state, 9u * sizeof(float));
         }
     }
+}
+
+static bool _fcs_ahrs_trical_is_valid(TRICAL_instance_t *instance) {
+    size_t j;
+    for (j = 0; j < 9u; j++) {
+        if (isnan(instance->state[j])) {
+            /* TRICAL has blown up -- reset this instance. */
+            TRICAL_reset(instance);
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void fcs_ahrs_set_constraints(uint32_t constraints) {
