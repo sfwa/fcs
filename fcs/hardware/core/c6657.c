@@ -457,61 +457,13 @@ static void _fcs_ddr3_emif_setup(void) {
     /***************** 3.4 Basic Controller and DRAM Configuration **********/
     ddr3->SDRAM_REF_CTRL = 0x0000515C;    /* enable configuration */
 
-    uint32_t temp;
-
-    /* DDR_SDTIM1 = 0x1557B9BD; */
-    temp = 0;
-    temp |= 0x09 << 25; /* T_RP bit field 28:25 */
-    temp |= 0x09 << 21; /* T_RCD bit field 24:21 */
-    temp |= 0x09 << 17; /* T_WR bit field 20:17 */
-    temp |= 0x17 << 12; /* T_RAS bit field 16:12 */
-    temp |= 0x20 << 6; /* T_RC bit field 11:6 */
-    temp |= 0x1 << 3; /* T_RRD bit field 5:3 */
-    temp |= 0x4; /* T_WTR bit field 2:0 */
-    ddr3->SDRAM_TIM_1 = temp;
-
-    /* DDR_SDTIM2 = 0x304F7FE3; */
-    temp = 0;
-    temp |= 0x3 << 28; /* T_XP bit field 30:28 */
-    temp |= 0x71 << 16; /* T_XSNR bit field 24:16 */
-    temp |= 0x1ff << 6; /* T_XSRD bit field 15:6 */
-    temp |= 0x4 << 3; /* T_RTP bit field 5:3 */
-    temp |= 0x3; /* T_CKE bit field 2:0 */
-    ddr3->SDRAM_TIM_2 = temp;
-
-    /* DDR_SDTIM3 = 0x559F849F; */
-    temp = 0;
-    temp |= 0x5 << 28; /* T_PDLL_UL bit field 31:28 (fixed value) */
-    temp |= 0x5 << 24; /* T_CSTA bit field 27:24 (fixed value) */
-    temp |= 0x4 << 21; /* T_CKESR bit field 23:21 */
-    temp |= 0x3f << 15; /* T_ZQCS bit field 20:15 */
-    temp |= 0x6A << 4; /* T_RFC bit field 12:4 */
-    temp |= 0xf; /* T_RAS_MAX bit field 3:0 (fixed value) */
-    ddr3->SDRAM_TIM_3 = temp;
-
+    ddr3->SDRAM_TIM_1 = 0x1333780C;
+    ddr3->SDRAM_TIM_2 = 0x30717FE3;
+    ddr3->SDRAM_TIM_3 = 0x559F86AF;
     ddr3->DDR_PHY_CTRL_1 = 0x0010010F;
-
-    ddr3->ZQ_CONFIG = 0x70074c1f;
-
-    ddr3->PWR_MGMT_CTRL = 0x0;
-
-    /* DDR_SDCFG = 0x63077AB3; */
-    /* New value with DYN_ODT disabled and SDRAM_DRIVE = RZQ/7
-       //0x63222A32;    // last config write DRAM init occurs */
-    temp = 0;
-    temp |= 0x3 << 29; /* SDRAM_TYPE bit field 31:29 (fixed value) */
-    temp |= 0x0 << 27; /* IBANK_POS bit field 28:27 */
-    temp |= 0x2 << 24; /* DDR_TERM bit field 26:24 */
-    temp |= 0x2 << 21; /* DYN_ODT bit field 22:21 */
-    temp |= 0x1 << 18; /* SDRAM_DRIVE bit field 19:18 */
-    temp |= 0x3 << 16; /* CWL bit field 17:16 */
-    temp |= 0x1 << 14; /* NM bit field 15:14 */
-    temp |= 0xE << 10; /* CL bit field 13:10 */
-    temp |= 0x5 << 7; /* ROWSIZE bit field 9:7 */
-    temp |= 0x3 << 4; /* IBANK bit field 6:4 */
-    temp |= 0x0 << 3; /* EBANK bit field 3:3 */
-    temp |= 0x2; /* PAGESIZE bit field 2:0 */
-    ddr3->SDRAM_CONFIG = temp;
+    ddr3->ZQ_CONFIG = 0x70074C1F;
+    ddr3->PWR_MGMT_CTRL = 0;
+    ddr3->SDRAM_CONFIG = 0x62477AB2;
 
     /* Wait 600us for HW init to complete */
     _fcs_delay_cycles(600000);
