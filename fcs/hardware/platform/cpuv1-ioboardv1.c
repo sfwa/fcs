@@ -40,7 +40,6 @@ SOFTWARE.
 #include "../../ukf/cukf.h"
 #include "../../drivers/stream.h"
 #include "../../stats/stats.h"
-#include "../../piksi/piksi.h"
 #include "../../TRICAL/TRICAL.h"
 #include "../../ahrs/measurement.h"
 #include "../../ahrs/ahrs.h"

@@ -34,10 +34,6 @@ struct fcs_stats_counter_t {
     uint64_t cpu_packet_rx_err;
     uint64_t cpu_packet_tx;
 
-    /* Piksi packet counters */
-    uint64_t piksi_packet_rx;
-    uint64_t piksi_packet_rx_err;
-
     /* TRICAL counters */
     uint64_t trical_resets[4];
 

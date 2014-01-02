@@ -150,7 +150,6 @@ def reset():
     _fcs.fcs_board_init_platform()
     _fcs.fcs_util_init()
     _fcs.fcs_comms_init()
-    _fcs.fcs_piksi_init()
     _fcs.fcs_ahrs_init()
     _fcs.fcs_nmpc_init()
 
@@ -167,7 +166,6 @@ def tick():
     ahrs_tick += 1
 
     _fcs.fcs_board_tick()
-    _fcs.fcs_piksi_tick()
     _fcs.fcs_ahrs_tick()
     _fcs.fcs_nmpc_tick()
     _fcs.fcs_comms_tick()

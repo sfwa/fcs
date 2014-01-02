@@ -66,7 +66,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ahrs/ahrs.h"
 #include "nmpc/nmpc.h"
 #include "util/util.h"
-#include "piksi/piksi.h"
 #include "drivers/peripheral.h"
 #include "stats/stats.h"
 #include "comms/comms.h"

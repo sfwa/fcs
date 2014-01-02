@@ -43,7 +43,6 @@ INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
 # Add test executable target
 ADD_EXECUTABLE(unittest
     ../stats/stats.c
-    ../piksi/piksi.c
     ../util/cobsr.c
     ../util/base64.c
     ../util/crc8.c
@@ -101,7 +100,6 @@ ADD_LIBRARY(fcs SHARED
     ../util/crc32.c
     ../util/util.c
     ../nmpc/nmpc.c
-    ../piksi/piksi.c
     ../drivers/stream.c
     ../drivers/peripheral.c
     ../comms/comms.c
