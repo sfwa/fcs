@@ -540,20 +540,14 @@ double prescale) {
                 temp_value[0] -= p[0];
                 temp_value[0] *= p[1];
                 break;
-            case FCS_CALIBRATION_BIAS_SCALE_3D:
-                for (i = 0; i < 3u; i++) {
-                    temp_value[i] -= p[i];
-                    temp_value[i] *= p[i + 3u];
-                }
-                break;
             case FCS_CALIBRATION_BIAS_SCALE_3X3:
                 /*
                 Implements
-                B' = DB - b
+                B' = (I_{3x3} + D)B - b
 
-                where B' is the calibrated measurement, D is the scale
-                calibration matrix, B is the raw measurement, and b is
-                the bias vector.
+                where B' is the calibrated measurement, I_{3x3} is the 3x3
+                identity matrix, D is the scale calibration matrix, B is the
+                raw measurement, and b is the bias vector.
 
                 This is exactly the same as the equivalent TRICAL function
                 (and for magnetometers we use the TRICAL calibration state

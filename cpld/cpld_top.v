@@ -188,9 +188,9 @@ assign en_1v8 = 1'b1;
 /*
 DSP sequencer -- handles power on/off for the DSP and associated peripherals
 */
-assign en_vtt = en_1v5; /* FIXME? */
-assign pg_ddr3 = pg_1v5 & pg_vtt; /* FIXME? */
-assign pg_1v8 = en_1v8; /* FIXME */
+assign en_vtt = en_1v5;
+assign pg_ddr3 = pg_1v5 & pg_vtt;
+assign pg_1v8 = en_1v8;
 assign ucd9222_rst_INV = 1'b1;
 assign dsp_lreset_INV = dsp_bank_enable;
 assign dsp_lresetnmien_INV = dsp_bank_enable;

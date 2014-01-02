@@ -189,7 +189,7 @@ void fcs_board_init_platform(void) {
     gpio->BANK_REGISTERS[0].DIR &= 0xFFFFFFFCu;
 #endif
 
-    /* TODO: set up default sensor calibration */
+    /* Set up default sensor calibration */
     struct fcs_calibration_t *restrict map =
         fcs_global_ahrs_state.calibration.sensor_calibration;
 
@@ -213,11 +213,13 @@ void fcs_board_init_platform(void) {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_GYROSCOPE,
         .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                FCS_CALIBRATION_BIAS_SCALE_3D,
+                FCS_CALIBRATION_BIAS_SCALE_3X3,
         .error = 0.0349, /* approx 2 degrees */
         .params = {
             0.0f, 0.0f, 0.0f,
-            1.0f, 1.0f, 1.0f
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f },
@@ -249,10 +251,14 @@ void fcs_board_init_platform(void) {
     struct fcs_calibration_t gps_velocity_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_GPS_VELOCITY,
-        .type = FCS_CALIBRATION_BIAS_SCALE_3D,
+        .type = FCS_CALIBRATION_BIAS_SCALE_3X3,
         .error = 3.0f,
-        .params = { 0.0f, 0.0f, 0.0f,
-                    1.0f, 1.0f, 1.0f },
+        .params = {
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f
+        },
         .scale_factor = 1e-3f * 32767.0f
     };
     struct fcs_calibration_t pitot_calibration = {
@@ -277,7 +283,7 @@ void fcs_board_init_platform(void) {
     };
 
     /*
-    FIXME: should update the calibration sensor ID for each of these so they
+    FIXME: Should update the calibration sensor ID for each of these so they
     match the calibration slot for I/O board 1.
     */
     uint8_t sensor_id_bits, i;
@@ -449,9 +455,9 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_ACCELEROMETER);
 
-        measurement.data.i16[0] = swap_int16(packet.accel.x);
-        measurement.data.i16[1] = swap_int16(packet.accel.y);
-        measurement.data.i16[2] = swap_int16(packet.accel.z);
+        measurement.data.i16[0] = swap_int16(packet.accel.y);
+        measurement.data.i16[1] = swap_int16(packet.accel.x);
+        measurement.data.i16[2] = -swap_int16(packet.accel.z);
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 
@@ -460,9 +466,9 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_GYROSCOPE);
 
-        measurement.data.i16[0] = swap_int16(packet.gyro.x);
-        measurement.data.i16[1] = swap_int16(packet.gyro.y);
-        measurement.data.i16[2] = swap_int16(packet.gyro.z);
+        measurement.data.i16[0] = swap_int16(packet.gyro.y);
+        measurement.data.i16[1] = swap_int16(packet.gyro.x);
+        measurement.data.i16[2] = -swap_int16(packet.gyro.z);
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 
@@ -509,8 +515,8 @@ struct fcs_measurement_log_t *out_measurements) {
                                    FCS_MEASUREMENT_TYPE_MAGNETOMETER);
 
         measurement.data.i16[0] = swap_int16(packet.mag.x);
-        measurement.data.i16[1] = swap_int16(packet.mag.y);
-        measurement.data.i16[2] = swap_int16(packet.mag.z);
+        measurement.data.i16[1] = -swap_int16(packet.mag.y);
+        measurement.data.i16[2] = -swap_int16(packet.mag.z);
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 
@@ -555,7 +561,7 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 
-    /* TODO: log GPS info updates */
+    /* TODO: Log GPS info updates */
 
     fcs_global_counters.ioboard_packet_rx[dev]++;
     return true;

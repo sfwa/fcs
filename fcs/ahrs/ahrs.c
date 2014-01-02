@@ -61,6 +61,8 @@ struct fcs_ahrs_state_t fcs_global_ahrs_state;
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
 
 static void _fcs_ahrs_update_wmm(void);
+static void _fcs_ahrs_magnetometer_calibration(void);
+static void _fcs_ahrs_accelerometer_calibration(void);
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
@@ -103,19 +105,6 @@ void fcs_ahrs_init(void) {
     everything's in sync
     */
     ukf_get_state((struct ukf_state_t*)&fcs_global_ahrs_state.lat);
-
-    /*
-    TODO: Configure default UKF covariance and sensor offsets
-    covariance.accel_covariance = 81.0;
-    covariance.gyro_covariance = 0.5 * (M_PI / 180.0);
-    covariance.mag_covariance = 1.5;
-    covariance.gps_position_covariance_h = 1e-11;
-    covariance.gps_position_covariance_v = 225.0;
-    covariance.gps_velocity_covariance_h = 9.0;
-    covariance.gps_velocity_covariance_v = 49.0;
-    covariance.pitot_covariance = 100.0;
-    covariance.barometer_amsl_covariance = 4.0;
-    */
 
     /* Calculate WMM field at current lat/lon/alt/time */
     _fcs_ahrs_update_wmm();
@@ -168,7 +157,7 @@ void fcs_ahrs_tick(void) {
     /* Increment solution time */
     fcs_global_ahrs_state.solution_time++;
 
-    /* Remove the level and no-rotation constraints 10s after power-up */
+    /* Remove the level and no-rotation constraints 20s after power-up */
     if (fcs_global_ahrs_state.solution_time > 20000u) {
         fcs_global_ahrs_state.dynamics_constraints &=
             ~FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION;
@@ -177,89 +166,7 @@ void fcs_ahrs_tick(void) {
     }
 
     _fcs_ahrs_update_wmm();
-
-    /*
-    Handle magnetometer calibration update based on new readings -- we do this
-    regardless of calibration mode
-    */
-    struct fcs_calibration_t *restrict sensor_calibration_map =
-        fcs_global_ahrs_state.calibration.sensor_calibration;
-    TRICAL_instance_t *restrict instance;
-    struct fcs_measurement_t measurement;
-
-    double mag_value[4], expected_field[3], scale_factor,
-           field_norm_inv = 1.0f / fcs_global_ahrs_state.wmm_field_norm;
-    float mag_value_f[3], expected_field_f[3];
-    uint8_t i, j;
-
-    /*
-    Rotate the WMM field by the current attitude to get the expected field
-    direction for these readings
-    */
-    quaternion_vector3_multiply_d(
-        expected_field, fcs_global_ahrs_state.attitude,
-        fcs_global_ahrs_state.wmm_field_dir);
-    expected_field_f[0] = expected_field[0];
-    expected_field_f[1] = -expected_field[1];
-    expected_field_f[2] = -expected_field[2];
-
-    for (i = 0; i < 2u; i++) {
-        if (fcs_measurement_log_find(
-                &fcs_global_ahrs_state.measurements,
-                FCS_MEASUREMENT_TYPE_MAGNETOMETER, i, &measurement)) {
-            /* Get the measurement value */
-            fcs_measurement_get_values(&measurement, mag_value);
-
-            uint8_t sensor_key =
-                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
-                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
-                ((FCS_MEASUREMENT_TYPE_MAGNETOMETER <<
-                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
-                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
-
-            /*
-            Update TRICAL instance parameters with the latest results. Scale
-            the magnetometer reading such that the expected magnitude is the
-            unit vector, by dividing by the current WMM field strength in
-            Gauss.
-            */
-            instance = &fcs_global_ahrs_state.trical_instances[i];
-
-            /*
-            Copy the current sensor calibration to the TRICAL instance state
-            so that any external changes to the calibration are captured.
-            */
-            memcpy(instance->state, sensor_calibration_map[sensor_key].params,
-                   9u * sizeof(float));
-
-            scale_factor = field_norm_inv *
-                sensor_calibration_map[sensor_key].scale_factor;
-            mag_value_f[0] = mag_value[0] * scale_factor;
-            mag_value_f[1] = mag_value[1] * scale_factor;
-            mag_value_f[2] = mag_value[2] * scale_factor;
-
-            TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
-
-            for (j = 0; j < 9u; j++) {
-                if (isnan(instance->state[j])) {
-                    /*
-                    TRICAL has blown up -- reset this instance and ignore the
-                    current reading.
-                    */
-                    TRICAL_reset(instance);
-                    fcs_global_counters.trical_resets[i]++;
-                    break;
-                }
-            }
-
-            /*
-            Copy the TRICAL calibration estimate to the magnetometer
-            calibration
-            */
-            memcpy(sensor_calibration_map[sensor_key].params, instance->state,
-                   9u * sizeof(float));
-        }
-    }
+    _fcs_ahrs_magnetometer_calibration();
 
     /*
     While copying measurement data to the UKF, get sensor error and geometry
@@ -287,8 +194,8 @@ void fcs_ahrs_tick(void) {
             &fcs_global_ahrs_state.calibration,
             FCS_MEASUREMENT_TYPE_ACCELEROMETER, v, &err, offset)) {
         /* Accelerometer output is in g, convert to m/s^2 */
-        ukf_sensor_set_accelerometer(v[1] * G_ACCEL, v[0] * G_ACCEL,
-                                     -v[2] * G_ACCEL);
+        ukf_sensor_set_accelerometer(v[0] * G_ACCEL, v[1] * G_ACCEL,
+                                     v[2] * G_ACCEL);
         params.accel_covariance[0] = params.accel_covariance[1] =
             params.accel_covariance[2] = err * err;
         params.accel_offset[0] = offset[0];
@@ -300,7 +207,7 @@ void fcs_ahrs_tick(void) {
             &fcs_global_ahrs_state.measurements,
             &fcs_global_ahrs_state.calibration,
             FCS_MEASUREMENT_TYPE_GYROSCOPE, v, &err, offset)) {
-        ukf_sensor_set_gyroscope(v[1], v[0], -v[2]);
+        ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
         params.gyro_covariance[0] = params.gyro_covariance[1] =
             params.gyro_covariance[2] = err * err;
     }
@@ -318,7 +225,7 @@ void fcs_ahrs_tick(void) {
         The calibration scales the magnetometer value to unity expectation.
         Scale error by the same amount, so the units of error are Gauss.
         */
-        ukf_sensor_set_magnetometer(v[0], -v[1], -v[2]);
+        ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
         err *= field_norm_inv;
         params.mag_covariance[0] = params.mag_covariance[1] =
             params.mag_covariance[2] = err * err;
@@ -412,99 +319,7 @@ void fcs_ahrs_tick(void) {
         state_values[3] = state_values[4] = state_values[5] = state_values[6]
             = state_values[7] = state_values[8] = 0.0;
 
-        /*
-        Rotate the gravitational field by the current attitude to get the
-        expected field direction for these readings
-        */
-        double g_field[] = { 0.0, 0.0, 1.0 };
-        quaternion_vector3_multiply_d(
-            expected_field, fcs_global_ahrs_state.attitude, g_field);
-        expected_field_f[0] = expected_field[0];
-        expected_field_f[1] = expected_field[1];
-        expected_field_f[2] = expected_field[2];
-
-        double accel_value[4];
-        float accel_value_f[3];
-        for (i = 0; i < 2u; i++) {
-            if (fcs_measurement_log_find(
-                    &fcs_global_ahrs_state.measurements,
-                    FCS_MEASUREMENT_TYPE_ACCELEROMETER, i, &measurement)) {
-                /* Get the accelerometer value */
-                fcs_measurement_get_values(&measurement, accel_value);
-
-                uint8_t sensor_key =
-                    ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
-                     FCS_MEASUREMENT_SENSOR_ID_MASK) |
-                    ((FCS_MEASUREMENT_TYPE_ACCELEROMETER <<
-                      FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
-                     FCS_MEASUREMENT_SENSOR_TYPE_MASK);
-
-                /*
-                Update TRICAL instance parameters with the latest results.
-
-                The accelerometer TRICAL instances are 3 and 4.
-                */
-                instance = &fcs_global_ahrs_state.trical_instances[i + 2u];
-
-                /*
-                Copy the current sensor calibration to the TRICAL instance
-                state so that any external changes to the calibration are
-                captured.
-                */
-                memcpy(instance->state,
-                       sensor_calibration_map[sensor_key].params,
-                       9u * sizeof(float));
-
-                scale_factor =
-                    sensor_calibration_map[sensor_key].scale_factor;
-                accel_value_f[0] = accel_value[0] * scale_factor;
-                accel_value_f[1] = accel_value[1] * scale_factor;
-                accel_value_f[2] = accel_value[2] * scale_factor;
-
-                /*
-                If the vehicle is level, we can assume that bias accounts for
-                essentially the entire deviation from a reading of (0, 0, 1).
-
-                Strictly that's not quite true, as the Z-axis may have scale
-                error, but it'll get us pretty close.
-
-                Since we're level, we can also set the expected field
-                direction to straight down.
-                */
-                if (fcs_global_ahrs_state.dynamics_constraints &
-                    FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL) {
-                    instance->state[0] = accel_value_f[0];
-                    instance->state[1] = accel_value_f[1];
-                    instance->state[2] = accel_value_f[2] - 1.0f;
-
-                    expected_field_f[0] = 0.0;
-                    expected_field_f[1] = 0.0;
-                    expected_field_f[2] = 1.0;
-                }
-
-                TRICAL_estimate_update(instance, accel_value_f,
-                                       expected_field_f);
-
-                for (j = 0; j < 9u; j++) {
-                    if (isnan(instance->state[j])) {
-                        /*
-                        TRICAL has blown up -- reset this instance and ignore
-                        the current reading.
-                        */
-                        TRICAL_reset(instance);
-                        fcs_global_counters.trical_resets[i + 2u]++;
-                        break;
-                    }
-                }
-
-                /*
-                Copy the TRICAL calibration estimate to the accelerometer
-                calibration
-                */
-                memcpy(sensor_calibration_map[sensor_key].params,
-                       instance->state, 9u * sizeof(float));
-            }
-        }
+        _fcs_ahrs_accelerometer_calibration();
 
         /*
         If there's no velocity, trust the kinematic model of angular velocity
@@ -610,7 +425,13 @@ void fcs_ahrs_tick(void) {
         memcpy(reset_state.attitude, fcs_global_ahrs_state.attitude,
                sizeof(double) * 4u);
 
-        /* TODO: if gyro bias is sane, copy that too */
+        /* If gyro bias is sane, copy that too */
+        uint8_t i;
+        for (i = 0; i < 3; i++) {
+            if (fabs(fcs_global_ahrs_state.gyro_bias[i]) < M_PI / 10.0) {
+                reset_state.gyro_bias[i] = fcs_global_ahrs_state.gyro_bias[i];
+            }
+        }
 
         fcs_global_counters.ukf_resets++;
         ukf_init();
@@ -648,6 +469,194 @@ static void _fcs_ahrs_update_wmm(void) {
         (1G = 100 000nT). Convert the field norm to G.
         */
         fcs_global_ahrs_state.wmm_field_norm *= (1.0f / 100000.0f);
+    }
+}
+
+static void _fcs_ahrs_magnetometer_calibration(void) {
+    /*
+    Handle magnetometer calibration update based on new readings -- we do this
+    regardless of calibration mode
+    */
+    struct fcs_calibration_t *restrict sensor_calibration_map =
+        fcs_global_ahrs_state.calibration.sensor_calibration;
+    TRICAL_instance_t *restrict instance;
+    struct fcs_measurement_t measurement;
+
+    double mag_value[4], expected_field[3], scale_factor,
+           field_norm_inv = 1.0f / fcs_global_ahrs_state.wmm_field_norm;
+    float mag_value_f[3], expected_field_f[3];
+    uint8_t i, j;
+
+    /*
+    Rotate the WMM field by the current attitude to get the expected field
+    direction for these readings
+    */
+    quaternion_vector3_multiply_d(
+        expected_field, fcs_global_ahrs_state.attitude,
+        fcs_global_ahrs_state.wmm_field_dir);
+    expected_field_f[0] = expected_field[0];
+    expected_field_f[1] = expected_field[1];
+    expected_field_f[2] = expected_field[2];
+
+    for (i = 0; i < 2u; i++) {
+        if (fcs_measurement_log_find(
+                &fcs_global_ahrs_state.measurements,
+                FCS_MEASUREMENT_TYPE_MAGNETOMETER, i, &measurement)) {
+            /* Get the measurement value */
+            fcs_measurement_get_values(&measurement, mag_value);
+
+            uint8_t sensor_key =
+                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
+                ((FCS_MEASUREMENT_TYPE_MAGNETOMETER <<
+                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+
+            /*
+            Update TRICAL instance parameters with the latest results. Scale
+            the magnetometer reading such that the expected magnitude is the
+            unit vector, by dividing by the current WMM field strength in
+            Gauss.
+            */
+            instance = &fcs_global_ahrs_state.trical_instances[i];
+
+            /*
+            Copy the current sensor calibration to the TRICAL instance state
+            so that any external changes to the calibration are captured.
+            */
+            memcpy(instance->state, sensor_calibration_map[sensor_key].params,
+                   9u * sizeof(float));
+
+            scale_factor = field_norm_inv *
+                sensor_calibration_map[sensor_key].scale_factor;
+            mag_value_f[0] = mag_value[0] * scale_factor;
+            mag_value_f[1] = mag_value[1] * scale_factor;
+            mag_value_f[2] = mag_value[2] * scale_factor;
+
+            TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
+
+            for (j = 0; j < 9u; j++) {
+                if (isnan(instance->state[j])) {
+                    /*
+                    TRICAL has blown up -- reset this instance and ignore the
+                    current reading.
+                    */
+                    TRICAL_reset(instance);
+                    fcs_global_counters.trical_resets[i]++;
+                    break;
+                }
+            }
+
+            /*
+            Copy the TRICAL calibration estimate to the magnetometer
+            calibration
+            */
+            memcpy(sensor_calibration_map[sensor_key].params, instance->state,
+                   9u * sizeof(float));
+        }
+    }
+}
+
+static void _fcs_ahrs_accelerometer_calibration(void) {
+    struct fcs_calibration_t *restrict sensor_calibration_map =
+        fcs_global_ahrs_state.calibration.sensor_calibration;
+    TRICAL_instance_t *restrict instance;
+    struct fcs_measurement_t measurement;
+
+    double accel_value[4], expected_field[3], scale_factor;
+    float accel_value_f[3], expected_field_f[3];
+    uint8_t i, j;
+
+    /*
+    Rotate the gravitational field by the current attitude to get the
+    expected field direction for these readings
+    */
+    double g_field[] = { 0.0, 0.0, 1.0 };
+    quaternion_vector3_multiply_d(
+        expected_field, fcs_global_ahrs_state.attitude, g_field);
+    expected_field_f[0] = expected_field[0];
+    expected_field_f[1] = expected_field[1];
+    expected_field_f[2] = expected_field[2];
+
+    for (i = 0; i < 2u; i++) {
+        if (fcs_measurement_log_find(
+                &fcs_global_ahrs_state.measurements,
+                FCS_MEASUREMENT_TYPE_ACCELEROMETER, i, &measurement)) {
+            /* Get the accelerometer value */
+            fcs_measurement_get_values(&measurement, accel_value);
+
+            uint8_t sensor_key =
+                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
+                ((FCS_MEASUREMENT_TYPE_ACCELEROMETER <<
+                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+
+            /*
+            Update TRICAL instance parameters with the latest results.
+
+            The accelerometer TRICAL instances are 3 and 4.
+            */
+            instance = &fcs_global_ahrs_state.trical_instances[i + 2u];
+
+            /*
+            Copy the current sensor calibration to the TRICAL instance
+            state so that any external changes to the calibration are
+            captured.
+            */
+            memcpy(instance->state,
+                   sensor_calibration_map[sensor_key].params,
+                   9u * sizeof(float));
+
+            scale_factor =
+                sensor_calibration_map[sensor_key].scale_factor;
+            accel_value_f[0] = accel_value[0] * scale_factor;
+            accel_value_f[1] = accel_value[1] * scale_factor;
+            accel_value_f[2] = accel_value[2] * scale_factor;
+
+            /*
+            If the vehicle is level, we can assume that bias accounts for
+            essentially the entire deviation from a reading of (0, 0, 1).
+
+            Strictly that's not quite true, as the Z-axis may have scale
+            error, but it'll get us pretty close.
+
+            Since we're level, we can also set the expected field
+            direction to straight down.
+            */
+            if (fcs_global_ahrs_state.dynamics_constraints &
+                FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL) {
+                instance->state[0] = accel_value_f[0];
+                instance->state[1] = accel_value_f[1];
+                instance->state[2] = accel_value_f[2] - 1.0f;
+
+                expected_field_f[0] = 0.0;
+                expected_field_f[1] = 0.0;
+                expected_field_f[2] = 1.0;
+            }
+
+            TRICAL_estimate_update(instance, accel_value_f,
+                                   expected_field_f);
+
+            for (j = 0; j < 9u; j++) {
+                if (isnan(instance->state[j])) {
+                    /*
+                    TRICAL has blown up -- reset this instance and ignore
+                    the current reading.
+                    */
+                    TRICAL_reset(instance);
+                    fcs_global_counters.trical_resets[i + 2u]++;
+                    break;
+                }
+            }
+
+            /*
+            Copy the TRICAL calibration estimate to the accelerometer
+            calibration
+            */
+            memcpy(sensor_calibration_map[sensor_key].params,
+                   instance->state, 9u * sizeof(float));
+        }
     }
 }
 

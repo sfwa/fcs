@@ -44,7 +44,6 @@ enum fcs_measurement_type_t {
 enum fcs_calibration_type_t {
     FCS_CALIBRATION_NONE,
     FCS_CALIBRATION_BIAS_SCALE_1D, /* params[0] is bias, params[1] is scale */
-    FCS_CALIBRATION_BIAS_SCALE_3D, /* params[0:3] are bias, [3:6] are scale */
     FCS_CALIBRATION_BIAS_SCALE_3X3, /* params[0:3] are bias, [3:11] specify a
                                        3x3 matrix of scale factors */
     FCS_CALIBRATION_BIAS_SCALE_PITOT, /* params[0] is 0-pressure reading,
