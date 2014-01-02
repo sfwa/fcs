@@ -78,16 +78,16 @@ TEST(Hardware, ReadIOBoardPacket) {
                                       FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
                                       &measurement);
     ASSERT_TRUE(result);
-    EXPECT_EQ(2048, measurement.data.i16[0]);
-    EXPECT_EQ(2304, measurement.data.i16[1]);
-    EXPECT_EQ(4096, measurement.data.i16[2]);
+    EXPECT_EQ(2048, measurement.data.i16[1]);
+    EXPECT_EQ(2304, measurement.data.i16[0]);
+    EXPECT_EQ(4096, -measurement.data.i16[2]);
 
     len = fcs_measurement_get_values(&measurement, value);
     ASSERT_EQ(3u, len);
     ASSERT_EQ(16u, fcs_measurement_get_precision_bits(&measurement));
-    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[0]);
-    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[1]);
-    EXPECT_FLOAT_EQ(4096.0 / 32768.0, value[2]);
+    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[1]);
+    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[0]);
+    EXPECT_FLOAT_EQ(4096.0 / 32768.0, -value[2]);
 }
 
 TEST(Hardware, ReadIOBoardPacketPartial) {
@@ -127,16 +127,16 @@ TEST(Hardware, ReadIOBoardPacketPartial) {
                                       FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
                                       &measurement);
     ASSERT_TRUE(result);
-    EXPECT_EQ(2048, measurement.data.i16[0]);
-    EXPECT_EQ(2304, measurement.data.i16[1]);
-    EXPECT_EQ(4096, measurement.data.i16[2]);
+    EXPECT_EQ(2048, measurement.data.i16[1]);
+    EXPECT_EQ(2304, measurement.data.i16[0]);
+    EXPECT_EQ(4096, -measurement.data.i16[2]);
 
     len = fcs_measurement_get_values(&measurement, value);
     ASSERT_EQ(3u, len);
     ASSERT_EQ(16u, fcs_measurement_get_precision_bits(&measurement));
-    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[0]);
-    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[1]);
-    EXPECT_FLOAT_EQ(4096.0 / 32768.0, value[2]);
+    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[1]);
+    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[0]);
+    EXPECT_FLOAT_EQ(4096.0 / 32768.0, -value[2]);
 }
 
 TEST(Hardware, ReadIOBoardPacketAfterGarbage) {
@@ -176,16 +176,16 @@ TEST(Hardware, ReadIOBoardPacketAfterGarbage) {
                                       FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
                                       &measurement);
     ASSERT_TRUE(result);
-    EXPECT_EQ(2048, measurement.data.i16[0]);
-    EXPECT_EQ(2304, measurement.data.i16[1]);
-    EXPECT_EQ(4096, measurement.data.i16[2]);
+    EXPECT_EQ(2048, measurement.data.i16[1]);
+    EXPECT_EQ(2304, measurement.data.i16[0]);
+    EXPECT_EQ(4096, -measurement.data.i16[2]);
 
     len = fcs_measurement_get_values(&measurement, value);
     ASSERT_EQ(3u, len);
     ASSERT_EQ(16u, fcs_measurement_get_precision_bits(&measurement));
-    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[0]);
-    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[1]);
-    EXPECT_FLOAT_EQ(4096.0 / 32768.0, value[2]);
+    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[1]);
+    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[0]);
+    EXPECT_FLOAT_EQ(4096.0 / 32768.0, -value[2]);
 }
 
 TEST(Hardware, ReadIOBoardPacketAfterPacket) {
@@ -224,15 +224,15 @@ TEST(Hardware, ReadIOBoardPacketAfterPacket) {
                                       FCS_MEASUREMENT_TYPE_GYROSCOPE, 0,
                                       &measurement);
     ASSERT_TRUE(result);
-    EXPECT_EQ(2048, measurement.data.i16[0]);
-    EXPECT_EQ(2304, measurement.data.i16[1]);
-    EXPECT_EQ(4096, measurement.data.i16[2]);
+    EXPECT_EQ(2048, measurement.data.i16[1]);
+    EXPECT_EQ(2304, measurement.data.i16[0]);
+    EXPECT_EQ(4096, -measurement.data.i16[2]);
 
     len = fcs_measurement_get_values(&measurement, value);
     ASSERT_EQ(3u, len);
-    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[0]);
-    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[1]);
-    EXPECT_FLOAT_EQ(4096.0 / 32768.0, value[2]);
+    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[1]);
+    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[0]);
+    EXPECT_FLOAT_EQ(4096.0 / 32768.0, -value[2]);
 
     result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 1, &measurements);
     ASSERT_TRUE(result);
@@ -242,16 +242,16 @@ TEST(Hardware, ReadIOBoardPacketAfterPacket) {
                                       FCS_MEASUREMENT_TYPE_GYROSCOPE, 1,
                                       &measurement);
     ASSERT_TRUE(result);
-    EXPECT_EQ(2048, measurement.data.i16[0]);
-    EXPECT_EQ(2304, measurement.data.i16[1]);
-    EXPECT_EQ(4096, measurement.data.i16[2]);
+    EXPECT_EQ(2048, measurement.data.i16[1]);
+    EXPECT_EQ(2304, measurement.data.i16[0]);
+    EXPECT_EQ(4096, -measurement.data.i16[2]);
 
     len = fcs_measurement_get_values(&measurement, value);
     ASSERT_EQ(3u, len);
     ASSERT_EQ(16u, fcs_measurement_get_precision_bits(&measurement));
-    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[0]);
-    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[1]);
-    EXPECT_FLOAT_EQ(4096.0 / 32768.0, value[2]);
+    EXPECT_FLOAT_EQ(2048.0 / 32768.0, value[1]);
+    EXPECT_FLOAT_EQ(2304.0 / 32768.0, value[0]);
+    EXPECT_FLOAT_EQ(4096.0 / 32768.0, -value[2]);
 }
 
 TEST(Hardware, SerializeControlPacket) {

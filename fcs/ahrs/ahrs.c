@@ -216,6 +216,7 @@ void fcs_ahrs_tick(void) {
     We need to pre-scale the sensor reading by the current WMM field magnitude
     to work with the calibration params.
     */
+    double field_norm_inv = 1.0f / fcs_global_ahrs_state.wmm_field_norm;
     if (fcs_measurement_log_get_calibrated_value_prescale(
             &fcs_global_ahrs_state.measurements,
             &fcs_global_ahrs_state.calibration,
@@ -275,6 +276,8 @@ void fcs_ahrs_tick(void) {
     control response time configured in control_rates. Log the result.
     */
     struct fcs_measurement_t control_log;
+    uint8_t i;
+
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4; i++) {
         double delta = control_set[i] - fcs_global_ahrs_state.control_pos[i],
@@ -426,7 +429,6 @@ void fcs_ahrs_tick(void) {
                sizeof(double) * 4u);
 
         /* If gyro bias is sane, copy that too */
-        uint8_t i;
         for (i = 0; i < 3; i++) {
             if (fabs(fcs_global_ahrs_state.gyro_bias[i]) < M_PI / 10.0) {
                 reset_state.gyro_bias[i] = fcs_global_ahrs_state.gyro_bias[i];
