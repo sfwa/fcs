@@ -27,19 +27,15 @@ SOFTWARE.
 
 /*
 The "level" constraint requires that the vehicle is upright on a flat level
-surface.
+surface, with angular velocity 0, and angular acceleration averaging to 0 over
+a short time period.
 */
 #define FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL 0x1u
 /*
-The "no velocity" constraint requires that velocity be 0, and acceleration
+The "stationary" constraint requires that velocity be 0, and acceleration
 average to 0 over a 'short' time period (e.g. a few seconds).
 */
-#define FCS_AHRS_DYNAMICS_CONSTRAINT_NO_VELOCITY 0x2u
-/*
-The "no rotation" constraint requires that angular velocity be 0, and angular
-acceleration average to 0 over a short time period.
-*/
-#define FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION 0x4u
+#define FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY 0x2u
 /*
 The 2D constraint requires that the UAV not be moving under its own power
 (i.e. motion described by a flight dynamics model); this can be used when the

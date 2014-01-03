@@ -119,8 +119,7 @@ void fcs_ahrs_init(void) {
     */
     fcs_global_ahrs_state.dynamics_constraints =
         FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL |
-        FCS_AHRS_DYNAMICS_CONSTRAINT_NO_VELOCITY |
-        FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION |
+        FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY |
         FCS_AHRS_DYNAMICS_CONSTRAINT_2D;
     fcs_global_ahrs_state.ukf_dynamics_model = UKF_MODEL_X8;
 
@@ -147,12 +146,15 @@ void fcs_ahrs_tick(void) {
     /* Increment solution time */
     fcs_global_ahrs_state.solution_time++;
 
-    /* Remove the level and no-rotation constraints 20s after power-up */
+    /*
+    Remove the level and stationary constraints 20s after power-up -- these
+    can be manually re-applied if desired.
+    */
     if (fcs_global_ahrs_state.solution_time > 20000u) {
         fcs_global_ahrs_state.dynamics_constraints &=
-            ~FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION;
-        fcs_global_ahrs_state.dynamics_constraints &=
             ~FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL;
+        fcs_global_ahrs_state.dynamics_constraints &=
+            ~FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY;
     }
 
     _fcs_ahrs_update_wmm();
@@ -293,7 +295,7 @@ void fcs_ahrs_tick(void) {
 
     /* Apply dynamics constraints to the UKF state */
     if (fcs_global_ahrs_state.dynamics_constraints &
-            FCS_AHRS_DYNAMICS_CONSTRAINT_NO_VELOCITY) {
+            FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY) {
         /*
         We know that velocity = 0 and acceleration averages to 0 (but angular
         velocity and angular acceleration are non-zero in general).
@@ -304,7 +306,7 @@ void fcs_ahrs_tick(void) {
     }
 
     if (fcs_global_ahrs_state.dynamics_constraints &
-            FCS_AHRS_DYNAMICS_CONSTRAINT_NO_ROTATION) {
+            FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL) {
         /* Trust the gyro bias estimate less.  */
         fcs_global_ahrs_state.ukf_process_noise[21] = 1e-9;
         fcs_global_ahrs_state.ukf_process_noise[22] = 1e-9;
