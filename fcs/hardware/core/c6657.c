@@ -762,8 +762,13 @@ uint32_t _fcs_init_core0(void) {
     We want GPIO27_UARTRTS1_MUX, GPIO26_UARTCTS1_MUX, GPIO23_UARTRTS0_MUX,
     GPIO22_UARTCTS0_MUX, GPIO19_TIMO1_MUX, GPIO18_TIMO0_MUX, GPIO17_TIMI1_MUX,
     and GPIO16_TIMI0_MUX high.
+
+    Now, you'd think this would be accessible via cfg->CHIP_PIN_CONTROL_0,
+    but somehow TI have messed up the offset in the CSL_BootcfgRegs, so we
+    have to use the address directly. See this thread for details:
+    http://e2e.ti.com/support/dsp/c6000_multi-core_dsps/f/639/t/215377.aspx
     */
-    cfg->CHIP_PIN_CONTROL_0 = 0x0CCF0000u;
+    *(uint32_t*)0x02620580 = 0x0CCF0000u;
 
     /*
     Each GPIO bank has DIR, OUT_DATA, SET_DATA, CLR_DATA, IN_DATA,
