@@ -271,6 +271,26 @@ const float q1[4], const float q2[4]) {
     result[Z] = q1[W]*q2[Z] + q1[X]*q2[Y] - q1[Y]*q2[X] + q1[Z]*q2[W];
 }
 
+static inline double quaternion_quaternion_angle_d(const double q1[4],
+const double q2[4]) {
+    assert(q1 && q2);
+    _nassert((size_t)q1 % 8 == 0);
+    _nassert((size_t)q2 % 8 == 0);
+
+    double qdot = q1[W]*q2[W] + q1[X]*q2[X] + q1[Y]*q2[Y] + q1[Z]*q2[Z];
+    return acos(2.0 * qdot - 1.0);
+}
+
+static inline float quaternion_quaternion_angle_f(const float q1[4],
+const float q2[4]) {
+    assert(q1 && q2);
+    _nassert((size_t)q1 % 4 == 0);
+    _nassert((size_t)q2 % 4 == 0);
+
+    float qdot = q1[W]*q2[W] + q1[X]*q2[X] + q1[Y]*q2[Y] + q1[Z]*q2[Z];
+    return (float)acos(2.0f * qdot - 1.0f);
+}
+
 static void matrix_multiply_d(double *restrict C, const double B[],
 const double A[], const size_t AR, const size_t AC, const size_t BR,
 const size_t BC, const double mul) {

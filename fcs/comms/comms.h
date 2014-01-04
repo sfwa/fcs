@@ -38,8 +38,8 @@ State (FCS->CPU): $PSFWAS
 - wind N (m/s to 2dp) -- 6 chars
 - wind E (m/s to 2dp) -- 6 chars
 - wind D (m/s to 2dp) -- 6 chars
-- attitude (yaw/pitch/roll, degrees to 2dp) -- 19 chars
-- angular velocity (yaw/pitch/roll rate, degrees/s to 2dp) -- 21 chars
+- attitude (yaw/pitch/roll, degrees to 1dp) -- 16 chars
+- angular velocity (yaw/pitch/roll rate, degrees/s to 1dp) -- 18 chars
 - horizontal position uncertainty (95%, integral m) -- 3 chars
 - alt uncertainty (95%, m to 1dp) -- 4 chars
 - velocity N uncertainty (95%, integral m/s) -- 2 chars
@@ -73,12 +73,13 @@ Waypoint information (CPU->FCS, FCS->CPU): $PSFWAP
 - target lat (up to 7dp) -- 12 chars
 - target lon (up to 7dp) -- 12 chars
 - target alt (above ellipsoid, up to 2dp) -- 7 chars
-- target attitude (yaw/pitch/roll, up to 3dp) -- 19 chars
+- target attitude (yaw/pitch/roll, up to 1dp) -- 13 chars
 - target airspeed (m/s, up to 2dp) -- 7 chars
+- hold duration (min, up to 60 + 1dp) -- 4 chars
 - CRC32 -- 8 chars
 
-=> 73 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   93 bytes total
+=> 77 bytes + 9 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   98 bytes total
 
 
 GCS information (CPU->FCS): $PSFWAG
@@ -115,30 +116,13 @@ Status information (FCS->CPU): $PSFWAT
    2 bytes checksum + CRLF = 121 bytes total
 
 
-Sensor calibration information (CPU->FCS, FCS->CPU): $PSFWAL
+Mode packet (CPU->FCS, FCS->CPU): $PSFWAM
 - packet time (ms) -- 9 chars
-- Sensor type -- 1 char (lookup table)
-- Sensor ID -- 1 char (0-3)
-- Flags -- 5 chars
-- Calibration type -- 1 char (lookup table)
-- Error -- 8 chars
-- Params * 9 -- 8 chars * 9
-- Orientation * 4 -- 8 chars * 4
-- Offset * 3 -- 8 chars * 3
+- mode -- up to 24 chars
 - CRC32 -- 8 chars
 
-=> 164 bytes + 21 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   195 bytes
-
-Config information (CPU->FCS, FCS->CPU): $PSFWAC
-- packet time (ms) -- 9 chars
-- config key -- up to 24 chars
-- config value count -- up to 16 (2 chars)
-- config value(s) -- up to 128 chars total
-- CRC32 -- 8 chars
-
-=> 171 bytes + 6 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   189 bytes
+=> 41 bytes + 3 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   56 bytes
 */
 
 /* Init functions for comms module */
@@ -174,8 +158,11 @@ const struct fcs_ahrs_state_t *restrict state,
 const struct fcs_stats_counter_t *restrict counters,
 const struct fcs_peripheral_state_t *restrict peripheral_state);
 
-/* Config deserialization */
+/* Config serialization and deserialization */
 enum fcs_deserialization_result_t fcs_comms_deserialize_config(
 const uint8_t *restrict packet, size_t packet_length);
+
+size_t fcs_comms_serialize_config(const uint8_t *restrict packet,
+const uint8_t *restrict config_key, size_t config_key_len);
 
 #endif

@@ -25,23 +25,68 @@ SOFTWARE.
 
 #define FCS_AHRS_NUM_TRICAL_INSTANCES 4u
 
-/*
-The "level" constraint requires that the vehicle is upright on a flat level
-surface, with angular velocity 0, and angular acceleration averaging to 0 over
-a short time period.
-*/
-#define FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL 0x1u
-/*
-The "stationary" constraint requires that velocity be 0, and acceleration
-average to 0 over a 'short' time period (e.g. a few seconds).
-*/
-#define FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY 0x2u
-/*
-The 2D constraint requires that the UAV not be moving under its own power
-(i.e. motion described by a flight dynamics model); this can be used when the
-UAV is being held or transported.
-*/
-#define FCS_AHRS_DYNAMICS_CONSTRAINT_2D 0x8u
+enum fcs_mode_t {
+    /*
+    State: initializing (I)
+    Previous states: none
+    Entry condition: startup
+    Control output: none
+    */
+    FCS_MODE_INITIALIZING,
+    /*
+    State: calibrating (C)
+    Previous states: initializing, safe
+    Entry condition: received first GPS packet ||
+        calibration command from GCS
+    Control output: none
+    */
+    FCS_MODE_CALIBRATING,
+    /*
+    State: safe (S)
+    Previous states: calibrating, armed, active
+    Entry condition: time since last GPS packet received < 1s &&
+        (time since entered calibration > 30s ||
+        safe command from GCS)
+    Control output: none
+    */
+    FCS_MODE_SAFE,
+    /*
+    State: armed (R)
+    Previous states: safe
+    Entry condition: arm command from GCS && all sensor health == OK &&
+        mission boundary defined && home waypoint defined &&
+        recovery waypoint defined
+    Control output: take-off, failsafe device arm asserted
+    */
+    FCS_MODE_ARMED,
+    /*
+    State: active (A)
+    Previous states: armed, holding
+    Entry condition: freefall detected (take-off) || activate command from GCS
+    Control output: from NMPC
+    Waypoint mode: normal
+    */
+    FCS_MODE_ACTIVE,
+    /*
+    State: holding (H)
+    Previous states: active
+    Entry condition: lost GPS || hold command from GCS
+    Control output: from NMPC
+    Waypoint mode: hold at current position
+    */
+    FCS_MODE_HOLDING,
+    /*
+    State: abort (F)
+    Previous states: armed, active, holding
+    Entry condition: mission boundary crossed ||
+        (lost data link && lost gps) ||
+        termination requested || sensor health != OK
+    Control output: failsafe (all min), failsafe device abort asserted
+    */
+    FCS_MODE_ABORT,
+    /* Sentinel */
+    FCS_MODE_INVALID
+};
 
 /*
 AHRS global state
@@ -76,19 +121,23 @@ struct fcs_ahrs_state_t {
     double wmm_field_norm;
     double ukf_process_noise[24];
     uint32_t ukf_dynamics_model;
-    uint32_t dynamics_constraints;
     struct fcs_calibration_map_t calibration;
     TRICAL_instance_t trical_instances[FCS_AHRS_NUM_TRICAL_INSTANCES];
+    double trical_update_attitude[4][FCS_AHRS_NUM_TRICAL_INSTANCES];
+
+    /* Mode */
+    enum fcs_mode_t mode;
+    uint64_t mode_start_time;
 };
 
 void fcs_ahrs_init(void);
 void fcs_ahrs_tick(void);
 
 /*
-Configure the AHRS' dynamics constraints based on the value of the
-`constraints` bitfield. Setting constraints allows sensors to be calibrated.
+Change the AHRS mode. Returns false if the mode change is rejected, or true
+if successful.
 */
-void fcs_ahrs_set_constraints(uint32_t constraints);
+bool fcs_ahrs_set_mode(enum fcs_mode_t mode);
 
 /*
 Updated every AHRS tick -- contains the current state and uncertainty

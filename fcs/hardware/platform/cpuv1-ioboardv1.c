@@ -229,7 +229,7 @@ void fcs_board_init_platform(void) {
         .sensor = FCS_MEASUREMENT_TYPE_MAGNETOMETER,
         .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 0.1f, /* = 0.1G */
+        .error = 0.1f, /* = 0.3G */
         .params = {
             0.0f, 0.0f, 0.0f,
             0.0f, 0.0f, 0.0f,

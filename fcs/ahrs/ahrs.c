@@ -108,19 +108,12 @@ void fcs_ahrs_init(void) {
     memcpy(fcs_global_ahrs_state.ukf_process_noise, default_process_noise,
            sizeof(default_process_noise));
 
-    fcs_global_ahrs_state.lat = -37.8136;
-    fcs_global_ahrs_state.lon = 144.9631;
+    fcs_global_ahrs_state.lat = -37.8136 * M_PI / 180.0;
+    fcs_global_ahrs_state.lon = 144.9631 * M_PI / 180.0;
     fcs_global_ahrs_state.alt = 70.0;
 
-    /*
-    Initialize dynamics constraints
-
-    TODO: don't do this if this isn't a cold start
-    */
-    fcs_global_ahrs_state.dynamics_constraints =
-        FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL |
-        FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY |
-        FCS_AHRS_DYNAMICS_CONSTRAINT_2D;
+    /* Initialize AHRS mode */
+    fcs_global_ahrs_state.mode = FCS_MODE_INITIALIZING;
     fcs_global_ahrs_state.ukf_dynamics_model = UKF_MODEL_X8;
 
     /*
@@ -138,24 +131,13 @@ void fcs_ahrs_init(void) {
         */
         TRICAL_norm_set(&fcs_global_ahrs_state.trical_instances[i], 1.0f);
         TRICAL_noise_set(&fcs_global_ahrs_state.trical_instances[i],
-                         i < 2u ? 1e-2f : 10.0f);
+                         i < 2u ? 1e-3f : 1.0f);
     }
 }
 
 void fcs_ahrs_tick(void) {
     /* Increment solution time */
     fcs_global_ahrs_state.solution_time++;
-
-    /*
-    Remove the level and stationary constraints 20s after power-up -- these
-    can be manually re-applied if desired.
-    */
-    if (fcs_global_ahrs_state.solution_time > 20000u) {
-        fcs_global_ahrs_state.dynamics_constraints &=
-            ~FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL;
-        fcs_global_ahrs_state.dynamics_constraints &=
-            ~FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY;
-    }
 
     _fcs_ahrs_update_wmm();
     _fcs_ahrs_magnetometer_calibration();
@@ -286,35 +268,43 @@ void fcs_ahrs_tick(void) {
     */
     ukf_set_params(&params);
     ukf_set_process_noise(fcs_global_ahrs_state.ukf_process_noise);
-    ukf_iterate(AHRS_DELTA, fcs_global_ahrs_state.control_pos);
+
+    /* Don't update the filter during initialization */
+    if (fcs_global_ahrs_state.mode != FCS_MODE_INITIALIZING) {
+        ukf_iterate(AHRS_DELTA, fcs_global_ahrs_state.control_pos);
+    }
 
     /* Copy the global state out of the UKF */
     double state_values[25], covariance[24];
     ukf_get_state((struct ukf_state_t*)state_values);
     ukf_get_state_covariance_diagonal(covariance);
 
-    /* Apply dynamics constraints to the UKF state */
-    if (fcs_global_ahrs_state.dynamics_constraints &
-            FCS_AHRS_DYNAMICS_CONSTRAINT_STATIONARY) {
-        /*
-        We know that velocity = 0 and acceleration averages to 0 (but angular
-        velocity and angular acceleration are non-zero in general).
+    /*
+    Use different process noise values during calibration to get the gyro
+    bias estimate converging more quickly.
+    */
+    if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
+        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-5;
+        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-5;
+        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-5;
 
+        /* Trust the gyro bias estimate less.  */
+        fcs_global_ahrs_state.ukf_process_noise[21] = 1e-7;
+        fcs_global_ahrs_state.ukf_process_noise[22] = 1e-7;
+        fcs_global_ahrs_state.ukf_process_noise[23] = 1e-7;
+
+        /*
         Run TRICAL on the current accelerometer results.
         */
         _fcs_ahrs_accelerometer_calibration();
-    }
+    } else {
+        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-8;
+        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-8;
+        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-8;
 
-    if (fcs_global_ahrs_state.dynamics_constraints &
-            FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL) {
-        /* Trust the gyro bias estimate less.  */
         fcs_global_ahrs_state.ukf_process_noise[21] = 1e-9;
         fcs_global_ahrs_state.ukf_process_noise[22] = 1e-9;
         fcs_global_ahrs_state.ukf_process_noise[23] = 1e-9;
-    } else {
-        fcs_global_ahrs_state.ukf_process_noise[21] = 1.5e-12;
-        fcs_global_ahrs_state.ukf_process_noise[22] = 1.5e-12;
-        fcs_global_ahrs_state.ukf_process_noise[23] = 1.5e-12;
     }
 
     /* Validate the UKF state; if it's invalid, reset it */
@@ -335,6 +325,19 @@ void fcs_ahrs_tick(void) {
         _fcs_ahrs_update_global_state(state_values, covariance);
     } else {
         _fcs_ahrs_reset_state();
+    }
+
+    /* Check the current mode and transition if necessary */
+    if (fcs_global_ahrs_state.mode == FCS_MODE_INITIALIZING) {
+        fcs_global_ahrs_state.mode = FCS_MODE_CALIBRATING;
+        fcs_global_ahrs_state.mode_start_time =
+            fcs_global_ahrs_state.solution_time;
+    } else if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
+        /* Transition out of calibration mode after 30s */
+        if (fcs_global_ahrs_state.solution_time -
+                fcs_global_ahrs_state.mode_start_time > 30000) {
+            fcs_global_ahrs_state.mode = FCS_MODE_SAFE;
+        }
     }
 }
 
@@ -436,7 +439,7 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
     TRICAL_instance_t *restrict instance;
     struct fcs_measurement_t measurement;
 
-    double mag_value[4], expected_field[3], scale_factor,
+    double mag_value[4], expected_field[3], scale_factor, delta_angle,
            field_norm_inv = 1.0f / fcs_global_ahrs_state.wmm_field_norm;
     float mag_value_f[3], expected_field_f[3];
     size_t i;
@@ -456,6 +459,17 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
         if (fcs_measurement_log_find(
                 &fcs_global_ahrs_state.measurements,
                 FCS_MEASUREMENT_TYPE_MAGNETOMETER, i, &measurement)) {
+            /*
+            If the current attitude is too close to the attitude at which this
+            TRICAL instance was last updated, skip calibration this time
+            */
+            delta_angle = quaternion_quaternion_angle_d(
+                    fcs_global_ahrs_state.attitude,
+                    fcs_global_ahrs_state.trical_update_attitude[i]);
+            if (delta_angle < 3.0 * M_PI / 180.0) {
+                continue;
+            }
+
             /* Get the measurement value */
             fcs_measurement_get_values(&measurement, mag_value);
 
@@ -499,6 +513,13 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
             */
             memcpy(sensor_calibration_map[sensor_key].params, instance->state,
                    9u * sizeof(float));
+
+            /*
+            Record the attitude at which this TRICAL instance was last updated
+            so that we can space out calibration updates
+            */
+            memcpy(fcs_global_ahrs_state.trical_update_attitude[i],
+                   fcs_global_ahrs_state.attitude, sizeof(double) * 4);
         }
     }
 }
@@ -509,20 +530,9 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
     TRICAL_instance_t *restrict instance;
     struct fcs_measurement_t measurement;
 
-    double accel_value[4], expected_field[3], scale_factor;
-    float accel_value_f[3], expected_field_f[3];
+    double accel_value[4], scale_factor;
+    float accel_value_f[3], g_field[] = { 0.0, 0.0, -1.0 };
     size_t i;
-
-    /*
-    Rotate the gravitational field by the current attitude to get the
-    expected field direction for these readings
-    */
-    double g_field[] = { 0.0, 0.0, -1.0 };
-    quaternion_vector3_multiply_d(
-        expected_field, fcs_global_ahrs_state.attitude, g_field);
-    expected_field_f[0] = expected_field[0];
-    expected_field_f[1] = expected_field[1];
-    expected_field_f[2] = expected_field[2];
 
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(
@@ -570,19 +580,14 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
             Since we're level, we can also set the expected field
             direction to straight down.
             */
-            if (fcs_global_ahrs_state.dynamics_constraints &
-                FCS_AHRS_DYNAMICS_CONSTRAINT_LEVEL) {
+            if (instance->state[0] == 0.0 || instance->state[1] == 0.0 ||
+                    instance->state[2] == 0.0) {
                 instance->state[0] = accel_value_f[0];
                 instance->state[1] = accel_value_f[1];
                 instance->state[2] = accel_value_f[2] + 1.0f;
-
-                expected_field_f[0] = 0.0;
-                expected_field_f[1] = 0.0;
-                expected_field_f[2] = -1.0;
             }
 
-            TRICAL_estimate_update(instance, accel_value_f,
-                                   expected_field_f);
+            TRICAL_estimate_update(instance, accel_value_f, g_field);
 
             if (!_fcs_ahrs_trical_is_valid(instance)) {
                 fcs_global_counters.trical_resets[i + 2u]++;
@@ -611,13 +616,15 @@ static bool _fcs_ahrs_trical_is_valid(TRICAL_instance_t *instance) {
     return true;
 }
 
-void fcs_ahrs_set_constraints(uint32_t constraints) {
-    fcs_global_ahrs_state.dynamics_constraints = constraints;
+bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
+    fcs_global_ahrs_state.mode = mode;
 
-    /* Activate the dynamics model if the 2D constraint isn't specified */
-    if (constraints & FCS_AHRS_DYNAMICS_CONSTRAINT_2D) {
+    /* Activate the dynamics model in active mode */
+    if (mode == FCS_MODE_ACTIVE) {
         ukf_choose_dynamics(0);
     } else {
         ukf_choose_dynamics(fcs_global_ahrs_state.ukf_dynamics_model);
     }
+
+    return true;
 }

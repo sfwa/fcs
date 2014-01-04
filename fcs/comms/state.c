@@ -106,13 +106,13 @@ const struct fcs_ahrs_state_t *restrict state) {
     assert(-90.0 <= pitch && pitch <= 90.0);
     assert(-180.0 <= roll && roll <= 180.0);
 
-    index += fcs_ascii_fixed_from_double(&buf[index], yaw, 3u, 2u);
+    index += fcs_ascii_fixed_from_double(&buf[index], yaw, 3u, 1u);
     buf[index++] = ',';
 
-    index += fcs_ascii_fixed_from_double(&buf[index], pitch, 2u, 2u);
+    index += fcs_ascii_fixed_from_double(&buf[index], pitch, 2u, 1u);
     buf[index++] = ',';
 
-    index += fcs_ascii_fixed_from_double(&buf[index], roll, 3u, 2u);
+    index += fcs_ascii_fixed_from_double(&buf[index], roll, 3u, 1u);
     buf[index++] = ',';
 
     /*
@@ -122,7 +122,7 @@ const struct fcs_ahrs_state_t *restrict state) {
     */
     for (i = 0; i < 3; i++) {
         index += fcs_ascii_fixed_from_double(
-            &buf[index], state->angular_velocity[i] * (180.0/M_PI), 3u, 2u);
+            &buf[index], state->angular_velocity[i] * (180.0/M_PI), 3u, 1u);
         buf[index++] = ',';
     }
 
