@@ -270,13 +270,6 @@ def init(dll_path):
     _fcs.fcs_nmpc_tick.argtypes = []
     _fcs.fcs_nmpc_tick.restype = None
 
-    # From piksi/piksi.h
-    _fcs.fcs_piksi_init.argtypes = []
-    _fcs.fcs_piksi_init.restype = None
-
-    _fcs.fcs_piksi_tick.argtypes = []
-    _fcs.fcs_piksi_tick.restype = None
-
     # From util/util.h
     _fcs.fcs_util_init.argtypes = []
     _fcs.fcs_util_init.restype = None
