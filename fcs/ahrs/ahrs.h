@@ -26,6 +26,8 @@ SOFTWARE.
 #define FCS_AHRS_NUM_TRICAL_INSTANCES 4u
 
 enum fcs_mode_t {
+    /* Placeholder */
+    FCS_MODE_STARTUP_VALUE,
     /*
     State: initializing (I)
     Previous states: none

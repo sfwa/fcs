@@ -113,8 +113,8 @@ void fcs_ahrs_init(void) {
     fcs_global_ahrs_state.alt = 70.0;
 
     /* Initialize AHRS mode */
-    fcs_global_ahrs_state.mode = FCS_MODE_INITIALIZING;
     fcs_global_ahrs_state.ukf_dynamics_model = UKF_MODEL_X8;
+    fcs_ahrs_set_mode(FCS_MODE_INITIALIZING);
 
     /*
     Update the TRICAL instance parameters. Instances 0 and 1 are
@@ -141,6 +141,13 @@ void fcs_ahrs_tick(void) {
 
     _fcs_ahrs_update_wmm();
     _fcs_ahrs_magnetometer_calibration();
+
+    /*
+    Run TRICAL on the current accelerometer results when in calibration mode
+    */
+    if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
+        _fcs_ahrs_accelerometer_calibration();
+    }
 
     /*
     While copying measurement data to the UKF, get sensor error and geometry
@@ -174,16 +181,14 @@ void fcs_ahrs_tick(void) {
         /* Accelerometer output is in g, convert to m/s^2 */
         ukf_sensor_set_accelerometer(v[0] * G_ACCEL, v[1] * G_ACCEL,
                                      v[2] * G_ACCEL);
-        params.accel_covariance[0] = params.accel_covariance[1] =
-            params.accel_covariance[2] = err * err;
+        vector_set_d(params.accel_covariance, err * err, 3);
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
         mlog, cmap, FCS_MEASUREMENT_TYPE_GYROSCOPE, v, &err, NULL, 1.0);
     if (got_values) {
         ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
-        params.gyro_covariance[0] = params.gyro_covariance[1] =
-            params.gyro_covariance[2] = err * err;
+        vector_set_d(params.gyro_covariance, err * err, 3);
     }
 
     /*
@@ -201,8 +206,7 @@ void fcs_ahrs_tick(void) {
         */
         ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
         err *= field_norm_inv;
-        params.mag_covariance[0] = params.mag_covariance[1] =
-            params.mag_covariance[2] = err * err;
+        vector_set_d(params.mag_covariance, err * err, 3);
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -223,8 +227,7 @@ void fcs_ahrs_tick(void) {
         mlog, cmap, FCS_MEASUREMENT_TYPE_GPS_POSITION, v, &err, NULL, 1.0);
     if (got_values) {
         ukf_sensor_set_gps_position(v[0], v[1], v[2]);
-        params.gps_position_covariance[0] =
-            params.gps_position_covariance[1] = err * err;
+        vector_set_d(params.gps_position_covariance, err * err, 2);
         params.gps_position_covariance[2] = 225.0;
     }
 
@@ -232,8 +235,7 @@ void fcs_ahrs_tick(void) {
         mlog, cmap, FCS_MEASUREMENT_TYPE_GPS_VELOCITY, v, &err, NULL, 1.0);
     if (got_values) {
         ukf_sensor_set_gps_velocity(v[0], v[1], v[2]);
-        params.gps_velocity_covariance[0] =
-            params.gps_velocity_covariance[1] = err * err;
+        vector_set_d(params.gps_velocity_covariance, err * err, 2);
         params.gps_velocity_covariance[2] = 49.0;
     }
 
@@ -279,34 +281,6 @@ void fcs_ahrs_tick(void) {
     ukf_get_state((struct ukf_state_t*)state_values);
     ukf_get_state_covariance_diagonal(covariance);
 
-    /*
-    Use different process noise values during calibration to get the gyro
-    bias estimate converging more quickly.
-    */
-    if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
-        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-5;
-        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-5;
-        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-5;
-
-        /* Trust the gyro bias estimate less.  */
-        fcs_global_ahrs_state.ukf_process_noise[21] = 1e-7;
-        fcs_global_ahrs_state.ukf_process_noise[22] = 1e-7;
-        fcs_global_ahrs_state.ukf_process_noise[23] = 1e-7;
-
-        /*
-        Run TRICAL on the current accelerometer results.
-        */
-        _fcs_ahrs_accelerometer_calibration();
-    } else {
-        fcs_global_ahrs_state.ukf_process_noise[9] = 1e-8;
-        fcs_global_ahrs_state.ukf_process_noise[10] = 1e-8;
-        fcs_global_ahrs_state.ukf_process_noise[11] = 1e-8;
-
-        fcs_global_ahrs_state.ukf_process_noise[21] = 1e-9;
-        fcs_global_ahrs_state.ukf_process_noise[22] = 1e-9;
-        fcs_global_ahrs_state.ukf_process_noise[23] = 1e-9;
-    }
-
     /* Validate the UKF state; if it's invalid, reset it */
     bool ukf_valid = true;
 
@@ -329,14 +303,12 @@ void fcs_ahrs_tick(void) {
 
     /* Check the current mode and transition if necessary */
     if (fcs_global_ahrs_state.mode == FCS_MODE_INITIALIZING) {
-        fcs_global_ahrs_state.mode = FCS_MODE_CALIBRATING;
-        fcs_global_ahrs_state.mode_start_time =
-            fcs_global_ahrs_state.solution_time;
+        fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
     } else if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
         /* Transition out of calibration mode after 30s */
         if (fcs_global_ahrs_state.solution_time -
                 fcs_global_ahrs_state.mode_start_time > 30000) {
-            fcs_global_ahrs_state.mode = FCS_MODE_SAFE;
+            fcs_ahrs_set_mode(FCS_MODE_SAFE);
         }
     }
 }
@@ -354,9 +326,8 @@ static void _fcs_ahrs_reset_state(void) {
     /*
     Copy the last position and attitude; if gyro bias is sane, copy that too
     */
-    reset_state.position[0] = fcs_global_ahrs_state.lat;
-    reset_state.position[1] = fcs_global_ahrs_state.lon;
-    reset_state.position[2] = fcs_global_ahrs_state.alt;
+    memcpy(
+        reset_state.position, &fcs_global_ahrs_state.lat, sizeof(double) * 3);
 
     #pragma MUST_ITERATE(3, 3);
     for (i = 0; i < 3u; i++) {
@@ -451,9 +422,7 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
     quaternion_vector3_multiply_d(
         expected_field, fcs_global_ahrs_state.attitude,
         fcs_global_ahrs_state.wmm_field_dir);
-    expected_field_f[0] = expected_field[0];
-    expected_field_f[1] = expected_field[1];
-    expected_field_f[2] = expected_field[2];
+    vector_f_from_d(expected_field_f, expected_field, 3u);
 
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(
@@ -519,7 +488,7 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
             so that we can space out calibration updates
             */
             memcpy(fcs_global_ahrs_state.trical_update_attitude[i],
-                   fcs_global_ahrs_state.attitude, sizeof(double) * 4);
+                   fcs_global_ahrs_state.attitude, sizeof(double) * 4u);
         }
     }
 }
@@ -582,9 +551,8 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
             */
             if (instance->state[0] == 0.0 || instance->state[1] == 0.0 ||
                     instance->state[2] == 0.0) {
-                instance->state[0] = accel_value_f[0];
-                instance->state[1] = accel_value_f[1];
-                instance->state[2] = accel_value_f[2] + 1.0f;
+                memcpy(instance->state, accel_value_f, sizeof(float) * 3u);
+                instance->state[2] += 1.0f;
             }
 
             TRICAL_estimate_update(instance, accel_value_f, g_field);
@@ -617,13 +585,81 @@ static bool _fcs_ahrs_trical_is_valid(TRICAL_instance_t *instance) {
 }
 
 bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
-    fcs_global_ahrs_state.mode = mode;
+    enum fcs_mode_t previous_mode = fcs_global_ahrs_state.mode;
 
-    /* Activate the dynamics model in active mode */
-    if (mode == FCS_MODE_ACTIVE) {
-        ukf_choose_dynamics(0);
-    } else {
-        ukf_choose_dynamics(fcs_global_ahrs_state.ukf_dynamics_model);
+    if (mode == FCS_MODE_STARTUP_VALUE || mode > FCS_MODE_ABORT) {
+        /* Invalid mode requested */
+        return false;
+    } else if (mode == FCS_MODE_INITIALIZING &&
+            previous_mode != FCS_MODE_STARTUP_VALUE) {
+        /* Invalid mode transition */
+        return false;
+    } else if (mode == FCS_MODE_CALIBRATING &&
+            previous_mode != FCS_MODE_INITIALIZING &&
+            previous_mode != FCS_MODE_SAFE) {
+        /* Invalid mode transition */
+        return false;
+    } else if (mode == FCS_MODE_SAFE &&
+            previous_mode != FCS_MODE_CALIBRATING &&
+            previous_mode != FCS_MODE_ARMED &&
+            previous_mode != FCS_MODE_ACTIVE) {
+        /* Invalid mode transition */
+        return false;
+    } else if (mode == FCS_MODE_ARMED &&
+            previous_mode != FCS_MODE_SAFE) {
+        /* Invalid mode transition */
+        return false;
+    } else if (mode == FCS_MODE_ACTIVE &&
+            previous_mode != FCS_MODE_ARMED &&
+            previous_mode != FCS_MODE_HOLDING) {
+        /* Invalid mode transition */
+        return false;
+    } else if (mode == FCS_MODE_HOLDING &&
+            previous_mode != FCS_MODE_ACTIVE) {
+        /* Invalid mode transition */
+        return false;
+    } else if (mode == FCS_MODE_ABORT &&
+            previous_mode != FCS_MODE_ARMED &&
+            previous_mode != FCS_MODE_ACTIVE &&
+            previous_mode != FCS_MODE_HOLDING) {
+        /* Invalid mode transition */
+        return false;
+    }
+
+    fcs_global_ahrs_state.mode = mode;
+    fcs_global_ahrs_state.mode_start_time =
+            fcs_global_ahrs_state.solution_time;
+
+    switch (mode) {
+        case FCS_MODE_INITIALIZING:
+            ukf_choose_dynamics(0);
+            break;
+        case FCS_MODE_CALIBRATING:
+            /* Trust attitude and gyro bias predictors less. */
+            vector_set_d(
+                &fcs_global_ahrs_state.ukf_process_noise[9], 1e-5, 3u);
+            vector_set_d(
+                &fcs_global_ahrs_state.ukf_process_noise[21], 1e-7, 3u);
+            break;
+        case FCS_MODE_SAFE:
+            ukf_choose_dynamics(0);
+
+            vector_set_d(
+                &fcs_global_ahrs_state.ukf_process_noise[9], 1e-8, 3u);
+            vector_set_d(
+                &fcs_global_ahrs_state.ukf_process_noise[21], 1e-9, 3u);
+            break;
+        case FCS_MODE_ARMED:
+            break;
+        case FCS_MODE_ACTIVE:
+            ukf_choose_dynamics(fcs_global_ahrs_state.ukf_dynamics_model);
+            break;
+        case FCS_MODE_HOLDING:
+            break;
+        case FCS_MODE_ABORT:
+            break;
+        default:
+            assert(false);
     }
 
     return true;

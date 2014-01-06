@@ -488,9 +488,7 @@ double *out_error, double out_offset[3], double prescale) {
 
     /* Set error and offset based on calibration values */
     *out_error = calibration->error;
-    out_offset[0] = calibration->offset[0];
-    out_offset[1] = calibration->offset[1];
-    out_offset[2] = calibration->offset[2];
+    vector_d_from_f(out_offset, calibration->offset, 3u);
 
     /* Run the appropriate calibration routine */
     switch (fcs_calibration_get_type(calibration)) {
@@ -555,13 +553,9 @@ double *out_error, double out_offset[3], double prescale) {
 
     if (calibration->type & FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION) {
         /* Transform calibrated value based on sensor orientation */
-        for (i = 0; i < 4u; i++) {
-            orientation[i] = calibration->orientation[i];
-        }
+        vector_d_from_f(orientation, calibration->orientation, 4u);
         quaternion_vector3_multiply_d(out_value, orientation, temp_value);
     } else {
-        for (i = 0; i < 4u; i++) {
-            out_value[i] = temp_value[i];
-        }
+        memcpy(out_value, temp_value, sizeof(double) * 4u);
     }
 }

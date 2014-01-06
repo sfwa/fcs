@@ -53,6 +53,50 @@ SOFTWARE.
 #define _nassert(x)
 #endif
 
+static inline void vector_f_from_d(float *restrict result,
+const double *restrict v, size_t n) {
+    assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
+    _nassert((size_t)result % 4 == 0);
+    _nassert((size_t)v % 8 == 0);
+
+    size_t i;
+    for (i = 0; i < n; i++) {
+        result[i] = v[i];
+    }
+}
+
+static inline void vector_d_from_f(double *restrict result,
+const float *restrict v, size_t n) {
+    assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
+    _nassert((size_t)result % 8 == 0);
+    _nassert((size_t)v % 4 == 0);
+
+    size_t i;
+    for (i = 0; i < n; i++) {
+        result[i] = v[i];
+    }
+}
+
+static inline void vector_set_d(double *restrict v1, double value, size_t n) {
+    assert(v1);
+    _nassert((size_t)v1 % 8 == 0);
+
+    size_t i;
+    for (i = 0; i < n; i++) {
+        v1[i] = value;
+    }
+}
+
+static inline void vector_set_f(float *restrict v1, float value, size_t n) {
+    assert(v1);
+    _nassert((size_t)v1 % 4 == 0);
+
+    size_t i;
+    for (i = 0; i < n; i++) {
+        v1[i] = value;
+    }
+}
+
 static inline double vector3_norm_d(const double *restrict v1) {
     assert(v1);
     _nassert((size_t)v1 % 8 == 0);
