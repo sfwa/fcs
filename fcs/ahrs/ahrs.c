@@ -85,7 +85,7 @@ void fcs_ahrs_init(void) {
     fcs_wmm_init();
 
     /* TODO: don't reset attitude if any of the entries are non-zero */
-    memset(fcs_global_ahrs_state.attitude, 0, sizeof(double) * 4u);
+    vector_set_d(fcs_global_ahrs_state.attitude, 0, 4u);
     fcs_global_ahrs_state.attitude[3] = 1.0;
 
     /* Reset/init the UKF */
@@ -105,8 +105,8 @@ void fcs_ahrs_init(void) {
         1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
         1.5e-12, 1.5e-12, 1.5e-12 /* gyro bias x, y, z */
     };
-    memcpy(fcs_global_ahrs_state.ukf_process_noise, default_process_noise,
-           sizeof(default_process_noise));
+    vector_copy_d(
+        fcs_global_ahrs_state.ukf_process_noise, default_process_noise, 24u);
 
     fcs_global_ahrs_state.lat = -37.8136 * M_PI / 180.0;
     fcs_global_ahrs_state.lon = 144.9631 * M_PI / 180.0;
@@ -161,8 +161,7 @@ void fcs_ahrs_tick(void) {
     };
 
     /* Use the latest WMM field vector (unit length) */
-    memcpy(params.mag_field, fcs_global_ahrs_state.wmm_field_dir,
-           sizeof(double) * 3u);
+    vector_copy_d(params.mag_field, fcs_global_ahrs_state.wmm_field_dir, 3u);
 
     /* Read sensor data from the measurement log, and pass it to the UKF */
     double v[4], err;
@@ -326,8 +325,7 @@ static void _fcs_ahrs_reset_state(void) {
     /*
     Copy the last position and attitude; if gyro bias is sane, copy that too
     */
-    memcpy(
-        reset_state.position, &fcs_global_ahrs_state.lat, sizeof(double) * 3);
+    vector_copy_d(reset_state.position, &fcs_global_ahrs_state.lat, 3u);
 
     #pragma MUST_ITERATE(3, 3);
     for (i = 0; i < 3u; i++) {
@@ -364,9 +362,8 @@ double *restrict covariance) {
     assert(sem_val == 1u);
 #endif
 
-    memcpy(&fcs_global_ahrs_state.lat, state, sizeof(double) * 25u);
-    memcpy(&fcs_global_ahrs_state.lat_covariance, covariance,
-           sizeof(double) * 24u);
+    vector_copy_d(&fcs_global_ahrs_state.lat, state, 25u);
+    vector_copy_d(&fcs_global_ahrs_state.lat_covariance, covariance, 24u);
 
 #ifdef __TI_COMPILER_VERSION__
     /* Release the semaphore */
@@ -461,8 +458,8 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
             Copy the current sensor calibration to the TRICAL instance state
             so that any external changes to the calibration are captured.
             */
-            memcpy(instance->state, sensor_calibration_map[sensor_key].params,
-                   9u * sizeof(float));
+            vector_copy_f(instance->state,
+                          sensor_calibration_map[sensor_key].params, 9u);
 
             scale_factor = field_norm_inv *
                 sensor_calibration_map[sensor_key].scale_factor;
@@ -480,15 +477,16 @@ static void _fcs_ahrs_magnetometer_calibration(void) {
             Copy the TRICAL calibration estimate to the magnetometer
             calibration
             */
-            memcpy(sensor_calibration_map[sensor_key].params, instance->state,
-                   9u * sizeof(float));
+            vector_copy_f(sensor_calibration_map[sensor_key].params,
+                          instance->state, 9u);
 
             /*
             Record the attitude at which this TRICAL instance was last updated
             so that we can space out calibration updates
             */
-            memcpy(fcs_global_ahrs_state.trical_update_attitude[i],
-                   fcs_global_ahrs_state.attitude, sizeof(double) * 4u);
+            vector_copy_d(
+                fcs_global_ahrs_state.trical_update_attitude[i],
+                fcs_global_ahrs_state.attitude, 4u);
         }
     }
 }
@@ -529,9 +527,8 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
             state so that any external changes to the calibration are
             captured.
             */
-            memcpy(instance->state,
-                   sensor_calibration_map[sensor_key].params,
-                   9u * sizeof(float));
+            vector_copy_f(instance->state,
+                          sensor_calibration_map[sensor_key].params, 9u);
 
             scale_factor =
                 sensor_calibration_map[sensor_key].scale_factor;
@@ -551,7 +548,7 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
             */
             if (instance->state[0] == 0.0 || instance->state[1] == 0.0 ||
                     instance->state[2] == 0.0) {
-                memcpy(instance->state, accel_value_f, sizeof(float) * 3u);
+                vector_copy_f(instance->state, accel_value_f, 3u);
                 instance->state[2] += 1.0f;
             }
 
@@ -565,8 +562,8 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
             Copy the TRICAL calibration estimate to the accelerometer
             calibration
             */
-            memcpy(sensor_calibration_map[sensor_key].params,
-                   instance->state, 9u * sizeof(float));
+            vector_copy_f(sensor_calibration_map[sensor_key].params,
+                          instance->state, 9u);
         }
     }
 }

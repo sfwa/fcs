@@ -335,14 +335,17 @@ double *out_offset, double prescale) {
     assert(out_value != out_error);
     assert(out_value != out_offset);
     assert(out_error != out_offset);
+    _nassert((size_t)out_value % 8 == 0);
+    _nassert((size_t)out_error % 8 == 0);
+    _nassert((size_t)out_offset % 8 == 0);
 
     double accum_value[4], accum_error, accum_offset[3];
     double temp_value[4], temp_error, temp_offset[3];
     size_t i, j, n_measurements, measurement_length, measurement_type;
     struct fcs_measurement_t measurement;
 
-    memset(accum_value, 0, sizeof(accum_value));
-    memset(accum_offset, 0, sizeof(accum_offset));
+    vector_set_d(accum_value, 0, 4u);
+    vector_set_d(accum_offset, 0, 3u);
     accum_error = 0.0;
 
     /* Start scanning at index 5, first byte after the log record header */
@@ -384,9 +387,9 @@ double *out_offset, double prescale) {
         accum_value[3] *= scale;
 
         if (out_offset) {
-            memcpy(out_offset, accum_offset, sizeof(double) * 3u);
+            vector_copy_d(out_offset, accum_offset, 3u);
         }
-        memcpy(out_value, accum_value, sizeof(double) * 4u);
+        vector_copy_d(out_value, accum_value, 4u);
         *out_error = accum_error * scale;
     }
 
@@ -401,8 +404,9 @@ size_t fcs_measurement_get_values(
 const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
     assert(measurement);
     assert(out_value);
+    _nassert((size_t)out_value % 8 == 0);
 
-    memset(out_value, 0, sizeof(double) * 4u);
+    vector_set_d(out_value, 0, 4u);
 
     enum fcs_measurement_type_t type =
         fcs_measurement_get_sensor_type(measurement);
@@ -463,6 +467,9 @@ double *out_error, double out_offset[3], double prescale) {
     assert(out_value != out_error);
     assert(out_value != out_offset);
     assert(out_error != out_offset);
+    _nassert((size_t)out_value % 8 == 0);
+    _nassert((size_t)out_error % 8 == 0);
+    _nassert((size_t)out_offset % 8 == 0);
 
     size_t i;
     double temp_value[4], c[3], orientation[4];
@@ -556,6 +563,6 @@ double *out_error, double out_offset[3], double prescale) {
         vector_d_from_f(orientation, calibration->orientation, 4u);
         quaternion_vector3_multiply_d(out_value, orientation, temp_value);
     } else {
-        memcpy(out_value, temp_value, sizeof(double) * 4u);
+        vector_copy_d(out_value, temp_value, 4u);
     }
 }

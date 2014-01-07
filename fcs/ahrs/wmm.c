@@ -71,6 +71,8 @@ void fcs_wmm_init(void) {
 bool fcs_wmm_calculate_field(double lat, double lon, double alt, double year,
 double out_field[3]) {
     assert(wmm_inited);
+    assert(out_field);
+    _nassert((size_t)out_field % 8 == 0);
 
     double dec, dip, ti, gv;
     E0000(1, NULL, alt * 0.001, lat * (180.0/M_PI), lon * (180.0/M_PI), year,

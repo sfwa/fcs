@@ -44,7 +44,6 @@ INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
 ADD_EXECUTABLE(unittest
     ../stats/stats.c
     ../util/cobsr.c
-    ../util/base64.c
     ../util/crc8.c
     ../util/crc16sbp.c
     ../util/crc32.c
@@ -94,7 +93,6 @@ ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
 ADD_LIBRARY(fcs SHARED
     ../stats/stats.c
     ../util/cobsr.c
-    ../util/base64.c
     ../util/crc8.c
     ../util/crc16sbp.c
     ../util/crc32.c
