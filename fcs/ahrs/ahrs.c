@@ -476,7 +476,8 @@ static void _fcs_ahrs_pitot_calibration(void) {
             reading should be 0. This is just a weighted moving average, with
             convergence taking a few seconds.
             */
-            params[0] += 0.001 * (pitot_value[0] - params[0]);
+            params[0] += 0.001 * ((pitot_value[0] * scale_factor)
+                                  - params[0]);
         }
     }
 }
@@ -515,7 +516,8 @@ static void _fcs_ahrs_barometer_calibration(void) {
             (TODO: Take the height of the GCS above the ground into
             consideration.)
             */
-            params[0] += 0.001 * (fcs_global_ahrs_state.reference_pressure
+            params[0] += 0.001 * ((barometer_value[0] * scale_factor)
+                                  - fcs_global_ahrs_state.reference_pressure
                                   - params[0]);
         }
     }
