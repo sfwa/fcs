@@ -43,17 +43,10 @@ SOFTWARE.
 #define UART0_STATUS_INTERVAL 100u
 #define UART0_STATUS_OFFSET 12u
 
-/*
 #define UART1_RATE 57600u
 #define UART1_STATE_INTERVAL 1000u
 #define UART1_STATUS_INTERVAL 1000u
 #define UART1_STATUS_OFFSET 500u
-*/
-
-#define UART1_RATE 921600u
-#define UART1_STATE_INTERVAL 20u
-#define UART1_STATUS_INTERVAL 100u
-#define UART1_STATUS_OFFSET 12u
 
 struct fcs_rfd900_status_packet_t {
     uint8_t type; /* always 0x11 */
@@ -111,7 +104,7 @@ void fcs_comms_tick(void) {
     if (tick % UART1_STATE_INTERVAL == 0) {
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, comms_buf,
                                      comms_buf_len);
-        assert(comms_buf_len == write_len);
+        /* Ignore a buffer full result */
     }
 
     /* Generate a status packet */
@@ -138,7 +131,7 @@ void fcs_comms_tick(void) {
     if (tick % UART1_STATUS_INTERVAL == UART1_STATUS_OFFSET) {
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, comms_buf,
                                      comms_buf_len);
-        assert(comms_buf_len == write_len);
+        /* Ignore a buffer full result */
     }
 
     /*
@@ -147,7 +140,9 @@ void fcs_comms_tick(void) {
     */
     comms_buf_len = fcs_measurement_log_serialize(
         comms_buf, sizeof(comms_buf), &fcs_global_ahrs_state.measurements);
-    fcs_stream_write(FCS_STREAM_UART_INT1, comms_buf, comms_buf_len);
+    write_len = fcs_stream_write(FCS_STREAM_UART_INT1, comms_buf,
+                                 comms_buf_len);
+    assert(comms_buf_len == write_len);
 
     /* Check for packets from both the CPU and comms UARTs */
     _fcs_comms_parse_packets(FCS_STREAM_UART_EXT0);

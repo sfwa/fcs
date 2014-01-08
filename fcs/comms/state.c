@@ -169,7 +169,7 @@ const struct fcs_ahrs_state_t *restrict state) {
         buf[index++] = ',';
     }
 
-    buf[index++] = 'A';
+    buf[index++] = (uint8_t)state->mode;
     buf[index++] = ',';
 
     memset(&buf[index], '-', 7u);

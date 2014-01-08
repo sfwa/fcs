@@ -54,9 +54,7 @@ State (FCS->CPU): $PSFWAS
 - yaw rate uncertainty (95%, degreees/s up to 90deg/s) -- 2 chars
 - pitch rate uncertainty (95%, degrees/s up to 90deg/s) -- 2 chars
 - roll rate uncertainty (95%, degrees/s up to 90deg/s) -- 2 chars
-- FAA mode indicator ('A' = autonomous, 'D' = differential,
-  'E' = dead-reckoning, 'M' = manual input, 'S' = simulated,
-  'N' = not valid) -- 1 char
+- FCS state -- 1 char
 - flags (GPS SVs, GPS fix status, taken photo) -- 7 chars
 - CRC32 -- 8 chars
 

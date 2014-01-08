@@ -181,6 +181,9 @@ void fcs_ahrs_tick(void) {
         ukf_sensor_set_accelerometer(v[0] * G_ACCEL, v[1] * G_ACCEL,
                                      v[2] * G_ACCEL);
         vector_set_d(params.accel_covariance, err * err, 3);
+
+        fcs_global_ahrs_state.last_accelerometer_time =
+            fcs_global_ahrs_state.solution_time;
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -188,6 +191,9 @@ void fcs_ahrs_tick(void) {
     if (got_values) {
         ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
         vector_set_d(params.gyro_covariance, err * err, 3);
+
+        fcs_global_ahrs_state.last_gyroscope_time =
+            fcs_global_ahrs_state.solution_time;
     }
 
     /*
@@ -206,6 +212,9 @@ void fcs_ahrs_tick(void) {
         ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
         err *= field_norm_inv;
         vector_set_d(params.mag_covariance, err * err, 3);
+
+        fcs_global_ahrs_state.last_magnetometer_time =
+            fcs_global_ahrs_state.solution_time;
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -213,6 +222,9 @@ void fcs_ahrs_tick(void) {
     if (got_values) {
         ukf_sensor_set_pitot_tas(0.0 /* v[0] */);
         params.pitot_covariance = err * err;
+
+        fcs_global_ahrs_state.last_pitot_time =
+            fcs_global_ahrs_state.solution_time;
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -220,6 +232,9 @@ void fcs_ahrs_tick(void) {
     if (got_values) {
         ukf_sensor_set_barometer_amsl(v[0]);
         params.barometer_amsl_covariance = err * err;
+
+        fcs_global_ahrs_state.last_barometer_time =
+            fcs_global_ahrs_state.solution_time;
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -228,6 +243,9 @@ void fcs_ahrs_tick(void) {
         ukf_sensor_set_gps_position(v[0], v[1], v[2]);
         vector_set_d(params.gps_position_covariance, err * err, 2);
         params.gps_position_covariance[2] = 225.0;
+
+        fcs_global_ahrs_state.last_gps_time =
+            fcs_global_ahrs_state.solution_time;
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -301,8 +319,13 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Check the current mode and transition if necessary */
-    if (fcs_global_ahrs_state.mode == FCS_MODE_INITIALIZING) {
-        fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
+    if (fcs_global_ahrs_state.mode == FCS_MODE_STARTUP_VALUE) {
+        fcs_ahrs_set_mode(FCS_MODE_INITIALIZING);
+    } else if (fcs_global_ahrs_state.mode == FCS_MODE_INITIALIZING) {
+        /* Transition out of initializing if we've received a GPS packet */
+        if (fcs_global_ahrs_state.last_gps_time > 0) {
+            fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
+        }
     } else if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
         /* Transition out of calibration mode after 30s */
         if (fcs_global_ahrs_state.solution_time -
@@ -584,7 +607,7 @@ static bool _fcs_ahrs_trical_is_valid(TRICAL_instance_t *instance) {
 bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
     enum fcs_mode_t previous_mode = fcs_global_ahrs_state.mode;
 
-    if (mode == FCS_MODE_STARTUP_VALUE || mode > FCS_MODE_ABORT) {
+    if (mode == FCS_MODE_STARTUP_VALUE) {
         /* Invalid mode requested */
         return false;
     } else if (mode == FCS_MODE_INITIALIZING &&
@@ -632,6 +655,8 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             ukf_choose_dynamics(0);
             break;
         case FCS_MODE_CALIBRATING:
+            /* Start up clean */
+            _fcs_ahrs_reset_state();
             /* Trust attitude and gyro bias predictors less. */
             vector_set_d(
                 &fcs_global_ahrs_state.ukf_process_noise[9], 1e-5, 3u);

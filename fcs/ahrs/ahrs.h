@@ -125,6 +125,14 @@ struct fcs_ahrs_state_t {
     TRICAL_instance_t trical_instances[FCS_AHRS_NUM_TRICAL_INSTANCES];
     double trical_update_attitude[4][FCS_AHRS_NUM_TRICAL_INSTANCES];
 
+    /* Sensor health */
+    uint64_t last_accelerometer_time;
+    uint64_t last_gyroscope_time;
+    uint64_t last_magnetometer_time;
+    uint64_t last_barometer_time;
+    uint64_t last_pitot_time;
+    uint64_t last_gps_time;
+
     /* Mode */
     enum fcs_mode_t mode;
     uint64_t mode_start_time;
