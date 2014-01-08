@@ -274,11 +274,11 @@ void fcs_board_init_platform(void) {
         .type = FCS_CALIBRATION_BIAS_SCALE_1D,
         .error = 2.0f,
         /*
-        5000.0 would be the GCS pressure; 0.02 is the sensor scale factor and
-        0.12mbar is the change in pressure per meter altitude
+        1013.25 is a guess at the GCS pressure; 0.02 is the sensor scale
+        factor.
         */
-        .params = { (50000.0 / 65535.0f), (0.02f / 0.12f) * 65535.0f },
-        .scale_factor = 1.0f
+        .params = { FCS_STANDARD_PRESSURE, 1.0f },
+        .scale_factor = 0.02f * 65535.0f
     };
 
     /*

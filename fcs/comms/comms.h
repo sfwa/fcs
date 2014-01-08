@@ -126,8 +126,12 @@ const struct fcs_ahrs_state_t *restrict state,
 const struct fcs_stats_counter_t *restrict counters,
 const struct fcs_peripheral_state_t *restrict peripheral_state);
 
-/* Command serialization and deserialization */
+/* Command deserialization */
 enum fcs_deserialization_result_t fcs_comms_deserialize_command(
+const uint8_t *packet, size_t packet_length);
+
+/* GCS packet deserialization */
+enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
 const uint8_t *packet, size_t packet_length);
 
 #endif

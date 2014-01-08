@@ -25,6 +25,8 @@ SOFTWARE.
 
 #define FCS_AHRS_NUM_TRICAL_INSTANCES 4u
 
+#define FCS_STANDARD_PRESSURE 1013.25 /* mbar at sea level */
+
 enum fcs_mode_t {
     /* Placeholder */
     FCS_MODE_STARTUP_VALUE = 0,
@@ -124,6 +126,13 @@ struct fcs_ahrs_state_t {
     struct fcs_calibration_map_t calibration;
     TRICAL_instance_t trical_instances[FCS_AHRS_NUM_TRICAL_INSTANCES];
     double trical_update_attitude[4][FCS_AHRS_NUM_TRICAL_INSTANCES];
+
+    /*
+    Reference altitude and pressure for differential pressure altitude
+    calculation
+    */
+    double reference_alt; /* m above ellipsoid */
+    double reference_pressure; /* mbar */
 
     /* Sensor health */
     uint64_t last_accelerometer_time;

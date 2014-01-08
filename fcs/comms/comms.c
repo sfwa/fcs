@@ -205,7 +205,7 @@ void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
                 /* TODO */
                 break;
             case 'G':
-                /* TODO */
+                result = fcs_comms_deserialize_gcs(comms_buf, comms_buf_len);
                 break;
             case 'T':
                 /* TODO */

@@ -61,6 +61,8 @@ struct fcs_ahrs_state_t fcs_global_ahrs_state;
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
 
 static void _fcs_ahrs_update_wmm(void);
+static void _fcs_ahrs_pitot_calibration(void);
+static void _fcs_ahrs_barometer_calibration(void);
 static void _fcs_ahrs_magnetometer_calibration(void);
 static void _fcs_ahrs_accelerometer_calibration(void);
 static void _fcs_ahrs_reset_state(void);
@@ -84,15 +86,17 @@ void fcs_ahrs_init(void) {
 
     fcs_wmm_init();
 
-    /* TODO: don't reset attitude if any of the entries are non-zero */
-    vector_set_d(fcs_global_ahrs_state.attitude, 0, 4u);
-    fcs_global_ahrs_state.attitude[3] = 1.0;
-
     /* Reset/init the UKF */
     _fcs_ahrs_reset_state();
 
-    /* Calculate WMM field at current lat/lon/alt/time */
-    _fcs_ahrs_update_wmm();
+    /* TODO: don't reset position if any of the entries are non-zero */
+    fcs_global_ahrs_state.lat = -37.8136 * M_PI / 180.0;
+    fcs_global_ahrs_state.lon = 144.9631 * M_PI / 180.0;
+    fcs_global_ahrs_state.alt = 70.0;
+
+    /* TODO: don't reset attitude if any of the entries are non-zero */
+    vector_set_d(fcs_global_ahrs_state.attitude, 0, 4u);
+    fcs_global_ahrs_state.attitude[3] = 1.0;
 
     /* Set the UKF model */
     double default_process_noise[] = {
@@ -108,13 +112,20 @@ void fcs_ahrs_init(void) {
     vector_copy_d(
         fcs_global_ahrs_state.ukf_process_noise, default_process_noise, 24u);
 
-    fcs_global_ahrs_state.lat = -37.8136 * M_PI / 180.0;
-    fcs_global_ahrs_state.lon = 144.9631 * M_PI / 180.0;
-    fcs_global_ahrs_state.alt = 70.0;
-
     /* Initialize AHRS mode */
     fcs_global_ahrs_state.ukf_dynamics_model = UKF_MODEL_X8;
     fcs_ahrs_set_mode(FCS_MODE_INITIALIZING);
+
+    /*
+    Reset reference pressure and altitude. These are inconsistent in that the
+    standard reference pressure is defined at sea level, but 0.0 for reference
+    altitude refers to metres above the WGS84 ellipsoid.
+
+    The difference isn't really important in this case because we don't do
+    much with these values until we get a reading from the GCS.
+    */
+    fcs_global_ahrs_state.reference_pressure = FCS_STANDARD_PRESSURE;
+    fcs_global_ahrs_state.reference_alt = 0.0;
 
     /*
     Update the TRICAL instance parameters. Instances 0 and 1 are
@@ -143,10 +154,13 @@ void fcs_ahrs_tick(void) {
     _fcs_ahrs_magnetometer_calibration();
 
     /*
-    Run TRICAL on the current accelerometer results when in calibration mode
+    Run TRICAL on the current accelerometer results when in calibration mode,
+    and call the other sensor calibration handlers
     */
     if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
         _fcs_ahrs_accelerometer_calibration();
+        _fcs_ahrs_pitot_calibration();
+        _fcs_ahrs_barometer_calibration();
     }
 
     /*
@@ -230,7 +244,17 @@ void fcs_ahrs_tick(void) {
     got_values = fcs_measurement_log_get_calibrated_value(
         mlog, cmap, FCS_MEASUREMENT_TYPE_PRESSURE_TEMP, v, &err, NULL, 1.0);
     if (got_values) {
-        ukf_sensor_set_barometer_amsl(v[0]);
+        /*
+        Calculate pressure differential between measured pressure and GCS
+        pressure, then convert that to metres by dividing by 0.12.
+
+        Add the GCS altitude above the ellipsoid to the result, so the final
+        value we pass to the UKF is our altitude above ellipsoid referenced
+        to current GCS pressure.
+        */
+        double pressure_d = v[0] - fcs_global_ahrs_state.reference_pressure;
+        ukf_sensor_set_barometer_amsl(
+            pressure_d / 0.12f + fcs_global_ahrs_state.reference_alt);
         params.barometer_amsl_covariance = err * err;
 
         fcs_global_ahrs_state.last_barometer_time =
@@ -417,6 +441,83 @@ static void _fcs_ahrs_update_wmm(void) {
         (1G = 100 000nT). Convert the field norm to G.
         */
         fcs_global_ahrs_state.wmm_field_norm *= (1.0f / 100000.0f);
+    }
+}
+
+static void _fcs_ahrs_pitot_calibration(void) {
+    struct fcs_calibration_t *restrict sensor_calibration_map =
+        fcs_global_ahrs_state.calibration.sensor_calibration;
+    struct fcs_measurement_t measurement;
+
+    double pitot_value[4], scale_factor;
+    float *restrict params;
+    size_t i;
+
+    for (i = 0; i < 2u; i++) {
+        if (fcs_measurement_log_find(
+                &fcs_global_ahrs_state.measurements,
+                FCS_MEASUREMENT_TYPE_PITOT, i, &measurement)) {
+            /* Get the measurement value */
+            fcs_measurement_get_values(&measurement, pitot_value);
+
+            uint8_t sensor_key =
+                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
+                ((FCS_MEASUREMENT_TYPE_PITOT <<
+                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+
+            scale_factor =
+                sensor_calibration_map[sensor_key].scale_factor;
+            params = sensor_calibration_map[sensor_key].params;
+
+            /*
+            Update bias based on current sensor value, assuming the true
+            reading should be 0. This is just a weighted moving average, with
+            convergence taking a few seconds.
+            */
+            params[0] += 0.001 * (pitot_value[0] - params[0]);
+        }
+    }
+}
+
+static void _fcs_ahrs_barometer_calibration(void) {
+    struct fcs_calibration_t *restrict sensor_calibration_map =
+        fcs_global_ahrs_state.calibration.sensor_calibration;
+    struct fcs_measurement_t measurement;
+
+    double barometer_value[4], scale_factor;
+    float *restrict params;
+    size_t i;
+
+    for (i = 0; i < 2u; i++) {
+        if (fcs_measurement_log_find(
+                &fcs_global_ahrs_state.measurements,
+                FCS_MEASUREMENT_TYPE_PRESSURE_TEMP, i, &measurement)) {
+            /* Get the measurement value */
+            fcs_measurement_get_values(&measurement, barometer_value);
+
+            uint8_t sensor_key =
+                ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_ID_MASK) |
+                ((FCS_MEASUREMENT_TYPE_PITOT <<
+                  FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
+                 FCS_MEASUREMENT_SENSOR_TYPE_MASK);
+
+            scale_factor =
+                sensor_calibration_map[sensor_key].scale_factor;
+            params = sensor_calibration_map[sensor_key].params;
+
+            /*
+            Update bias based on current sensor value, assuming the true
+            reading should be the same as the current reference pressure.
+
+            (TODO: Take the height of the GCS above the ground into
+            consideration.)
+            */
+            params[0] += 0.001 * (fcs_global_ahrs_state.reference_pressure
+                                  - params[0]);
+        }
     }
 }
 
