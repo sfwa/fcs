@@ -50,6 +50,7 @@ ADD_EXECUTABLE(unittest
     ../util/util.c
     test_util.cpp
     ../comms/comms.c
+    ../comms/command.c
     ../comms/state.c
     ../comms/status.c
     test_comms.cpp
@@ -101,6 +102,7 @@ ADD_LIBRARY(fcs SHARED
     ../drivers/stream.c
     ../drivers/peripheral.c
     ../comms/comms.c
+    ../comms/command.c
     ../comms/state.c
     ../comms/status.c
     ../hardware/platform/cpuv1-ioboardv1.c
