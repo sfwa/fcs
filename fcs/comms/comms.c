@@ -209,14 +209,15 @@ void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
             case 'S':
                 /* TODO */
                 break;
-            case 'P':
-                /* TODO */
-                break;
             case 'G':
                 /* TODO */
                 break;
-            case 'L':
+            case 'T':
                 /* TODO */
+                break;
+            case 'C':
+                result = fcs_comms_deserialize_command(comms_buf,
+                                                       comms_buf_len);
                 break;
             default:
                 result = FCS_DESERIALIZATION_ERROR;

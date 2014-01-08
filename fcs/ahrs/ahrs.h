@@ -27,14 +27,14 @@ SOFTWARE.
 
 enum fcs_mode_t {
     /* Placeholder */
-    FCS_MODE_STARTUP_VALUE,
+    FCS_MODE_STARTUP_VALUE = 0,
     /*
     State: initializing (I)
     Previous states: none
     Entry condition: startup
     Control output: none
     */
-    FCS_MODE_INITIALIZING,
+    FCS_MODE_INITIALIZING = 'I',
     /*
     State: calibrating (C)
     Previous states: initializing, safe
@@ -42,7 +42,7 @@ enum fcs_mode_t {
         calibration command from GCS
     Control output: none
     */
-    FCS_MODE_CALIBRATING,
+    FCS_MODE_CALIBRATING = 'C',
     /*
     State: safe (S)
     Previous states: calibrating, armed, active
@@ -51,7 +51,7 @@ enum fcs_mode_t {
         safe command from GCS)
     Control output: none
     */
-    FCS_MODE_SAFE,
+    FCS_MODE_SAFE = 'S',
     /*
     State: armed (R)
     Previous states: safe
@@ -60,7 +60,7 @@ enum fcs_mode_t {
         recovery waypoint defined
     Control output: take-off, failsafe device arm asserted
     */
-    FCS_MODE_ARMED,
+    FCS_MODE_ARMED = 'R',
     /*
     State: active (A)
     Previous states: armed, holding
@@ -68,7 +68,7 @@ enum fcs_mode_t {
     Control output: from NMPC
     Waypoint mode: normal
     */
-    FCS_MODE_ACTIVE,
+    FCS_MODE_ACTIVE = 'A',
     /*
     State: holding (H)
     Previous states: active
@@ -76,7 +76,7 @@ enum fcs_mode_t {
     Control output: from NMPC
     Waypoint mode: hold at current position
     */
-    FCS_MODE_HOLDING,
+    FCS_MODE_HOLDING = 'H',
     /*
     State: abort (F)
     Previous states: armed, active, holding
@@ -85,9 +85,7 @@ enum fcs_mode_t {
         termination requested || sensor health != OK
     Control output: failsafe (all min), failsafe device abort asserted
     */
-    FCS_MODE_ABORT,
-    /* Sentinel */
-    FCS_MODE_INVALID
+    FCS_MODE_ABORT = 'F'
 };
 
 /*

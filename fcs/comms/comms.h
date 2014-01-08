@@ -64,24 +64,6 @@ State (FCS->CPU): $PSFWAS
    216 bytes total
 
 
-Waypoint information (CPU->FCS, FCS->CPU): $PSFWAP
-- packet time (ms) -- 9 chars
-- waypoint ID -- 4 chars
-- waypoint role ("H" for home, "R" for recovery, "M" for mission boundary,
-  "C" for course, "I" for image) -- 1 char
-- flags -- 3 chars (say)
-- target lat (up to 7dp) -- 12 chars
-- target lon (up to 7dp) -- 12 chars
-- target alt (above ellipsoid, up to 2dp) -- 7 chars
-- target attitude (yaw/pitch/roll, up to 1dp) -- 13 chars
-- target airspeed (m/s, up to 2dp) -- 7 chars
-- hold duration (min, up to 60 + 1dp) -- 4 chars
-- CRC32 -- 8 chars
-
-=> 77 bytes + 9 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   98 bytes total
-
-
 GCS information (CPU->FCS): $PSFWAG
 - packet time (ms) -- 9 chars
 - flags -- 4 chars
@@ -116,13 +98,13 @@ Status information (FCS->CPU): $PSFWAT
    2 bytes checksum + CRLF = 121 bytes total
 
 
-Mode packet (CPU->FCS, FCS->CPU): $PSFWAM
+Command packet (CPU->FCS, FCS->CPU): $PSFWAC
 - packet time (ms) -- 9 chars
-- mode -- up to 24 chars
+- command -- up to 192 chars
 - CRC32 -- 8 chars
 
-=> 41 bytes + 3 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   56 bytes
+=> 209 bytes + 3 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   224 bytes
 */
 
 /* Init functions for comms module */
@@ -140,29 +122,14 @@ enum fcs_deserialization_result_t {
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_ahrs_state_t *restrict state);
 
-/* Waypoint serialization/deserialization
-size_t fcs_comms_serialize_waypoint(uint8_t *restrict buf,
-const struct fcs_packet_waypoint_t *restrict waypoint);
-
-enum fcs_deserialization_result_t fcs_comms_deserialize_waypoint(
-struct fcs_packet_waypoint_t *restrict waypoint, uint8_t *restrict buf,
-size_t len);
-
-enum fcs_validation_result_t fcs_comms_validate_waypoint(
-const struct fcs_packet_waypoint_t *restrict waypoint);
-*/
-
 /* Status serialization */
 size_t fcs_comms_serialize_status(uint8_t *restrict buf,
 const struct fcs_ahrs_state_t *restrict state,
 const struct fcs_stats_counter_t *restrict counters,
 const struct fcs_peripheral_state_t *restrict peripheral_state);
 
-/* Config serialization and deserialization */
-enum fcs_deserialization_result_t fcs_comms_deserialize_config(
-const uint8_t *restrict packet, size_t packet_length);
-
-size_t fcs_comms_serialize_config(const uint8_t *restrict packet,
-const uint8_t *restrict config_key, size_t config_key_len);
+/* Command serialization and deserialization */
+enum fcs_deserialization_result_t fcs_comms_deserialize_command(
+const uint8_t *packet, size_t packet_length);
 
 #endif
