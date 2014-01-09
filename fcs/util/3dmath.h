@@ -29,19 +29,48 @@ SOFTWARE.
 #define W 3
 
 #define G_ACCEL 9.80665 /* m/s^2 */
-#define STANDARD_PRESSURE 1013.25 /* mbar at sea level */
-#define STANDARD_TEMP 15 /* deg C */
+#define STANDARD_PRESSURE 1013250 /* Pa at sea level */
+#define STANDARD_TEMP (273.15 + 15.0) /* K */
+#define STANDARD_C 340.27 /* speed of sound at STANDARD_TEMP and
+                             STANDARD_PRESSURE */
 
+/*
+Calculate a difference in altitude from differences in pressure at a given
+temperature (for standard pressure altitude, use STANDARD_TEMP).
+
+Should not be used for altitudes above 11km, as the standard temperature
+lapse rate varies with altitude.
+
+Nominally, both `pref` and `p` are Pa, but since it's a ratio it doesn't
+really matter.
+*/
 static inline double altitude_diff_from_pressure_diff(double pref, double p,
 double temp) {
-    /*
-    Calculate a difference in altitude from differences in pressure at a given
-    temperature (for standard pressure altitude, use STANDARD_TEMP).
-
-    Should not be used for altitudes above 11km, as the standard temperature
-    lapse rate varies with altitude.
-    */
     return (pow(pref / p, 1 / 5.257) - 1.0) * (temp + 273.15) / 0.0065;
+}
+
+/*
+Calculate the density of air at a given pressure (`p`, in Pa) and temperature
+(`temp`, in deg C).
+*/
+static inline double density_from_pressure_temp(double p, double temp) {
+    /* 287.058 is the gas constant for dry air, in J kg^-1 K^-1 */
+    return p / (287.058 * (temp + 273.15));
+}
+
+/*
+Calculate the airspeed corresponding to a given differential pitot pressure
+reading.
+
+`pstatic` is the static pressure in Pa (e.g. from the barometer), `pdynamic`
+is the dynamic/impact/differential pressure in Pa, and `temp` is the static
+temperature in deg C.
+*/
+static inline double airspeed_from_pressure_temp(double pstatic,
+double pdynamic, double temp) {
+    return STANDARD_C *
+           sqrt((5.0 / STANDARD_TEMP) *
+                (pow(pdynamic / pstatic + 1.0, 2.0 / 7.0) - 1.0));
 }
 
 #ifndef absval

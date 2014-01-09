@@ -527,31 +527,6 @@ double *out_error, double out_offset[3], double prescale) {
             temp_value[1] = c[0] * p[6] + c[1] * (p[7] + 1.0) + c[2] * p[8];
             temp_value[2] = c[0] * p[9] + c[1] * p[10] + c[2] * (p[11] + 1.0);
             break;
-        case FCS_CALIBRATION_BIAS_SCALE_PITOT:
-            /*
-            FIXME: this is really hacky, clean it up.
-
-            Convert pitot reading to kPa -- 0.2533 = 0 kPa, 0 = 2 kPa
-            From the datasheet, Vout = Vs * (0.2 * P + 0.5),
-            where Vs is 3.3V. At Vout = 1.65V (P = 0), the reading is
-            0.2533; at Vout = 3.3V, the reading is 0.
-            Vout = -6.514 * Rd + 3.3;
-            P = (Vout / Vs - 0.5) * 5
-            IAS = sqrt(2 * P / 1.225)
-            Thus:
-            IAS = sqrt(2 * (((-6.514 * Rd + 3.3) / 3.3 - 0.5) * 5) / 1.225)
-
-            p[0] is the 0-pressure reading (0.2533); p[1] is the ADC scale
-            factor (-6.514).
-            */
-            if (temp_value[0] >= p[0]) {
-                temp_value[0] = 0.0;
-            } else {
-                temp_value[0] = sqrt(
-                    2.0 * ((p[1] * temp_value[0] + 3.3) / 3.3 - 0.5) *
-                    5000 / 1.225
-                );
-            }
         default:
             /* Invalid calibration type */
             assert(false);

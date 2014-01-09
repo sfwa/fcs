@@ -68,12 +68,12 @@ GCS information (CPU->FCS): $PSFWAG
 - lat (up to 7dp) -- 12 chars
 - lon (up to 7dp) -- 12 chars
 - alt (m, up to 2dp) -- 7 chars
-- barometric pressure (mbar, up to 2dp) -- 7 chars
+- barometric pressure (Pa, 0dp) -- 6 chars
 - Piksi RTK data? -- ?? chars
 - CRC32 -- 8 chars
 
-=> 59 bytes + Piksi data + 8 separators + 7 bytes prefix + * +
-   2 bytes checksum + CRLF = 79 bytes total
+=> 58 bytes + Piksi data + 8 separators + 7 bytes prefix + * +
+   2 bytes checksum + CRLF = 78 bytes total
 
 
 Status information (FCS->CPU): $PSFWAT

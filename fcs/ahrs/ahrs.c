@@ -127,6 +127,11 @@ void fcs_ahrs_init(void) {
     fcs_global_ahrs_state.reference_pressure = STANDARD_PRESSURE;
     fcs_global_ahrs_state.reference_alt = 0.0;
 
+    /* Reset the vehicle aerodynamic environment state */
+    fcs_global_ahrs_state.aero_static_pressure = STANDARD_PRESSURE;
+    fcs_global_ahrs_state.aero_static_temp = STANDARD_TEMP;
+    fcs_global_ahrs_state.aero_dynamic_pressure = 0.0;
+
     /*
     Update the TRICAL instance parameters. Instances 0 and 1 are
     magnetometers; instances 2 and 3 are accelerometers.
@@ -234,11 +239,18 @@ void fcs_ahrs_tick(void) {
     got_values = fcs_measurement_log_get_calibrated_value(
         mlog, cmap, FCS_MEASUREMENT_TYPE_PITOT, v, &err, NULL, 1.0);
     if (got_values) {
-        ukf_sensor_set_pitot_tas(0.0 /* v[0] */);
+        double tas = airspeed_from_pressure_temp(
+            fcs_global_ahrs_state.aero_static_pressure, v[0],
+            fcs_global_ahrs_state.aero_static_temp);
+        ukf_sensor_set_pitot_tas(tas);
         params.pitot_covariance = err * err;
 
         fcs_global_ahrs_state.last_pitot_time =
             fcs_global_ahrs_state.solution_time;
+
+        /* Update the dynamic pressure -- simple moving average for now */
+        fcs_global_ahrs_state.aero_dynamic_pressure +=
+            0.5 * (v[0] - fcs_global_ahrs_state.aero_dynamic_pressure);
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(
@@ -253,13 +265,18 @@ void fcs_ahrs_tick(void) {
         to current GCS pressure.
         */
         double alt = altitude_diff_from_pressure_diff(
-            fcs_global_ahrs_state.reference_pressure, v[0], STANDARD_TEMP);
+            fcs_global_ahrs_state.reference_pressure, v[0],
+            fcs_global_ahrs_state.aero_static_temp);
         ukf_sensor_set_barometer_amsl(
             alt + fcs_global_ahrs_state.reference_alt);
         params.barometer_amsl_covariance = err * err;
 
         fcs_global_ahrs_state.last_barometer_time =
             fcs_global_ahrs_state.solution_time;
+
+        /* Update the static pressure -- moving average for now */
+        fcs_global_ahrs_state.aero_static_pressure +=
+            0.5 * (v[0] - fcs_global_ahrs_state.aero_static_pressure);
     }
 
     got_values = fcs_measurement_log_get_calibrated_value(

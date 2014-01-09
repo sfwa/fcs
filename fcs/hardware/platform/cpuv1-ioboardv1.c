@@ -265,7 +265,11 @@ void fcs_board_init_platform(void) {
         .sensor = FCS_MEASUREMENT_TYPE_PITOT,
         .type = FCS_CALIBRATION_BIAS_SCALE_1D,
         .error = 10.0f,
-        .params = { 0.2533f, -6.514f },
+        /*
+        Scale pitot output voltage from -2000.0 to 2000.0Pa, with 0.2533 being
+        1.65V (=0kPa)
+        */
+        .params = { 0.2533f, 4000.0f / 0.5066f },
         .scale_factor = 1.0f
     };
     struct fcs_calibration_t barometer_calibration = {
@@ -274,11 +278,11 @@ void fcs_board_init_platform(void) {
         .type = FCS_CALIBRATION_BIAS_SCALE_1D,
         .error = 2.0f,
         /*
-        1013.25 is a guess at the GCS pressure; 0.02 is the sensor scale
-        factor.
+        0.02 is the sensor scale factor for conversion to mbar; multiply by
+        100 for Pa.
         */
         .params = { 0.0, 1.0f },
-        .scale_factor = 0.02f * 65535.0f
+        .scale_factor = 0.02f * 65535.0f * 100.0
     };
 
     /*

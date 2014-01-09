@@ -130,7 +130,12 @@ struct fcs_ahrs_state_t {
     calculation
     */
     double reference_alt; /* m above ellipsoid */
-    double reference_pressure; /* mbar */
+    double reference_pressure; /* Pa */
+
+    /* Aerodynamic properties used for altitude and airspeed conversions */
+    double aero_static_pressure;
+    double aero_static_temp;
+    double aero_dynamic_pressure;
 
     /* Sensor health */
     uint64_t last_accelerometer_time;
