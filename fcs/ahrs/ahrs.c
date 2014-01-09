@@ -86,9 +86,6 @@ void fcs_ahrs_init(void) {
 
     fcs_wmm_init();
 
-    /* Reset/init the UKF */
-    _fcs_ahrs_reset_state();
-
     /* TODO: don't reset position if any of the entries are non-zero */
     fcs_global_ahrs_state.lat = -37.8136 * M_PI / 180.0;
     fcs_global_ahrs_state.lon = 144.9631 * M_PI / 180.0;
@@ -97,6 +94,9 @@ void fcs_ahrs_init(void) {
     /* TODO: don't reset attitude if any of the entries are non-zero */
     vector_set_d(fcs_global_ahrs_state.attitude, 0, 4u);
     fcs_global_ahrs_state.attitude[3] = 1.0;
+
+    /* Reset/init the UKF */
+    _fcs_ahrs_reset_state();
 
     /* Set the UKF model */
     double default_process_noise[] = {
@@ -124,7 +124,7 @@ void fcs_ahrs_init(void) {
     The difference isn't really important in this case because we don't do
     much with these values until we get a reading from the GCS.
     */
-    fcs_global_ahrs_state.reference_pressure = FCS_STANDARD_PRESSURE;
+    fcs_global_ahrs_state.reference_pressure = STANDARD_PRESSURE;
     fcs_global_ahrs_state.reference_alt = 0.0;
 
     /*
@@ -252,9 +252,10 @@ void fcs_ahrs_tick(void) {
         value we pass to the UKF is our altitude above ellipsoid referenced
         to current GCS pressure.
         */
-        double pressure_d = v[0] - fcs_global_ahrs_state.reference_pressure;
+        double alt = altitude_diff_from_pressure_diff(
+            fcs_global_ahrs_state.reference_pressure, v[0], STANDARD_TEMP);
         ukf_sensor_set_barometer_amsl(
-            pressure_d / 0.12f + fcs_global_ahrs_state.reference_alt);
+            alt + fcs_global_ahrs_state.reference_alt);
         params.barometer_amsl_covariance = err * err;
 
         fcs_global_ahrs_state.last_barometer_time =
@@ -356,6 +357,12 @@ void fcs_ahrs_tick(void) {
                 fcs_global_ahrs_state.mode_start_time > 30000) {
             fcs_ahrs_set_mode(FCS_MODE_SAFE);
         }
+    } else if (fcs_global_ahrs_state.mode == FCS_MODE_ARMED) {
+        /* Transition to active once speed exceeds 5m/s */
+        double speed = vector3_norm_d(fcs_global_ahrs_state.velocity);
+        if (speed > 5.0) {
+            fcs_ahrs_set_mode(FCS_MODE_ACTIVE);
+        }
     }
 }
 
@@ -372,17 +379,27 @@ static void _fcs_ahrs_reset_state(void) {
     /*
     Copy the last position and attitude; if gyro bias is sane, copy that too
     */
-    vector_copy_d(reset_state.position, &fcs_global_ahrs_state.lat, 3u);
+    if (!isnan(fcs_global_ahrs_state.lat) &&
+            !isnan(fcs_global_ahrs_state.lon) &&
+            !isnan(fcs_global_ahrs_state.alt)) {
+        vector_copy_d(reset_state.position, &fcs_global_ahrs_state.lat, 3u);
+    }
+
+    if (!isnan(fcs_global_ahrs_state.attitude[0]) &&
+            !isnan(fcs_global_ahrs_state.attitude[1]) &&
+            !isnan(fcs_global_ahrs_state.attitude[2]) &&
+            !isnan(fcs_global_ahrs_state.attitude[3])) {
+        vector_copy_d(
+            reset_state.attitude, fcs_global_ahrs_state.attitude, 4u);
+    }
 
     #pragma MUST_ITERATE(3, 3);
     for (i = 0; i < 3u; i++) {
-        reset_state.attitude[i] = fcs_global_ahrs_state.attitude[i];
-
-        if (fabs(fcs_global_ahrs_state.gyro_bias[i]) < M_PI / 10.0) {
+        if (!isnan(fcs_global_ahrs_state.gyro_bias[i]) &&
+                fabs(fcs_global_ahrs_state.gyro_bias[i]) < M_PI / 10.0) {
             reset_state.gyro_bias[i] = fcs_global_ahrs_state.gyro_bias[i];
         }
     }
-    reset_state.attitude[3] = fcs_global_ahrs_state.attitude[3];
 
     ukf_init();
     ukf_set_state(&reset_state);
@@ -511,10 +528,13 @@ static void _fcs_ahrs_barometer_calibration(void) {
 
             /*
             Update bias based on current sensor value, assuming the true
-            reading should be the same as the current reference pressure.
+            reading should be the same as the current reference pressure
+            (valid since we're looking for height above our starting
+            position).
 
-            (TODO: Take the height of the GCS above the ground into
-            consideration.)
+            The GCS sensor will generally be elevated by a metre or two, but
+            this code will simply treat that as a sensor bias and compensate
+            automatically.
             */
             params[0] += 0.001 * ((barometer_value[0] * scale_factor)
                                   - fcs_global_ahrs_state.reference_pressure

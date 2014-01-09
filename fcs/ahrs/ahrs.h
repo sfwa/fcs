@@ -25,8 +25,6 @@ SOFTWARE.
 
 #define FCS_AHRS_NUM_TRICAL_INSTANCES 4u
 
-#define FCS_STANDARD_PRESSURE 1013.25 /* mbar at sea level */
-
 enum fcs_mode_t {
     /* Placeholder */
     FCS_MODE_STARTUP_VALUE = 0,

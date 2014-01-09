@@ -28,7 +28,21 @@ SOFTWARE.
 #define Z 2
 #define W 3
 
-#define G_ACCEL 9.80665
+#define G_ACCEL 9.80665 /* m/s^2 */
+#define STANDARD_PRESSURE 1013.25 /* mbar at sea level */
+#define STANDARD_TEMP 15 /* deg C */
+
+static inline double altitude_diff_from_pressure_diff(double pref, double p,
+double temp) {
+    /*
+    Calculate a difference in altitude from differences in pressure at a given
+    temperature (for standard pressure altitude, use STANDARD_TEMP).
+
+    Should not be used for altitudes above 11km, as the standard temperature
+    lapse rate varies with altitude.
+    */
+    return (pow(pref / p, 1 / 5.257) - 1.0) * (temp + 273.15) / 0.0065;
+}
 
 #ifndef absval
 #define absval(x) ((x) < 0 ? -x : x)

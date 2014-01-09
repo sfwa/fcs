@@ -277,7 +277,7 @@ void fcs_board_init_platform(void) {
         1013.25 is a guess at the GCS pressure; 0.02 is the sensor scale
         factor.
         */
-        .params = { FCS_STANDARD_PRESSURE, 1.0f },
+        .params = { 0.0, 1.0f },
         .scale_factor = 0.02f * 65535.0f
     };
 
