@@ -199,7 +199,23 @@ void fcs_ahrs_tick(void) {
         /* Accelerometer output is in g, convert to m/s^2 */
         ukf_sensor_set_accelerometer(v[0] * G_ACCEL, v[1] * G_ACCEL,
                                      v[2] * G_ACCEL);
-        vector_set_d(params.accel_covariance, err * err, 3);
+
+        /*
+        Add a relative error term to the covariance to account for scale
+        factor error when the accelerometer reading differs from the bias
+        calibration point (0, 0, -1).
+
+        This isn't the right way to do it as the UKF assumes zero-mean error,
+        but in practice it's OK.
+        */
+        params.accel_covariance[0] = err + absval(v[0]) * G_ACCEL * 0.1;
+        params.accel_covariance[0] *= params.accel_covariance[0];
+
+        params.accel_covariance[1] = err + absval(v[1]) * G_ACCEL * 0.1;
+        params.accel_covariance[1] *= params.accel_covariance[1];
+
+        params.accel_covariance[2] = err + absval(v[2] + 1.0) * G_ACCEL * 0.1;
+        params.accel_covariance[2] *= params.accel_covariance[2];
 
         fcs_global_ahrs_state.last_accelerometer_time =
             fcs_global_ahrs_state.solution_time;
@@ -209,7 +225,19 @@ void fcs_ahrs_tick(void) {
         mlog, cmap, FCS_MEASUREMENT_TYPE_GYROSCOPE, v, &err, NULL, 1.0);
     if (got_values) {
         ukf_sensor_set_gyroscope(v[0], v[1], v[2]);
-        vector_set_d(params.gyro_covariance, err * err, 3);
+
+        /*
+        Add a relative error term, as above. Remove this if gyro scale factor
+        error is included in the process model.
+        */
+        params.gyro_covariance[0] = err + absval(v[0]) * 0.03;
+        params.gyro_covariance[0] *= params.gyro_covariance[0];
+
+        params.gyro_covariance[1] = err + absval(v[1]) * 0.03;
+        params.gyro_covariance[1] *= params.gyro_covariance[1];
+
+        params.gyro_covariance[2] = err + absval(v[2]) * 0.03;
+        params.gyro_covariance[2] *= params.gyro_covariance[2];
 
         fcs_global_ahrs_state.last_gyroscope_time =
             fcs_global_ahrs_state.solution_time;
@@ -243,6 +271,9 @@ void fcs_ahrs_tick(void) {
             fcs_global_ahrs_state.aero_static_pressure, v[0],
             fcs_global_ahrs_state.aero_static_temp);
         ukf_sensor_set_pitot_tas(tas);
+
+        /* Allow for 10% scale factor error */
+        err += absval(v[0]) * 0.1;
         params.pitot_covariance = err * err;
 
         fcs_global_ahrs_state.last_pitot_time =
@@ -269,6 +300,9 @@ void fcs_ahrs_tick(void) {
             fcs_global_ahrs_state.aero_static_temp);
         ukf_sensor_set_barometer_amsl(
             alt + fcs_global_ahrs_state.reference_alt);
+
+        /* Allow for 3% scale factor error in altitude */
+        err += absval(alt) * 0.03;
         params.barometer_amsl_covariance = err * err;
 
         fcs_global_ahrs_state.last_barometer_time =
@@ -535,7 +569,7 @@ static void _fcs_ahrs_barometer_calibration(void) {
             uint8_t sensor_key =
                 ((i << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
                  FCS_MEASUREMENT_SENSOR_ID_MASK) |
-                ((FCS_MEASUREMENT_TYPE_PITOT <<
+                ((FCS_MEASUREMENT_TYPE_PRESSURE_TEMP <<
                   FCS_MEASUREMENT_SENSOR_TYPE_OFFSET) &
                  FCS_MEASUREMENT_SENSOR_TYPE_MASK);
 

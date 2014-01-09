@@ -264,7 +264,7 @@ void fcs_board_init_platform(void) {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_PITOT,
         .type = FCS_CALIBRATION_BIAS_SCALE_1D,
-        .error = 10.0f,
+        .error = 3.0f,
         /*
         Scale pitot output voltage from -2000.0 to 2000.0Pa, with 0.2533 being
         1.65V (=0kPa)
@@ -276,7 +276,7 @@ void fcs_board_init_platform(void) {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_PRESSURE_TEMP,
         .type = FCS_CALIBRATION_BIAS_SCALE_1D,
-        .error = 2.0f,
+        .error = 1.0f,
         /*
         0.02 is the sensor scale factor for conversion to mbar; multiply by
         100 for Pa.
@@ -492,7 +492,7 @@ struct fcs_measurement_log_t *out_measurements) {
                                    FCS_MEASUREMENT_TYPE_PITOT);
 
         measurement.data.i16[0] = swap_int16(packet.pitot);
-        fcs_measurement_log_add(out_measurements, &measurement);
+        /* fcs_measurement_log_add(out_measurements, &measurement); */
 
         /* Update current/voltage */
         fcs_measurement_set_header(&measurement, 16u, 2u);
@@ -501,7 +501,9 @@ struct fcs_measurement_log_t *out_measurements) {
 
         measurement.data.i16[0] = swap_int16(packet.i);
         measurement.data.i16[1] = swap_int16(packet.v);
+        /* FIXME: disabled for testing */
         fcs_measurement_log_add(out_measurements, &measurement);
+
 
         /* Update ultransonic rangefinder */
         fcs_measurement_set_header(&measurement, 16u, 1u);
@@ -561,6 +563,13 @@ struct fcs_measurement_log_t *out_measurements) {
         measurement.data.i16[0] = 0;
         measurement.data.i16[1] = 0;
         measurement.data.i16[2] = 0;
+        fcs_measurement_log_add(out_measurements, &measurement);
+
+        fcs_measurement_set_header(&measurement, 16u, 1u);
+        fcs_measurement_set_sensor(&measurement, board_id,
+                                   FCS_MEASUREMENT_TYPE_PITOT);
+
+        measurement.data.i16[0] = 8300;
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 
