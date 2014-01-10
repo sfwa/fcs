@@ -190,11 +190,14 @@ void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
                 (float)packet.noise / 1.9f - 127.0f;
 
             /*
-            FIXME: is errors a delta, or a count wrapping to 16-bit?
+            FIXME:
+            These are counts wrapped to 16 bits; we should really look for the
+            change between this packet and last packet, and increment our
+            counts accordingly.
             */
-            fcs_global_peripheral_state.telemetry_errors +=
+            fcs_global_peripheral_state.telemetry_errors =
                 swap_uint16(packet.rx_errors);
-            fcs_global_peripheral_state.telemetry_errors_corrected +=
+            fcs_global_peripheral_state.telemetry_errors_corrected =
                 swap_uint16(packet.rx_errors_fixed);
         }
     } else if (comms_buf_len && comms_buf[0] == '$') {

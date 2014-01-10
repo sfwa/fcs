@@ -113,29 +113,9 @@ const struct fcs_peripheral_state_t *restrict peripheral_state) {
         9u);
     buf[index++] = ',';
 
-    /*
-    Work out the maximum number of SVs tracked by any of the GPS units
-    connected
-    */
-    uint8_t gps_num_svs = 0;
-    struct fcs_measurement_t gps_info_measurement;
-    double value[4];
-    bool result;
-
-    for (i = 0; i < 4u; i++) {
-        result = fcs_measurement_log_find(
-            &state->measurements, FCS_MEASUREMENT_TYPE_GPS_INFO, i,
-            &gps_info_measurement);
-        if (result) {
-            fcs_measurement_get_values(&gps_info_measurement, value);
-            if (0.0 <= value[0] && value[0] < 16.0) {
-                gps_num_svs = max(gps_num_svs, (uint8_t)value[0]);
-            }
-        }
-    }
-    assert(gps_num_svs <= 0xFu);
-
-    index += fcs_ascii_from_int32(&buf[index], (int32_t)gps_num_svs, 2u);
+    index += fcs_ascii_from_int32(
+        &buf[index],
+        (int32_t)max(state->gps_num_svs[0], state->gps_num_svs[1]), 2u);
     buf[index++] = ',';
 
     /* Output the telemetry status */

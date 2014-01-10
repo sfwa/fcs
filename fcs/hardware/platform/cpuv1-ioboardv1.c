@@ -492,7 +492,7 @@ struct fcs_measurement_log_t *out_measurements) {
                                    FCS_MEASUREMENT_TYPE_PITOT);
 
         measurement.data.i16[0] = swap_int16(packet.pitot);
-        /* fcs_measurement_log_add(out_measurements, &measurement); */
+        fcs_measurement_log_add(out_measurements, &measurement);
 
         /* Update current/voltage */
         fcs_measurement_set_header(&measurement, 16u, 2u);
@@ -501,7 +501,6 @@ struct fcs_measurement_log_t *out_measurements) {
 
         measurement.data.i16[0] = swap_int16(packet.i);
         measurement.data.i16[1] = swap_int16(packet.v);
-        /* FIXME: disabled for testing */
         fcs_measurement_log_add(out_measurements, &measurement);
 
 
@@ -545,35 +544,21 @@ struct fcs_measurement_log_t *out_measurements) {
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 
-    /* FIXME: TESTING */
-    if (true) {
-        fcs_measurement_set_header(&measurement, 32u, 3u);
+    if (packet.sensor_update_flags & UPDATED_GPS_INFO) {
+        /*
+        1-bit precision to prevent normalization -- the values actually occupy
+        8 bits
+        */
+        fcs_measurement_set_header(&measurement, 1u, 3u);
         fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_GPS_POSITION);
+                                   FCS_MEASUREMENT_TYPE_GPS_INFO);
 
-        measurement.data.i32[0] = -378136000;
-        measurement.data.i32[1] = 1449631000;
-        measurement.data.i32[2] = 60000;
-        fcs_measurement_log_add(out_measurements, &measurement);
-
-        fcs_measurement_set_header(&measurement, 16u, 3u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_GPS_VELOCITY);
-
-        measurement.data.i16[0] = 0;
-        measurement.data.i16[1] = 0;
-        measurement.data.i16[2] = 0;
-        fcs_measurement_log_add(out_measurements, &measurement);
-
-        fcs_measurement_set_header(&measurement, 16u, 1u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_PITOT);
-
-        measurement.data.i16[0] = 8300;
-        fcs_measurement_log_add(out_measurements, &measurement);
+        measurement.data.u8[0] =
+            packet.gps_info.fix_mode_num_satellites >> 4u;
+        measurement.data.u8[1] =
+            packet.gps_info.fix_mode_num_satellites & 0xFu;
+        measurement.data.u8[2] = packet.gps_info.pos_err;
     }
-
-    /* TODO: Log GPS info updates */
 
     fcs_global_counters.ioboard_packet_rx[dev]++;
     return true;

@@ -73,7 +73,7 @@ Data:
 - current/voltage: 2x int16 (i, v)
 - gps position: 3x int32 (lat, lon, alt)
 - gps velocity: 3x int16 (n, e, d)
-- gps info: 2x int8 (7:4 fix mode, 3:0 num SVs, dop)
+- gps info: 3x uint8 (fix mode, num SVs, dop)
 - message: text
 - control position: 4x int16 (0, 1, 2, 3)
 - radio: 4x int8 (RSSI, noise, # packets rx, # errors rx)

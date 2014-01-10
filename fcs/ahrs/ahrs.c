@@ -332,6 +332,27 @@ void fcs_ahrs_tick(void) {
         params.gps_velocity_covariance[2] = 49.0;
     }
 
+    /*
+    Update GPS info parameters -- store the number of SVs tracked by connected
+    units, and the PDOP for each unit
+    */
+    struct fcs_measurement_t gps_info_measurement;
+    bool result;
+    uint8_t i;
+
+    for (i = 0; i < 2u; i++) {
+        result = fcs_measurement_log_find(mlog, FCS_MEASUREMENT_TYPE_GPS_INFO, i,
+            &gps_info_measurement);
+        if (result) {
+            fcs_measurement_get_values(&gps_info_measurement, v);
+            if (0.0 <= v[1] && v[1] < 16.0) {
+                fcs_global_ahrs_state.gps_num_svs[i] = (uint32_t)v[1];
+            }
+            /* PDOP is in metres */
+            fcs_global_ahrs_state.gps_pdop[i] = v[2];
+        }
+    }
+
     /* TODO: Read control set values from NMPC */
     double control_set[4] = { 0.0, 0.0, 0.0, 0.0 };
 
@@ -340,7 +361,6 @@ void fcs_ahrs_tick(void) {
     control response time configured in control_rates. Log the result.
     */
     struct fcs_measurement_t control_log;
-    uint8_t i;
 
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
@@ -745,6 +765,10 @@ static void _fcs_ahrs_accelerometer_calibration(void) {
             */
             if (instance->state[0] == 0.0 || instance->state[1] == 0.0 ||
                     instance->state[2] == 0.0) {
+                /*
+                TODO: average this out over a few ticks to avoid sensitivity
+                to noise on startup
+                */
                 vector_copy_f(instance->state, accel_value_f, 3u);
                 instance->state[2] += 1.0f;
             }

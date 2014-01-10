@@ -24,6 +24,7 @@ SOFTWARE.
 #define _FCS_AHRS_H
 
 #define FCS_AHRS_NUM_TRICAL_INSTANCES 4u
+#define FCS_AHRS_NUM_GPS 2u
 
 enum fcs_mode_t {
     /* Placeholder */
@@ -145,9 +146,12 @@ struct fcs_ahrs_state_t {
     uint64_t last_pitot_time;
     uint64_t last_gps_time;
 
+    uint32_t gps_num_svs[FCS_AHRS_NUM_GPS];
+    double gps_pdop[FCS_AHRS_NUM_GPS];
+
     /* Mode */
-    enum fcs_mode_t mode;
     uint64_t mode_start_time;
+    enum fcs_mode_t mode;
 };
 
 void fcs_ahrs_init(void);
