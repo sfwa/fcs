@@ -545,11 +545,7 @@ struct fcs_measurement_log_t *out_measurements) {
     }
 
     if (packet.sensor_update_flags & UPDATED_GPS_INFO) {
-        /*
-        1-bit precision to prevent normalization -- the values actually occupy
-        8 bits
-        */
-        fcs_measurement_set_header(&measurement, 1u, 3u);
+        fcs_measurement_set_header(&measurement, 8u, 3u);
         fcs_measurement_set_sensor(&measurement, board_id,
                                    FCS_MEASUREMENT_TYPE_GPS_INFO);
 
@@ -558,6 +554,7 @@ struct fcs_measurement_log_t *out_measurements) {
         measurement.data.u8[1] =
             packet.gps_info.fix_mode_num_satellites & 0xFu;
         measurement.data.u8[2] = packet.gps_info.pos_err;
+        fcs_measurement_log_add(out_measurements, &measurement);
     }
 
     fcs_global_counters.ioboard_packet_rx[dev]++;
