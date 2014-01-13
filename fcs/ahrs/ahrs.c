@@ -344,12 +344,10 @@ void fcs_ahrs_tick(void) {
         result = fcs_measurement_log_find(mlog, FCS_MEASUREMENT_TYPE_GPS_INFO, i,
             &gps_info_measurement);
         if (result) {
-            fcs_measurement_get_values(&gps_info_measurement, v);
-            if (0.0 <= v[1] && v[1] < 16.0) {
-                fcs_global_ahrs_state.gps_num_svs[i] = (uint32_t)v[1];
-            }
+            fcs_global_ahrs_state.gps_num_svs[i] =
+                gps_info_measurement.data.u8[1];
             /* PDOP is in metres */
-            fcs_global_ahrs_state.gps_pdop[i] = v[2];
+            fcs_global_ahrs_state.gps_pdop[i] = gps_info_measurement.data.u8[2];
         }
     }
 
@@ -408,6 +406,13 @@ void fcs_ahrs_tick(void) {
     }
 
     if (ukf_valid) {
+        if (fcs_global_ahrs_state.mode != FCS_MODE_ACTIVE) {
+            state_values[19] = 0.0;
+            state_values[20] = 0.0;
+            state_values[21] = 0.0;
+            ukf_set_state((struct ukf_state_t*)state_values);
+        }
+
         /* Update the global state structure */
         _fcs_ahrs_update_global_state(state_values, covariance);
     } else {
