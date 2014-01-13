@@ -44,9 +44,9 @@ SOFTWARE.
 #define UART0_STATUS_OFFSET 12u
 
 #define UART1_RATE 57600u
-#define UART1_STATE_INTERVAL 1000u
-#define UART1_STATUS_INTERVAL 1000u
-#define UART1_STATUS_OFFSET 500u
+#define UART1_STATE_INTERVAL 500u
+#define UART1_STATUS_INTERVAL 500u
+#define UART1_STATUS_OFFSET 250u
 
 struct fcs_rfd900_status_packet_t {
     uint8_t type; /* always 0x11 */
