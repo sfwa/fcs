@@ -29,7 +29,7 @@ SOFTWARE.
 #define W 3
 
 #define G_ACCEL 9.80665 /* m/s^2 */
-#define STANDARD_PRESSURE 1013250 /* Pa at sea level */
+#define STANDARD_PRESSURE 101325 /* Pa at sea level */
 #define STANDARD_TEMP (273.15 + 15.0) /* K */
 #define STANDARD_C 340.27 /* speed of sound at STANDARD_TEMP and
                              STANDARD_PRESSURE */
