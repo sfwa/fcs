@@ -253,9 +253,6 @@ def init(dll_path):
                                                      c_ulong]
     _fcs._fcs_stream_read_from_tx_buffer.restype = c_ulong
 
-    _fcs.fcs_stream_bytes_available.argtypes = [c_ubyte]
-    _fcs.fcs_stream_bytes_available.restype = c_ulong
-
     # From hardware/platform/cpuv1-ioboardv1.c
     _fcs.fcs_board_init_platform.argtypes = []
     _fcs.fcs_board_init_platform.restype = None

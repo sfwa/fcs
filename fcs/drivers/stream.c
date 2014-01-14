@@ -227,34 +227,42 @@ enum fcs_stream_device_t dev) {
 }
 
 /*
-fcs_stream_bytes_available - returns the number of bytes available to read in
-"dev". This count won't necessarily be accurate for long since the bytes are
-transferred via DMA.
+fcs_stream_read - copy up to nbytes characters to the output buffer.
+Does not consume the characters copied, so they will be returned by future
+reads unless fcs_stream_consume is called.
+
+Returns the number of bytes copied, in the range [0, nbytes].
 */
-uint32_t fcs_stream_bytes_available(enum fcs_stream_device_t dev) {
+size_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
+size_t nbytes) {
     assert(FCS_STREAM_BUFFER_SIZE == 256u); /* & 0xFF is faster than % 256 */
     assert(dev < FCS_STREAM_NUM_DEVICES);
+    assert(nbytes < 256u);
+    assert(buf);
 
     /* Reset the stream and abort if there's an overrun */
     if (_fcs_stream_check_overrun(dev)) {
         return 0;
     }
 
-    return rx_write_idx[dev] - rx_read_idx[dev];
+    size_t i, read_idx = rx_read_idx[dev];
+    for (i = 0; i < nbytes && ((read_idx - rx_write_idx[dev]) & 0xFFu);
+            read_idx++, i++) {
+        buf[i] = rx_buffers[dev][read_idx & 0xFFu];
+    }
+
+    return i;
 }
 
 /*
-fcs_stream_read - reads up to "nbytes" from the device's input buffer into
-"buf".
+fcs_stream_consume - discard up to nbytes characters from the input buffer.
 
-Returns the number of bytes actually read, in the range [0, nbytes].
+Returns the number of bytes discarded, in the range [0, nbytes].
 */
-uint32_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
-uint32_t nbytes) {
+size_t fcs_stream_consume(enum fcs_stream_device_t dev, size_t nbytes) {
     assert(FCS_STREAM_BUFFER_SIZE == 256u); /* & 0xFF is faster than % 256 */
     assert(dev < FCS_STREAM_NUM_DEVICES);
-    assert(nbytes && nbytes < 256u);
-    assert(buf);
+    assert(nbytes < 256u);
 
     /* Reset the stream and abort if there's an overrun */
     if (_fcs_stream_check_overrun(dev)) {
@@ -262,114 +270,12 @@ uint32_t nbytes) {
     }
 
     size_t i;
-    for (i = 0; i < nbytes &&
-            ((rx_read_idx[dev] - rx_write_idx[dev]) & 0xFFu);
-            rx_read_idx[dev]++, i++) {
-        buf[i] = rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
-    }
+    for (i = 0; i < nbytes && ((rx_read_idx[dev] - rx_write_idx[dev]) & 0xFFu);
+            rx_read_idx[dev]++, i++);
 
     fcs_global_counters.stream_rx_byte[dev] += i;
 
     return i;
-}
-
-/*
-fcs_stream_skip_until_after - discard bytes from the device's input buffer
-until (and including) the first occurrence of "ch".
-
-If "ch" is not present in the input buffer, the discarded bytes are restored.
-
-Returns the number of bytes skipped, in the range [0, nbytes].
-*/
-uint32_t fcs_stream_skip_until_after(enum fcs_stream_device_t dev,
-uint8_t ch) {
-    assert(dev < FCS_STREAM_NUM_DEVICES);
-
-    /* Reset the stream and abort if there's an overrun */
-    if (_fcs_stream_check_overrun(dev)) {
-        return 0;
-    }
-
-    uint8_t cur_ch;
-    size_t i, initial_read_idx = rx_read_idx[dev];
-    for (i = 0; (rx_read_idx[dev] - rx_write_idx[dev]) & 0xFFu;
-            rx_read_idx[dev]++, i++) {
-        cur_ch = rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
-        if (cur_ch == ch) {
-            /* Increment these because we want to read until after "ch" */
-            rx_read_idx[dev]++;
-            i++;
-            fcs_global_counters.stream_rx_byte[dev] += i;
-            return i;
-        }
-    }
-
-    /* Character not found -- restore the initial read index */
-    rx_read_idx[dev] = initial_read_idx;
-
-    return 0;
-}
-
-/*
-fcs_stream_read_until_after - reads up to "nbytes" bytes from the device's
-input buffer up to (and including) the first occurrence of "ch".
-
-If "ch" is not present in the input buffer, the discarded bytes are restored,
-and no bytes are read.
-
-Returns the number of bytes read, in the range [0, nbytes].
-*/
-uint32_t fcs_stream_read_until_after(enum fcs_stream_device_t dev,
-uint8_t ch, uint8_t *restrict buf, uint32_t nbytes) {
-    assert(dev < FCS_STREAM_NUM_DEVICES);
-    assert(nbytes);
-    assert(buf);
-
-    /* Reset the stream and abort if there's an overrun */
-    if (_fcs_stream_check_overrun(dev)) {
-        return 0;
-    }
-
-    uint8_t cur_ch;
-    size_t i, initial_read_idx = rx_read_idx[dev];
-    for (i = 0; i < nbytes &&
-            ((rx_read_idx[dev] - rx_write_idx[dev]) & 0xFFu);
-            rx_read_idx[dev]++, i++) {
-        cur_ch = rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
-        buf[i] = cur_ch;
-
-        if (cur_ch == ch) {
-            /* Increment these because we want to read until after "ch" */
-            rx_read_idx[dev]++;
-            i++;
-            fcs_global_counters.stream_rx_byte[dev] += i;
-            return i;
-        }
-    }
-
-    /* Character not found -- restore the initial read index */
-    rx_read_idx[dev] = initial_read_idx;
-
-    return 0;
-}
-
-/*
-fcs_stream_peek - return the next character in the stream, or -1 if none. Does
-not consume the character, so it will be returned by future peeks/reads.
-*/
-int16_t fcs_stream_peek(enum fcs_stream_device_t dev) {
-    assert(dev < FCS_STREAM_NUM_DEVICES);
-
-    /* Reset the stream and abort if there's an overrun */
-    if (_fcs_stream_check_overrun(dev)) {
-        return -1;
-    }
-
-    if (rx_read_idx[dev] != rx_write_idx[dev]) {
-        return rx_buffers[dev][rx_read_idx[dev] & 0xFFu];
-    } else {
-        return -1;
-    }
 }
 
 /*
@@ -382,8 +288,8 @@ the device, the return value will always be equal to "nbytes".
 
 TODO: support write buffering
 */
-uint32_t fcs_stream_write(enum fcs_stream_device_t dev,
-const uint8_t *restrict buf, uint32_t nbytes) {
+size_t fcs_stream_write(enum fcs_stream_device_t dev,
+const uint8_t *restrict buf, size_t nbytes) {
     assert(dev < FCS_STREAM_NUM_DEVICES);
     assert(nbytes && nbytes < 256u);
     assert(buf);

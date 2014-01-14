@@ -59,7 +59,7 @@ struct fcs_rfd900_status_packet_t {
     uint8_t remote_noise;
     uint16_t rx_errors;
     uint16_t rx_errors_fixed;
-};
+} __attribute__ ((packed));
 
 void _fcs_comms_parse_packets(enum fcs_stream_device_t dev);
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
@@ -107,10 +107,10 @@ void fcs_comms_tick(void) {
         /* Ignore a buffer full result */
     }
 
-    /* Generate a status packet */
+    /* Generate a status packet, resetting event counts every second */
     comms_buf_len = fcs_comms_serialize_status(
         comms_buf, &fcs_global_ahrs_state, &fcs_global_counters,
-        &fcs_global_peripheral_state);
+        &fcs_global_peripheral_state, tick % 1000u == 0 ? true : false);
     assert(comms_buf_len && comms_buf_len < 256u);
 
     /*
@@ -239,57 +239,99 @@ any message parsing at this level.
 The complication is that the RFD900 can inject NUL-terminated packets
 containing link status information. That means we need to check for $ and \n
 as well as NUL and NUL.
+
+`buf` must be at least 256 characters long.
 */
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
     assert(buf);
 
-    uint8_t ch;
-    uint32_t nbytes;
+    size_t nbytes, i, packet_start = 0, packet_end = 0;
+    enum {
+        UNKNOWN,
+        GOT_ZERO,
+        IN_RFD900_PACKET,
+        ENDED_RFD900_PACKET,
+        GOT_DOLLARS,
+        IN_CPU_PACKET,
+        ENDED_CPU_PACKET
+    } state = UNKNOWN;
+    bool result = false;
 
-    nbytes = fcs_stream_bytes_available(dev);
-
-    /*
-    If the initial byte is not $ or NUL, we haven't synchronised with the
-    start of a message -- try to do that now by finding the first of \n (which
-    should be the end of \r\n), or a NUL (which would be the end of an RFD900
-    status packet).
-    */
-    ch = fcs_stream_peek(dev);
-    while ((ch != '$' && ch != 0) && nbytes >= FCS_COMMS_MIN_PACKET_SIZE) {
-        fcs_stream_read(dev, &ch, 1u);
-        ch = fcs_stream_peek(dev);
-        nbytes = fcs_stream_bytes_available(dev);
-    }
-
-    /*
-    Give up if there aren't enough bytes remaining, or we're not currently at
-    a '$'/NUL character
-    */
-    if (nbytes < FCS_COMMS_MIN_PACKET_SIZE) {
-        return 0;
-    }
-
-    if (ch == 0) {
-        /*
-        If this was an RFD900 packet, read the initial NUL, the COBS-R byte,
-        and the terminating NUL (packet size + 3). If there are two NULs in a
-        row, ignore the first one.
-        */
-        fcs_stream_read(dev, buf, 1u);
-        if (fcs_stream_peek(dev) == 0) {
-            nbytes = fcs_stream_read(
-                dev, buf, sizeof(struct fcs_rfd900_status_packet_t) + 3u);
-        } else {
-            nbytes = fcs_stream_read(
-                dev, &buf[1], sizeof(struct fcs_rfd900_status_packet_t) + 2u);
+    nbytes = fcs_stream_read(dev, buf, 255u);
+    for (i = 0; i < nbytes && state != ENDED_RFD900_PACKET &&
+            state != ENDED_CPU_PACKET; i++) {
+        switch (state) {
+            case UNKNOWN:
+                if (buf[i] == 0) {
+                    state = GOT_ZERO;
+                } else if (buf[i] == '$') {
+                    state = GOT_DOLLARS;
+                }
+                break;
+            case GOT_ZERO:
+                if (buf[i] == '$' && buf[i - 1u] == 0) {
+                    state = GOT_DOLLARS;
+                    packet_start = 0;
+                } else if (buf[i] != 0) {
+                    state = IN_RFD900_PACKET;
+                    packet_start = i - 1;
+                }
+                break;
+            case IN_RFD900_PACKET:
+                if (buf[i] == 0) {
+                    state = ENDED_RFD900_PACKET;
+                    packet_end = i;
+                }
+                break;
+            case GOT_DOLLARS:
+                if (buf[i] == 0) {
+                    state = GOT_ZERO;
+                } else if (buf[i] == 'P') {
+                    state = IN_CPU_PACKET;
+                    packet_start = i - 1;
+                }
+                break;
+            case IN_CPU_PACKET:
+                if (buf[i] == 0) {
+                    state = GOT_ZERO;
+                    packet_start = 0;
+                } else if (buf[i] == '\n') {
+                    state = ENDED_CPU_PACKET;
+                    packet_end = i;
+                }
+                break;
+            default:
+                assert(false);
+                break;
         }
-        return
-            (nbytes > sizeof(struct fcs_rfd900_status_packet_t)) ? nbytes : 0;
+    }
+
+    if (state == ENDED_RFD900_PACKET || state == ENDED_CPU_PACKET) {
+        memmove(buf, &buf[packet_start], packet_end - packet_start + 1u);
+
+        /* Consume all bytes until the end of the packet */
+        fcs_stream_consume(dev, packet_end + 1u);
+
+        /* Return the number of bytes read */
+        return packet_end - packet_start + 1u;
+    } else if ((state == IN_RFD900_PACKET || state == IN_CPU_PACKET) &&
+            i < 255u) {
+        /*
+        Consume bytes until the start of the packet, so we can parse the
+        full packet next time
+        */
+        fcs_stream_consume(dev, packet_start);
+        return 0;
+    } else if (state == GOT_ZERO || state == GOT_DOLLARS) {
+        /* Consume bytes up to the current start character */
+        fcs_stream_consume(dev, nbytes - 1u);
+        return 0;
     } else {
         /*
-        Not an RFD900 packet, so read until after the next (terminating) '\n'
+        Something has gone badly wrong. Consume the whole buffer and hope
+        we get actual data next time.
         */
-        nbytes = fcs_stream_read_until_after(dev, (uint8_t)'\n', buf, 255u);
-        return (nbytes >= FCS_COMMS_MIN_PACKET_SIZE - 1u) ? nbytes : 0;
+        fcs_stream_consume(dev, nbytes);
+        return 0;
     }
 }

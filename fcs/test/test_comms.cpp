@@ -47,3 +47,141 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
 TEST(Comms, Initialisation) {
     fcs_comms_init();
 }
+
+TEST(Comms, ReadPacketSimpleCPU) {
+    size_t length;
+    uint8_t buf[256], msg1[] = "$PSFWAG,abcdefghijklmnopqrstuvwxyz*20\r\n";
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg1, sizeof(msg1) - 1u);
+    ASSERT_EQ(sizeof(msg1) - 1u, length);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg1) - 1u, length);
+    EXPECT_STREQ((char*)msg1, (char*)buf);
+
+    fcs_stream_consume((enum fcs_stream_device_t)0, 255u);
+}
+
+TEST(Comms, ReadPacketSimpleRadio) {
+    size_t length;
+    uint8_t buf[256],
+            msg1[] =
+                "\x00\x03\x11\x12\n\x01\x02\x03\x04\x05\x06\x07\x08\t\x00";
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg1, sizeof(msg1) - 1u);
+    ASSERT_EQ(sizeof(msg1) - 1u, length);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg1) - 1u, length);
+    EXPECT_EQ(0, buf[0]);
+    EXPECT_EQ(0, buf[length - 1]);
+    EXPECT_STREQ((char*)&msg1[1], (char*)&buf[1]);
+
+    fcs_stream_consume((enum fcs_stream_device_t)0, 255u);
+}
+
+TEST(Comms, ReadPacketCPUThenRadio) {
+    size_t length;
+    uint8_t buf[256], msg1[] = "$PSFWAG,abcdefghijklmnopqrstuvwxyz*20\r\n",
+            msg2[] =
+                "\x00\x03\x11\x12\n\x01\x02\x03\x04\x05\x06\x07\x08\t\x00";
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg1, sizeof(msg1) - 1u);
+    ASSERT_EQ(sizeof(msg1) - 1u, length);
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg2, sizeof(msg2) - 1u);
+    ASSERT_EQ(sizeof(msg2) - 1u, length);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg1) - 1u, length);
+    EXPECT_STREQ((char*)msg1, (char*)buf);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg2) - 1u, length);
+    EXPECT_EQ(0, buf[0]);
+    EXPECT_EQ(0, buf[length - 1]);
+    EXPECT_STREQ((char*)&msg2[1], (char*)&buf[1]);
+
+    fcs_stream_consume((enum fcs_stream_device_t)0, 255u);
+}
+
+TEST(Comms, ReadPacketRadioThenCPU) {
+    size_t length;
+    uint8_t buf[256], msg2[] = "$PSFWAG,abcdefghijklmnopqrstuvwxyz*20\r\n",
+            msg1[] =
+                "\x00\x03\x11\x12\n\x01\x02\x03\x04\x05\x06\x07\x08\t\x00";
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg1, sizeof(msg1) - 1u);
+    ASSERT_EQ(sizeof(msg1) - 1u, length);
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg2, sizeof(msg2) - 1u);
+    ASSERT_EQ(sizeof(msg2) - 1u, length);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg1) - 1u, length);
+    EXPECT_EQ(0, buf[0]);
+    EXPECT_EQ(0, buf[length - 1]);
+    EXPECT_STREQ((char*)&msg1[1], (char*)&buf[1]);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg2) - 1u, length);
+    EXPECT_STREQ((char*)msg2, (char*)buf);
+
+    fcs_stream_consume((enum fcs_stream_device_t)0, 255u);
+}
+
+TEST(Comms, ReadPacketPartialRadioThenCPU) {
+    size_t length;
+    uint8_t buf[256], msg2[] = "$PSFWAG,abcdefghijklmnopqrstuvwxyz*20\r\n",
+            msg1[] =
+                "\x03\x04\x05\x06\x07\x08\t\x00";
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg1, sizeof(msg1) - 1u);
+    ASSERT_EQ(sizeof(msg1) - 1u, length);
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg2, sizeof(msg2) - 1u);
+    ASSERT_EQ(sizeof(msg2) - 1u, length);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg2) - 1u, length);
+    EXPECT_STREQ((char*)msg2, (char*)buf);
+
+    fcs_stream_consume((enum fcs_stream_device_t)0, 255u);
+}
+
+TEST(Comms, ReadPacketPartialCPUThenRadio) {
+    size_t length;
+    uint8_t buf[256], msg1[] = "qrstuvwxyz*20\r\n",
+            msg2[] =
+                "\x00\x03\x11\x12\n\x01\x02\x03\x04\x05\x06\x07\x08\t\x00";
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg1, sizeof(msg1) - 1u);
+    ASSERT_EQ(sizeof(msg1) - 1u, length);
+
+    length = _fcs_stream_write_to_rx_buffer(0, msg2, sizeof(msg2) - 1u);
+    ASSERT_EQ(sizeof(msg2) - 1u, length);
+
+    length = _fcs_comms_read_packet((enum fcs_stream_device_t)0, buf);
+    buf[length] = 0;
+
+    EXPECT_EQ(sizeof(msg2) - 1u, length);
+    EXPECT_EQ(0, buf[0]);
+    EXPECT_EQ(0, buf[length - 1]);
+    EXPECT_STREQ((char*)&msg2[1], (char*)&buf[1]);
+
+    fcs_stream_consume((enum fcs_stream_device_t)0, 255u);
+}

@@ -121,6 +121,7 @@ const uint8_t *packet, size_t packet_length) {
                 if (actual_crc != expected_crc) {
                     return FCS_DESERIALIZATION_ERROR;
                 }
+                break;
             default:
                 assert(false);
                 break;
@@ -146,7 +147,7 @@ const uint8_t *packet, size_t packet_length) {
     /* Now that we know everything's valid, handle the actual command */
     if (command_length > sizeof(MODE_CMD) - 1 &&
             memcmp(MODE_CMD, command, sizeof(MODE_CMD) - 1) == 0) {
-        uint8_t new_mode = command[sizeof(MODE_CMD)];
+        uint8_t new_mode = command[sizeof(MODE_CMD) - 1];
         fcs_ahrs_set_mode((enum fcs_mode_t)new_mode);
     }
 

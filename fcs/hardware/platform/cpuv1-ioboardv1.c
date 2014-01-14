@@ -163,6 +163,9 @@ static inline int32_t swap_int32(int32_t val) {
 /* Prototypes of internal functions */
 bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements);
+bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes,
+enum fcs_stream_device_t dev, uint8_t board_id,
+struct fcs_measurement_log_t *out_measurements);
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const double *restrict control_values);
 
@@ -380,56 +383,88 @@ bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements) {
     assert(out_measurements);
 
-    /* Read latest I/O board packets from the UART streams */
-    uint8_t buf[64], i = 0, checksum;
-    uint32_t nbytes;
+    /* Read the latest I/O board packet from the UART streams */
+    uint8_t buf[64];
+    size_t nbytes, i, packet_start = 0, packet_end = 0;
+    enum {
+        UNKNOWN,
+        GOT_ZERO,
+        IN_PACKET,
+        ENDED_PACKET
+    } state = UNKNOWN;
+    bool result = false;
+
+    nbytes = fcs_stream_read(dev, buf, 64u);
+    while (!result && nbytes >= sizeof(struct sensor_packet_t) + 2u) {
+        state = UNKNOWN;
+        packet_start = packet_end = 0;
+        for (i = 0; i < nbytes && state != ENDED_PACKET; i++) {
+            switch (state) {
+                case UNKNOWN:
+                    if (buf[i] == 0) {
+                        state = GOT_ZERO;
+                    }
+                    break;
+                case GOT_ZERO:
+                    if (buf[i] != 0) {
+                        state = IN_PACKET;
+                        packet_start = i - 1u;
+                    }
+                    break;
+                case IN_PACKET:
+                    if (buf[i] == 0) {
+                        state = ENDED_PACKET;
+                        packet_end = i;
+                    }
+                    break;
+                default:
+                    assert(false);
+                    break;
+            }
+        }
+
+        if (state == ENDED_PACKET) {
+            result = _fcs_decode_packet(&buf[packet_start + 1u],
+                                        packet_end - packet_start,
+                                        dev, board_id, out_measurements);
+
+            /* Consume all bytes until the end of the packet */
+            fcs_stream_consume(dev, packet_end + 1u);
+        } else if (state == IN_PACKET &&
+                i < sizeof(struct sensor_packet_t) + 2u) {
+            /*
+            Consume bytes until the start of the packet, so we can parse the
+            full packet next time.
+            */
+            fcs_stream_consume(dev, packet_start);
+        } else if (state == GOT_ZERO) {
+            /* Consume bytes up to the current 0 */
+            fcs_stream_consume(dev, nbytes - 1u);
+        } else {
+            /*
+            Something has gone badly wrong. Consume the whole buffer and hope
+            we get actual data next time.
+            */
+            fcs_stream_consume(dev, nbytes);
+        }
+
+        if (!result) {
+            nbytes = fcs_stream_read(dev, buf, 64u);
+        }
+    }
+
+    return result;
+}
+
+/* Decode an input packet from `buf` */
+bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes,
+enum fcs_stream_device_t dev, uint8_t board_id,
+struct fcs_measurement_log_t *out_measurements) {
+    uint8_t checksum;
+    struct sensor_packet_t packet;
     struct fcs_cobsr_decode_result result;
 
-    nbytes = fcs_stream_bytes_available(dev);
-
-    /*
-    If the initial byte is not 0, we haven't synchronised with the start of a
-    message -- try to do that now by skipping until we see a zero followed by
-    another zero.
-
-    Give up after 4 tries.
-    */
-    while (i < 4u && fcs_stream_peek(dev) > 0 &&
-           nbytes > sizeof(struct sensor_packet_t) + 1u) {
-        fcs_stream_skip_until_after(dev, (uint8_t)0);
-        nbytes = fcs_stream_bytes_available(dev);
-        i++;
-    }
-
-    /* Give up if there aren't enough bytes remaining */
-    if (nbytes < sizeof(struct sensor_packet_t) + 2u || i == 4u) {
-        return false;
-    }
-
-    /*
-    Skip until after the next NUL byte -- if there was a successful read
-    last tick, this will bring us to the first byte of the message
-    */
-    nbytes = fcs_stream_skip_until_after(dev, (uint8_t)0);
-
-    /*
-    If no bytes were skipped, there must have been no NUL byte in the
-    buffer, and therefore no complete message -- don't bother trying to
-    read anything yet.
-    */
-    if (!nbytes) {
-        return false;
-    }
-
-    /* Read until after the next (terminating) NUL */
-    nbytes = fcs_stream_read_until_after(dev, (uint8_t)0, buf, 64u);
-    if (nbytes < sizeof(struct sensor_packet_t) ||
-            nbytes > sizeof(struct sensor_packet_t) + 2u) {
-        goto invalid;
-    }
-
     /* Decode the message into the packet buffer */
-    struct sensor_packet_t packet;
     result = fcs_cobsr_decode((uint8_t*)&packet, sizeof(packet), buf,
                               nbytes - 1u);
 

@@ -160,9 +160,6 @@ TEST(Hardware, ReadIOBoardPacketAfterGarbage) {
     len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_INT0, s, 62);
     ASSERT_EQ(62, len);
 
-    len = fcs_stream_bytes_available(FCS_STREAM_UART_INT0);
-    EXPECT_EQ(70, len);
-
     /* Read back and confirm results */
     fcs_measurement_log_init(&measurements, 0);
     result = _fcs_read_ioboard_packet(FCS_STREAM_UART_INT0, 0, &measurements);
@@ -207,9 +204,6 @@ TEST(Hardware, ReadIOBoardPacketAfterPacket) {
     /* Write a full packet */
     len = _fcs_stream_write_to_rx_buffer(FCS_STREAM_UART_INT0, s, 62);
     ASSERT_EQ(62, len);
-
-    len = fcs_stream_bytes_available(FCS_STREAM_UART_INT0);
-    EXPECT_EQ(124, len);
 
     /* Read back and confirm results */
     fcs_measurement_log_init(&measurements, 0);

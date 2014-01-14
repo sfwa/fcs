@@ -63,49 +63,21 @@ fcs_stream_check_error -- checks if an error has occurred
 enum fcs_stream_result_t fcs_stream_check_error(enum fcs_stream_device_t dev);
 
 /*
-fcs_stream_read - reads up to "nbytes" from the device's input buffer into
-"buf".
+fcs_stream_read - copy up to nbytes characters to the output buffer.
+Does not consume the characters copied, so they will be returned by future
+reads unless fcs_stream_consume is called.
 
-Returns the number of bytes actually read, in the range [0, nbytes].
+Returns the number of bytes copied, in the range [0, nbytes].
 */
-uint32_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
-uint32_t nbytes);
+size_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
+size_t nbytes);
 
 /*
-fcs_stream_bytes_available - returns the number of bytes available to read in
-"dev". This count won't necessarily be accurate for long since the bytes are
-transferred via DMA.
+fcs_stream_consume - discard up to nbytes characters from the input buffer.
+
+Returns the number of bytes discarded, in the range [0, nbytes].
 */
-uint32_t fcs_stream_bytes_available(enum fcs_stream_device_t dev);
-
-/*
-fcs_stream_skip_until_after - discard bytes from the device's input buffer
-until (and including) the first occurrence of "ch".
-
-If "ch" is not present in the input buffer, the discarded bytes are restored.
-
-Returns the number of bytes skipped, in the range [0, nbytes].
-*/
-uint32_t fcs_stream_skip_until_after(enum fcs_stream_device_t dev,
-uint8_t ch);
-
-/*
-fcs_stream_read_until_after - reads up to "nbytes" bytes from the device's
-input buffer up to (and including) the first occurrence of "ch".
-
-If "ch" is not present in the input buffer, the discarded bytes are restored,
-and no bytes are read.
-
-Returns the number of bytes read, in the range [0, nbytes].
-*/
-uint32_t fcs_stream_read_until_after(enum fcs_stream_device_t dev,
-uint8_t ch, uint8_t *restrict buf, uint32_t nbytes);
-
-/*
-fcs_stream_peek - return the next character in the stream, or -1 if none. Does
-not consume the character, so it will be returned by future peeks/reads.
-*/
-int16_t fcs_stream_peek(enum fcs_stream_device_t dev);
+size_t fcs_stream_consume(enum fcs_stream_device_t dev, size_t nbytes);
 
 /*
 fcs_stream_write - writes up to "nbytes" from "buf" into the device's output
@@ -115,7 +87,7 @@ Returns the number of bytes actually written, in the range [0, nbytes].
 Assuming the caller is writing at a rate lower than the maximum send rate of
 the device, the return value will always be equal to "nbytes".
 */
-uint32_t fcs_stream_write(enum fcs_stream_device_t dev,
-const uint8_t *restrict buf, uint32_t nbytes);
+size_t fcs_stream_write(enum fcs_stream_device_t dev,
+const uint8_t *restrict buf, size_t nbytes);
 
 #endif

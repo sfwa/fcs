@@ -40,7 +40,8 @@ SOFTWARE.
 size_t fcs_comms_serialize_status(uint8_t *restrict buf,
 const struct fcs_ahrs_state_t *restrict state,
 const struct fcs_stats_counter_t *restrict counters,
-const struct fcs_peripheral_state_t *restrict peripheral_state) {
+const struct fcs_peripheral_state_t *restrict peripheral_state,
+bool counter_reset) {
     static uint64_t last_ioboard_resets[2], last_trical_resets[2],
                     last_ukf_resets;
 
@@ -72,7 +73,9 @@ const struct fcs_peripheral_state_t *restrict peripheral_state) {
             &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
         buf[index++] = ',';
 
-        last_ioboard_resets[i] = counters->ioboard_resets[i];
+        if (counter_reset) {
+            last_ioboard_resets[i] = counters->ioboard_resets[i];
+        }
     }
 
     /*
@@ -84,7 +87,9 @@ const struct fcs_peripheral_state_t *restrict peripheral_state) {
             &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
         buf[index++] = ',';
 
-        last_trical_resets[i] = counters->trical_resets[i];
+        if (counter_reset) {
+            last_trical_resets[i] = counters->trical_resets[i];
+        }
     }
 
     /* And again, for UKF resets */
@@ -93,7 +98,9 @@ const struct fcs_peripheral_state_t *restrict peripheral_state) {
         &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
     buf[index++] = ',';
 
-    last_ukf_resets = counters->ukf_resets;
+    if (counter_reset) {
+        last_ukf_resets = counters->ukf_resets;
+    }
 
     /* Output the peak core cycle counts */
     for (i = 0; i < 2u; i++) {

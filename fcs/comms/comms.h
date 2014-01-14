@@ -124,7 +124,8 @@ const struct fcs_ahrs_state_t *restrict state);
 size_t fcs_comms_serialize_status(uint8_t *restrict buf,
 const struct fcs_ahrs_state_t *restrict state,
 const struct fcs_stats_counter_t *restrict counters,
-const struct fcs_peripheral_state_t *restrict peripheral_state);
+const struct fcs_peripheral_state_t *restrict peripheral_state,
+bool counter_reset);
 
 /* Command deserialization */
 enum fcs_deserialization_result_t fcs_comms_deserialize_command(
