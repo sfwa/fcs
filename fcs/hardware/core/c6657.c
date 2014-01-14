@@ -653,7 +653,11 @@ uint32_t _fcs_init_core0(void) {
     } while (!_fcs_ddr3_test(1048576) && tries < 10u);
     /* TODO: skip/reduce extent of memory test on restart */
 
+    /*
+    FIXME: allow DDR3 to fail for now since it's broken on the second
+    prototype board.
     assert(tries < 10u);
+    */
 
 
     /*
