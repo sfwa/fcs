@@ -379,6 +379,7 @@ Read, deserialize and validate a full I/O board packet from `dev`. Since we
 get two of these every tick there's no point doing this incrementally; we just
 need to make sure we can deal with partial/corrupted packets.
 */
+#include <stdio.h>
 bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements) {
     assert(out_measurements);
@@ -430,11 +431,10 @@ struct fcs_measurement_log_t *out_measurements) {
 
             /* Consume all bytes until the end of the packet */
             fcs_stream_consume(dev, packet_end + 1u);
-        } else if (state == IN_PACKET &&
-                i < sizeof(struct sensor_packet_t) + 2u) {
+        } else if (state == IN_PACKET && packet_start > 0) {
             /*
             Consume bytes until the start of the packet, so we can parse the
-            full packet next time.
+            full packet next time
             */
             fcs_stream_consume(dev, packet_start);
         } else if (state == GOT_ZERO) {
