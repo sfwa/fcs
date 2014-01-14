@@ -42,7 +42,7 @@ extern "C" {
 enum ukf_model_t {
     UKF_MODEL_NONE = 0,
     UKF_MODEL_CENTRIPETAL = 1,
-    UKF_MODEL_FIXED_WING = 2,
+    UKF_MODEL_CUSTOM = 2,
     UKF_MODEL_X8 = 3
 };
 
@@ -66,11 +66,11 @@ Members are as follows:
         readings
 */
 struct ukf_ioboard_params_t {
-    real_t accel_orientation[4];
-    real_t accel_offset[3];
-    real_t gyro_orientation[4];
-    real_t mag_orientation[4];
-    real_t mag_field[3];
+    real_t accel_orientation[4]; /* x, y, z, W */
+    real_t accel_offset[3]; /* forwards, starboard, down from CoG (m) */
+    real_t gyro_orientation[4]; /* x, y, z, W */
+    real_t mag_orientation[4]; /* x, y, z, W */
+    real_t mag_field[3]; /* North, East, Down (µT) */
 
     real_t accel_covariance[3];
     real_t gyro_covariance[3];
@@ -82,15 +82,26 @@ struct ukf_ioboard_params_t {
 };
 
 struct ukf_state_t {
-    real_t position[3];
-    real_t velocity[3];
-    real_t acceleration[3];
-    real_t attitude[4]; /* w, x, y, z */
-    real_t angular_velocity[3];
+    real_t position[3]; /* lat (rad), lon (rad), alt (m above ellipsoid) */
+    real_t velocity[3]; /* North (m/s), East (m/s), Down (m/s) */
+    real_t acceleration[3]; /* forwards (m/s), starboard (m/s), down (m/s) */
+    real_t attitude[4]; /* x, y, z, W */
+    real_t angular_velocity[3]; /* rolling (rad/s), pitching (rad/s),
+                                   yawing (rad/s) */
     real_t angular_acceleration[3];
-    real_t wind_velocity[3];
-    real_t gyro_bias[3];
+    real_t wind_velocity[3]; /* North (m/s), East (m/s), Down (m/s) */
+    real_t gyro_bias[3]; /* X (rad/s), Y (rad/s), Z (rad/s) */
 };
+
+/*
+Dynamics model function, for custom model support. These functions have to
+be compatible between the C++ and C versions of the UKF, so they take pointers
+to C arrays representing the state vector, the control vector, and the output
+vector.
+*/
+typedef void (*ukf_model_function_t)(const real_t *, const real_t *,
+                                     real_t *);
+
 
 void ukf_init(void);
 
@@ -111,6 +122,7 @@ void ukf_get_state_covariance(
     real_t state_covariance[UKF_STATE_DIM * UKF_STATE_DIM]);
 void ukf_get_state_covariance_diagonal(
     real_t state_covariance_diagonal[UKF_STATE_DIM]);
+void ukf_get_state_error(real_t state_error[UKF_STATE_DIM]);
 
 /*
 Functions for setting sensor data. Before each frame, call the sensor_clear()
@@ -131,26 +143,9 @@ UKF-related functions.
 void ukf_set_params(struct ukf_ioboard_params_t *in);
 void ukf_set_process_noise(real_t process_noise_covariance[UKF_STATE_DIM]);
 void ukf_choose_dynamics(enum ukf_model_t t);
+void ukf_set_custom_dynamics_model(ukf_model_function_t func);
+/* dt is the time delta in seconds */
 void ukf_iterate(float dt, real_t control_vector[UKF_CONTROL_DIM]);
-
-/*
-Functions to set airframe properties and coefficients for the fixed-wing
-dynamics model.
-*/
-void ukf_fixedwingdynamics_set_mass(real_t mass);
-void ukf_fixedwingdynamics_set_inertia_tensor(real_t inertia_tensor[9]);
-void ukf_fixedwingdynamics_set_prop_coeffs(real_t in_prop_area,
-    real_t in_prop_cve);
-void ukf_fixedwingdynamics_set_drag_coeffs(real_t coeffs[5]);
-void ukf_fixedwingdynamics_set_lift_coeffs(real_t coeffs[5]);
-void ukf_fixedwingdynamics_set_side_coeffs(real_t coeffs[4],
-    real_t control[UKF_CONTROL_DIM]);
-void ukf_fixedwingdynamics_set_pitch_moment_coeffs(real_t coeffs[2],
-    real_t control[UKF_CONTROL_DIM]);
-void ukf_fixedwingdynamics_set_roll_moment_coeffs(real_t coeffs[1],
-    real_t control[UKF_CONTROL_DIM]);
-void ukf_fixedwingdynamics_set_yaw_moment_coeffs(real_t coeffs[2],
-    real_t control[UKF_CONTROL_DIM]);
 
 /*
 Functions to access the compiled configuration

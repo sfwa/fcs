@@ -118,17 +118,17 @@ class AHRSState(Structure):
         ("gyro_bias", c_double * 3),
         ("control_pos", c_double * 4),
 
-        # UKF covariance
-        ("lat_covariance", c_double),
-        ("lon_covariance", c_double),
-        ("alt_covariance", c_double),
-        ("velocity_covariance", c_double * 3),
-        ("acceleration_covariance", c_double * 3),
-        ("attitude_covariance", c_double * 3),
-        ("angular_velocity_covariance", c_double * 3),
-        ("angular_acceleration_covariance", c_double * 3),
-        ("wind_velocity_covariance", c_double * 3),
-        ("gyro_bias_covariance", c_double * 3),
+        # UKF error estimate
+        ("lat_error", c_double),
+        ("lon_error", c_double),
+        ("alt_error", c_double),
+        ("velocity_error", c_double * 3),
+        ("acceleration_error", c_double * 3),
+        ("attitude_error", c_double * 3),
+        ("angular_velocity_error", c_double * 3),
+        ("angular_acceleration_error", c_double * 3),
+        ("wind_velocity_error", c_double * 3),
+        ("gyro_bias_error", c_double * 3),
 
         # Configuration
         ("wmm_field_dir", c_double * 3),

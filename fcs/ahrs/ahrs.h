@@ -107,15 +107,15 @@ struct fcs_ahrs_state_t {
     double gyro_bias[3]; /* x, y, z in rad/s */
     double control_pos[4]; /* arbitrary control units */
 
-    /* State estimate covariance */
-    double lat_covariance, lon_covariance, alt_covariance;
-    double velocity_covariance[3];
-    double acceleration_covariance[3];
-    double attitude_covariance[3];
-    double angular_velocity_covariance[3];
-    double angular_acceleration_covariance[3];
-    double wind_velocity_covariance[3];
-    double gyro_bias_covariance[3];
+    /* State error estimate */
+    double lat_error, lon_error, alt_error;
+    double velocity_error[3];
+    double acceleration_error[3];
+    double attitude_error[3];
+    double angular_velocity_error[3];
+    double angular_acceleration_error[3];
+    double wind_velocity_error[3];
+    double gyro_bias_error[3];
 
     /* Configuration */
     double wmm_field_dir[3];

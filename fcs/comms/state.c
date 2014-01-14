@@ -128,8 +128,8 @@ const struct fcs_ahrs_state_t *restrict state) {
 
     /*
     Work out 95th percentile confidence intervals for each of the output
-    values, based on the current state covariance matrix and the assumption
-    that error will follow a Gaussian distribution.
+    values, based on the current state error vector and the assumption that
+    error will follow a Gaussian distribution.
 
     Uncertainty values are half the 95th percentile confidence interval, i.e.
     the extent of the interval away from the midpoint (being the field value
@@ -142,19 +142,17 @@ const struct fcs_ahrs_state_t *restrict state) {
     Formula for m per degree latitude is approx (2 * pi / 360) * r
     */
     double ci[14];
-    ci[0] = 1.96 * 6378000.0 *
-            sqrt(max(state->lat_covariance, state->lon_covariance));
-    ci[1] = 1.96 * sqrt(state->alt_covariance);
+    ci[0] = 1.96 * 6378000.0 * max(state->lat_error, state->lon_error);
+    ci[1] = 1.96 * state->alt_error;
 
+    #pragma MUST_ITERATE(3, 3)
     for (i = 0; i < 3u; i++) {
-        ci[2 + i] = 1.96 * sqrt(state->velocity_covariance[i]);
-        ci[5 + i] = 1.96 * sqrt(state->wind_velocity_covariance[i]);
+        ci[2 + i] = 1.96 * state->velocity_error[i];
+        ci[5 + i] = 1.96 * state->wind_velocity_error[i];
 
         /* Rotation around +X, +Y and +Z -- roll, pitch, yaw */
-        ci[10 - i] = 1.96 * (180.0/M_PI) *
-                     sqrt(state->attitude_covariance[i]);
-        ci[13 - i] = 1.96 * (180.0/M_PI) *
-                     sqrt(state->angular_velocity_covariance[i]);
+        ci[10 - i] = 1.96 * (180.0/M_PI) * state->attitude_error[i];
+        ci[13 - i] = 1.96 * (180.0/M_PI) * state->angular_velocity_error[i];
     }
 
     index += fcs_ascii_fixed_from_double(&buf[index], ci[0], 3u, 0);
@@ -163,6 +161,7 @@ const struct fcs_ahrs_state_t *restrict state) {
     index += fcs_ascii_fixed_from_double(&buf[index], ci[1], 2u, 1u);
     buf[index++] = ',';
 
+    #pragma MUST_ITERATE(12, 12)
     for (i = 2u; i < 14u; i++) {
         index += fcs_ascii_fixed_from_double(
             &buf[index], ci[i], 2u, 0);

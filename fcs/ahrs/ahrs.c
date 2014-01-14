@@ -67,7 +67,7 @@ static void _fcs_ahrs_magnetometer_calibration(void);
 static void _fcs_ahrs_accelerometer_calibration(void);
 static void _fcs_ahrs_reset_state(void);
 static void _fcs_ahrs_update_global_state(double *restrict state,
-double *restrict covariance);
+double *restrict error);
 static bool _fcs_ahrs_trical_is_valid(TRICAL_instance_t *instance);
 
 void fcs_ahrs_init(void) {
@@ -388,16 +388,16 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Copy the global state out of the UKF */
-    double state_values[25], covariance[24];
+    double state_values[25], error[24];
     ukf_get_state((struct ukf_state_t*)state_values);
-    ukf_get_state_covariance_diagonal(covariance);
+    ukf_get_state_error(error);
 
     /* Validate the UKF state; if it's invalid, reset it */
     bool ukf_valid = true;
 
     #pragma MUST_ITERATE(24, 24);
     for (i = 0; i < 24u; i++) {
-        if (isnan(state_values[i]) || isnan(covariance[i])) {
+        if (isnan(state_values[i]) || isnan(error[i])) {
             ukf_valid = false;
         }
     }
@@ -414,7 +414,7 @@ void fcs_ahrs_tick(void) {
         }
 
         /* Update the global state structure */
-        _fcs_ahrs_update_global_state(state_values, covariance);
+        _fcs_ahrs_update_global_state(state_values, error);
     } else {
         _fcs_ahrs_reset_state();
     }
@@ -480,17 +480,17 @@ static void _fcs_ahrs_reset_state(void) {
     ukf_init();
     ukf_set_state(&reset_state);
 
-    double covariance[24];
-    ukf_get_state_covariance_diagonal(covariance);
+    double error[24];
+    ukf_get_state_error(error);
 
-    /* Update the output state and covariance with the latest values */
-    _fcs_ahrs_update_global_state((double*)&reset_state, covariance);
+    /* Update the output state and error with the latest values */
+    _fcs_ahrs_update_global_state((double*)&reset_state, error);
 
     fcs_global_counters.ukf_resets++;
 }
 
 static void _fcs_ahrs_update_global_state(double *restrict state,
-double *restrict covariance) {
+double *restrict error) {
 #ifdef __TI_COMPILER_VERSION__
     /*
     Use a semaphore to prevent the NMPC code accessing the state while we're
@@ -503,7 +503,7 @@ double *restrict covariance) {
 #endif
 
     vector_copy_d(&fcs_global_ahrs_state.lat, state, 25u);
-    vector_copy_d(&fcs_global_ahrs_state.lat_covariance, covariance, 24u);
+    vector_copy_d(&fcs_global_ahrs_state.lat_error, error, 24u);
 
 #ifdef __TI_COMPILER_VERSION__
     /* Release the semaphore */
