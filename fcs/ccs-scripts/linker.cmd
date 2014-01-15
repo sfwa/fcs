@@ -5,10 +5,10 @@
 /* Memory Map */
 MEMORY
 {
-    L1PSRAM (RWX)  : org = 0x0E00000, len = 0x7FFF
-    L1DSRAM (RWX)  : org = 0x0F00000, len = 0x7FFF
-    L2SRAM (RWX)   : org = 0x0800000, len = 0x200000
-    MSMCSRAM (RWX) : org = 0xc000000, len = 0x200000
+    L1PSRAM (RWX)  : org = 0x00E00000, len = 0x7FFF
+    L1DSRAM (RWX)  : org = 0x00F00000, len = 0x7FFF
+    L2SRAM (RWX)   : org = 0x00800000, len = 0x200000
+    MSMCSRAM (RWX) : org = 0x0C000000, len = 0x200000
     DDR3 (RWX)     : org = 0x80000000,len = 0x10000000
 }
 
