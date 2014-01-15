@@ -38,7 +38,7 @@ fcs.debug.ccs: b2ccs fcs.debug.i2c
 fcs.release.ccs: b2ccs fcs.release.i2c
 	./b2ccs fcs.release.i2c fcs.release.ccs
 
-# Romparse adds some extra boot configuration data and writes the resulting
+# bootbuild adds some extra boot configuration data and writes the resulting
 # file out to i2crom.ccs in the current directory
 fcs.debug.rom: bootbuild fcs.debug.ccs
 	./bootbuild spi-Debug.map
@@ -48,6 +48,7 @@ fcs.release.rom: bootbuild fcs.release.ccs
 	./bootbuild spi-Release.map
 	mv i2crom.ccs fcs.release.rom
 
+# byteswapccs converts the image to big-endian for the RBL
 fcs.debug.dat: byteswapccs fcs.debug.rom
 	./byteswapccs fcs.debug.rom fcs.debug.dat
 

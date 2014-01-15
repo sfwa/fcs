@@ -29,6 +29,7 @@ extern "C" {
 #include "comms/comms.h"
 #include "drivers/stream.h"
 #include "TRICAL/TRICAL.h"
+#include "ukf/cukf.h"
 #include "ahrs/measurement.h"
 #include "ahrs/ahrs.h"
 
