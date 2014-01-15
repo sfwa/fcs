@@ -1,34 +1,34 @@
 /*
  *
- * Copyright (C) 2010 Texas Instruments Incorporated - http://www.ti.com/ 
- * 
- * 
- *  Redistribution and use in source and binary forms, with or without 
- *  modification, are permitted provided that the following conditions 
+ * Copyright (C) 2010 Texas Instruments Incorporated - http://www.ti.com/
+ *
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
  *  are met:
  *
- *    Redistributions of source code must retain the above copyright 
+ *    Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  *
  *    Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the 
- *    documentation and/or other materials provided with the   
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the
  *    distribution.
  *
  *    Neither the name of Texas Instruments Incorporated nor the names of
  *    its contributors may be used to endorse or promote products derived
  *    from this software without specific prior written permission.
  *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
- *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
- *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT 
+ *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
- *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
+ *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
 */
@@ -41,13 +41,13 @@
  *************************************************************************************
  * FILE NAME: romparse.c
  *
- * DESCRIPTION: Creates a ccs hex file which contains the i2c eprom boot parameter 
+ * DESCRIPTION: Creates a ccs hex file which contains the i2c eprom boot parameter
  *              tables as well as any code.
  *
  *************************************************************************************/
 #include <stdio.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include "rparse.tab.h"
 #include "romparse.h"
 
@@ -91,9 +91,9 @@ int           ctable_index = -1;  /* Destination of current table */
 int           max_index    =  0;  /* maximum table index, used for compacting output */
 
 /************************************************************************************
- * Declaration: Layout tables. 
+ * Declaration: Layout tables.
  ************************************************************************************/
-layout_t  layouts[MAX_LAYOUTS];   /* Array of layout structures */                
+layout_t  layouts[MAX_LAYOUTS];   /* Array of layout structures */
 int       currentLayout;          /* Currently active layout    */
 
 /************************************************************************************
@@ -123,7 +123,7 @@ int currentPL = 0;
 
 /*************************************************************************************
  * Declaration: The next free address in the ROM for general data usage. For the
- *              start address there is room for the initial boot parameter tables, 
+ *              start address there is room for the initial boot parameter tables,
  *              plus room for the PCI eeai config.
  *************************************************************************************/
 int romBase = DATA_BASE;
@@ -244,13 +244,13 @@ void setLayout (void)
   padLayoutOrder[currentPL].type  = LAYOUT;
   padLayoutOrder[currentPL].index = currentLayout;
   currentPL += 1;
-    
+
   currentLayout += 1;      /* Advance to the next layout */
 
   if (currentLayout < MAX_LAYOUTS)
     initLayout (&layouts[currentLayout]);
 
-}    
+}
 
 /*************************************************************************************
  * FUNCTION PURPOSE: Initialize a pad structure
@@ -320,7 +320,7 @@ void section (void)
     else
         current_table.common.length   = sizeof(BOOT_PARAMS_I2C_T);
   #endif
-       
+
   current_table.common.checksum = 0;
 
   /* Copy the table */
@@ -441,7 +441,7 @@ int setPciParams (char *fname)
 
 } /* setPciParams */
 
- 
+
 
 /***************************************************************************************
  * FUNCTION PURPOSE: Store an assignment
@@ -474,14 +474,14 @@ void assignKeyVal (int field, int value)
         case MY_I2C_ID:        current_table.i2c.my_i2c_id = value;
                                break;
 
-        case CORE_FREQ_MHZ:    
+        case CORE_FREQ_MHZ:
                                #if (defined(c66x) || defined(c665x))
                                    if (current_table.common.boot_mode == BOOT_MODE_SPI)  {
                                         current_table.spi.cpuFreqMhz = value;
                                         break;
                                    }
                                #endif
-        
+
                                current_table.i2c.core_freq_mhz = value;
                                break;
 
@@ -490,7 +490,7 @@ void assignKeyVal (int field, int value)
 
         case NEXT_DEV_ADDR:    current_table.i2c.next_dev_addr = value;
                                break;
-                               
+
 
         case NEXT_DEV_ADDR_EXT: current_table.i2c.next_dev_addr_ext = value;
                                 break;
@@ -564,7 +564,7 @@ void assignKeyVal (int field, int value)
 
     case LAYOUT:
 
-      if (currentLayout >= MAX_LAYOUTS)  { 
+      if (currentLayout >= MAX_LAYOUTS)  {
         fprintf (stderr, "romparse: Too many layout sections (max = %d)\n", MAX_LAYOUTS);
         exit (-1);
       }
@@ -636,8 +636,8 @@ void assignKeyVal (int field, int value)
 /*******************************************************************************
  * FUNCTION PURPOSE: Parse a string input.
  *******************************************************************************
- * DESCRIPTION: Takes a string input. Currently only the i2c exe file name can be 
- *              assigned a string. 
+ * DESCRIPTION: Takes a string input. Currently only the i2c exe file name can be
+ *              assigned a string.
  *******************************************************************************/
 void assignKeyStr (int value, char *y)
 {
@@ -696,7 +696,7 @@ void assignKeyStr (int value, char *y)
           fprintf (stderr, "romparse: Number of layout sections exceeded (max = %d)\n", MAX_LAYOUTS);
 
       }
-        
+
 
       return;
     }
@@ -714,7 +714,7 @@ void assignKeyStr (int value, char *y)
           current_table.i2c.dev_addr_ext = i2cRomBase;
 
     }  else  {  /* LAYOUT */
-        
+
         if (currentLayout < MAX_LAYOUTS)  {
           if (layouts[currentLayout].nPlt <= MAX_LAYOUT_FILES)  {
             layouts[currentLayout].plt[layouts[currentLayout].nPlt].type  = PLT_FILE;
@@ -728,8 +728,8 @@ void assignKeyStr (int value, char *y)
           fprintf (stderr, "romparse: Number of layout sections exceeded (max = %d)\n", MAX_LAYOUTS);
 
     }
-      
-        
+
+
   }
 
 } /* assignKeyStr */
@@ -816,7 +816,7 @@ void createOutput (void)
 
   /* Compact the i2c eeprom to use the minimum memory possible */
   base    = (i2cRomBase << 16) + PCI_PARAM_BASE;
-  nTables = NUM_BOOT_PARAM_TABLES; 
+  nTables = NUM_BOOT_PARAM_TABLES;
 
   if ((compact != 0) && (pciSet == 0))  {
     nTables = max_index + 1;
@@ -830,7 +830,7 @@ void createOutput (void)
   /* Change the layout index value for pad mapping to a true array index value.
    * Also reflect the device address from the layout into the pad */
   for (i = 0; i < currentLayout; i++)  {
-    
+
     for (j = 0; j < layouts[i].nPlt; j++)  {
 
       if (layouts[i].plt[j].type == PLT_PAD)  {
@@ -853,7 +853,7 @@ void createOutput (void)
 
     if (padLayoutOrder[i].type == LAYOUT)  {
 
-      /* Determine the size of the table. Four bytes for each file, plus the 4 byte header */ 
+      /* Determine the size of the table. Four bytes for each file, plus the 4 byte header */
       v1 = (layouts[j].nPlt * 4) + 4;
 
       v2 = (layouts[j].dev_addr << 16) + layouts[j].address;
@@ -872,7 +872,7 @@ void createOutput (void)
         base = v2 + v1;  /* new base is the base plus the size */
 
 
-      }  
+      }
     }  else  {   /* Otherwise this is a pad */
 
       if (base > ((pads[j].dev_addr << 16) + pads[j].address))  {
@@ -887,7 +887,7 @@ void createOutput (void)
   }
 
   for (i = 0; i < NUM_BOOT_PARAM_TABLES; i++)  {
-    if (progFile[i].align > 0)  
+    if (progFile[i].align > 0)
       base = ((base + progFile[i].align - 1) / progFile[i].align) * progFile[i].align;
     progFile[i].addressBytes = base;
     base = base + progFile[i].sizeBytes;
@@ -898,7 +898,7 @@ void createOutput (void)
   for (i = 0; i < NUM_BOOT_PARAM_TABLES; i++)  {
     for (j = 0; j < NUM_BOOT_PARAM_TABLES; j++)  {
       if (progFile[i].tag[j] >= 0)  {
-        
+
         #if (defined(c66x) || defined(c665x))
           if (boot_params[progFile[i].tag[j]].common.boot_mode == BOOT_MODE_SPI)  {
             boot_params[progFile[i].tag[j]].spi.read_addr_lsw = (progFile[i].addressBytes & 0xffff);
@@ -916,7 +916,7 @@ void createOutput (void)
   base = (base + 3) & ~3;
 
   i2cRomStart = (i2cRomBase << 16);
-      
+
   /* The total length of the i2c eeprom is now stored in base */
   /* Write out the ccs header */
   fprintf (str, "1651 1 10000 1 %x\n", (base - i2cRomStart) >> 2);
@@ -967,13 +967,13 @@ void createOutput (void)
     base = imageWord(base, i2cRomStart, image, len << 16);
 
     for (j = 0; j < layouts[i].nPlt; j++)  {
-        
+
         if (layouts[i].plt[j].type == PLT_FILE)  {
           if (layouts[i].plt[j].index == -1)  {
             base = imageWord (base, i2cRomStart, image, 0xffffffff);
           } else {
             base = imageWord (base, i2cRomStart, image, progFile[layouts[i].plt[j].index].addressBytes);
-          } 
+          }
         }  else  {
           v1 = pads[layouts[i].plt[j].index].dev_addr;
           v2 = pads[layouts[i].plt[j].index].address;
@@ -983,7 +983,7 @@ void createOutput (void)
     }
 
   }
-                                
+
 
   /* Write out each of the program files */
   for (i = 0; i < nProgFiles; i++)  {
@@ -996,7 +996,7 @@ void createOutput (void)
   }
 
   /* Write out the data file */
-  for (i = 0; i < base - i2cRomStart; i += 4) 
+  for (i = 0; i < base - i2cRomStart; i += 4)
     fprintf (str, "0x%08x\n", formWord (i, image));
 
   free (image);
@@ -1034,7 +1034,7 @@ int readVal (char *s)
   return (ret);
 
 }
-  
+
 
 /************************************************************************************
  * FUNCTION PURPOSE: Parse the input arguments.
@@ -1050,7 +1050,7 @@ int parseIt (int argc, char *argv[])
      return (-1);
   }
 
-  inputFile = NULL;  
+  inputFile = NULL;
 
   for (i = 1; i < argc;  )  {
 
@@ -1114,7 +1114,7 @@ int main (int argc, char *argv[])
   if (parseIt (argc, argv))
     return (-1);
 
-  
+
   yyin = fopen (inputFile, "r");
   if (yyin == NULL)  {
     fprintf (stderr, "%s: could not open file %s\n", argv[0], inputFile);

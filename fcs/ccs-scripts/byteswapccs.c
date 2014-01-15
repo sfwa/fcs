@@ -9,7 +9,7 @@
  *
  ********************************************************************************************/
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 
 int main (int argc, char *argv[])
@@ -29,13 +29,13 @@ int main (int argc, char *argv[])
 
     fin = fopen (argv[1], "r");
     if (fin == NULL)  {
-        fprintf (stderr, "%s: Could not open input file %s\n", argv[1]);
+        fprintf (stderr, "%s: Could not open input file %s\n", argv[0], argv[1]);
         return (-1);
     }
 
     fout = fopen (argv[2], "w");
     if (fout == NULL)  {
-        fprintf (stderr, "%s: Could not open output file %s\n", argv[2]);
+        fprintf (stderr, "%s: Could not open output file %s\n", argv[0], argv[2]);
         fclose (fin);
         return (-1);
     }

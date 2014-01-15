@@ -37,11 +37,14 @@ ifdef BISONSKEL
  BISONDEFS=-S $(BISONSKEL)
 endif
 
+TARGET=c66x
+I2C_BUS_ADDR=0
+
 
 all: gen_cdefdep romparse
 
 romparse: cdefdep rparse.tab.o lex.yy.o romparse.c
-	gcc -DIBL_CFG_I2C_MAP_TABLE_DATA_BUS_ADDR=$(I2C_BUS_ADDR) -o romparse -g romparse.c rparse.tab.o lex.yy.o -I../.. -I. -I../../device/$(TARGET) -D$(TARGET)
+	gcc -DIBL_CFG_I2C_MAP_TABLE_DATA_BUS_ADDR=$(I2C_BUS_ADDR) -D$(TARGET) -o romparse -g romparse.c rparse.tab.o lex.yy.o -I.
 
 rparse.tab.c: rparse.y
 	bison -d $(BISONDEFS) rparse.y
@@ -56,7 +59,7 @@ lex.yy.o: lex.yy.c
 	gcc -c lex.yy.c
 
 clean:
-	rm -f romparse rparse.tab.o lex.yy.o
+	rm -f romparse rparse.tab.o lex.yy.o cdefdep cdefdep.tmp
 
 gen_cdefdep:
 	@echo Checking command line dependencies
