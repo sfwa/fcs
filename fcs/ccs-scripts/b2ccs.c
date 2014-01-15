@@ -35,23 +35,10 @@
 
 
 
-/* Create an ascii hex i2c data file */
+/* Convert a hex b file into a ccs data file */
 
 #include <stdio.h>
 #include <stdlib.h>
-
-unsigned onesComplementAdd (unsigned value1, unsigned value2)
-{
-  unsigned result;
-
-  result = (unsigned)value1 + (unsigned)value2;
-
-  result = (result >> 16) + (result & 0xFFFF); /* add in carry   */
-  result += (result >> 16);                    /* maybe one more */
-  result = (result & 0xffff);
-  return (unsigned)result;
-
-} /* end of beth_ones_complement_add() */
 
 
 int asciiByte (unsigned char c)
@@ -121,44 +108,29 @@ int readBFile (FILE *s, unsigned char *data, unsigned maxSize)
 }
 
 
-int copyBlock (unsigned char *source, int idx, int maxSize, unsigned char *dest, int count)
+unsigned dwordConvert (unsigned char *data, int idx, int iMax)
 {
-  int i;
-
-  for (i = 0; i < count; i++)  {
-    if (idx >= maxSize)
-      break;
-    dest[i] = source[idx++];
-  }
-
-  return (i);
-
-}
-
-void blockCheckSum (unsigned char *block, int blockSize)
-{
-  unsigned checksum = 0;
   unsigned value;
+  unsigned char c[4];
   int i;
 
-  if (blockSize & 0x0001)  {
-    fprintf (stderr, "program requires an even blocksize\n");
-    exit (-1);
+  c[0] = c[1] = c[2] = c[3] = 0;
+
+  for (i = 0; i < 4; i++)  {
+    if (idx >= iMax)
+      break;
+    c[i] = data[idx++];
   }
 
-  for (i = 0; i < blockSize; i += 2) {
-    value = (block[i] << 8) | block[i+1];
-    checksum = onesComplementAdd (checksum, value);
-  }
+  value = c[3] | (c[2] << 8) | (c[1] << 16) | (c[0] << 24);
 
-  /* Put the checksum into the block starting at byte 2. Use big endian */
-  checksum = ~checksum;
-  block[3] = checksum & 0xff;
-  block[2] = (checksum >> 8) & 0xff;
+  return (value);
 
 }
 
-#define SIZE	0x200000   /* max array size */
+
+
+#define SIZE    0x200000   /* max array size */
 
 int main (int argc, char *argv[])
 {
@@ -166,7 +138,6 @@ int main (int argc, char *argv[])
   FILE *strout;
 
   unsigned char *dataSet1;
-  unsigned char *dataSet2;
 
   unsigned char block[128];
   unsigned blockSize;
@@ -192,8 +163,7 @@ int main (int argc, char *argv[])
 
   /* Allocate the two data set memories */
   dataSet1 = malloc (SIZE * sizeof (unsigned char));
-  dataSet2 = malloc (SIZE * sizeof (unsigned char));
-  if ((dataSet1 == NULL) || (dataSet2 == NULL))  {
+  if (dataSet1 == NULL)  {
     fprintf (stderr, "%s: Malloc failure\n", argv[0]);
     return (-1);
   }
@@ -203,61 +173,23 @@ int main (int argc, char *argv[])
     return (inSize);
   fclose (strin);
 
-  /* Perform the i2c block formatting. The block size will be fixed at 128 bytes,
-   * 2 bytes of length, 2 bytes checksum, 124 bytes of data. */
-  pIn = 0;
-  pOut = 0;
-
-  do  {
-
-    /* Copy the block, leave 4 bytes at the top */
-    blockSize = copyBlock (dataSet1, pIn, inSize, &block[4], 124);
-    pIn += blockSize; /* advance to next data in source */
-
-    if (blockSize)  {
-      blockSize += 4;   /* Add room for the header - big endian */
-      block[1] = blockSize & 0xff;
-      block[0] = (blockSize >> 8) & 0xff;
-      block[2] = block[3] = 0;
-
-      /* Checksum the block */
-      blockCheckSum (block, blockSize);
-
-      /* Copy the results to the destination block */
-      if ((pOut + blockSize) >= SIZE)  {
-        fprintf (stderr, "%s: destination array size exceeded\n", argv[0]);
-        return (-1);
-      }
-      for (i = 0; i < blockSize; i++)
-        dataSet2[pOut++] = block[i];
-    }
-
-  } while (blockSize == 128);
-
-
-  /* Copy the resulting data set into the output file in ccs format */
   strout = fopen (argv[2], "w");
   if (strout == NULL)  {
-    fprintf (stderr, "%s: Could not open %s for writing\n", argv[0], argv[2]);
+    fprintf (stderr, "%s error: Could not open output file %s\n", argv[0], argv[2]);
+    free (dataSet1);
     return (-1);
   }
 
+  /* Write the CCS header */
+  fprintf (strout, "1651 1 10000 1 %x\n", (inSize + 3) / 4);
 
-  /* Write the two line header */
-  fprintf (strout, "%c\n$A000000\n", (unsigned char)2);
+  /* Write out each 32 bit line. */
+  for (i = 0; i < inSize; i += 4)
+    fprintf (strout, "0x%08x\n", dwordConvert (dataSet1, i, inSize));
 
-  /* Write out the data */
-  for (i = 0; i < pOut; i++)  {
-    if ( ((i+1)%24) )
-      fprintf (strout, "%02X ", dataSet2[i]);
-    else
-      fprintf (strout, "%02X\n", dataSet2[i]);
-  }
-
-  /* Write the close character */
-  fprintf (strout, "\n%c", (unsigned char)3);
-
+  free (dataSet1);
   fclose (strout);
+
 
   return (0);
 

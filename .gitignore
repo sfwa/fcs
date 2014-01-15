@@ -21,6 +21,11 @@ fcs/Release
 *.log
 *.qmsg
 *.bak
+*.bc64
+*.ccs
+*.dat
+*.i2c
+*.rom
 cpld/db
 cpld/incremental_db
 cpld/output_files
@@ -28,9 +33,10 @@ cpld/output_files
 
 # TI tool build junk
 fcs/ccs-scripts/b2i2c
+fcs/ccs-scripts/b2ccs
 fcs/ccs-scripts/bconvert64x
 fcs/ccs-scripts/byteswapccs
-fcs/ccs-scripts/romparse/romparse
-c6657-norwriter/evm6657l/Debug
-c6657-norwriter/evm6657l/Makefile
-c6657-norwriter/evm6657l/bin
+fcs/ccs-scripts/bootbuild
+c6657-norwriter/evmc6657l/Debug
+c6657-norwriter/evmc6657l/Makefile
+c6657-norwriter/evmc6657l/bin

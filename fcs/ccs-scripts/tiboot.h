@@ -1,43 +1,24 @@
-/*
- *
- * Copyright (C) 2010 Texas Instruments Incorporated - http://www.ti.com/
- *
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *    Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- *    Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the
- *    distribution.
- *
- *    Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
-*/
-
-
 #ifndef __TIBOOT_H__
 #define __TIBOOT_H__
-
-#include "tiboot_types.h"
+/******************************************************************************
+ * FILE PURPOSE: Define Structures, MACROs and etc for TI Shared ROM Boot
+ ******************************************************************************
+ * FILE NAME:   tiboot.h
+ *
+ * DESCRIPTION: Define structures, macros and etc for the TI Shared ROM boot
+ *              process.
+ *
+ * TABS: NONE
+ *
+ * $Id: $
+ *
+ * REVISION HISTORY:
+ *
+ * $Log: $
+ *
+ * Copyright (C) 2010 Texas Instruments, Inc. All rights reserved.
+ ******************************************************************************/
+#include "types.h"
 
 /*******************************************************************************
  * Utility Macro definitions
@@ -189,7 +170,7 @@ typedef struct boot_params_ethernet_s{
      #define BOOT_PARAMS_ETH_OPTIONS_RMII_10    0x0006
      #define BOOT_PARAMS_ETH_OPTIONS_RMII_100   0x0007
 
-	/* Faraday only supports SGMII */
+    /* Faraday only supports SGMII */
      #define BOOT_PARAMS_ETH_OPTIONS_SGMII      0x0006
 
      #define BOOT_PARAMS_ETH_OPTIONS_HD         0x0008
@@ -243,8 +224,8 @@ typedef struct boot_params_ethernet_s{
      UINT16 hmac_addr_m;
      UINT16 hmac_addr_l;
 
-	 /*
-      *	The CPSGMII configurations for Faraday
+     /*
+      * The CPSGMII configurations for Faraday
       */
 
      UINT16 sgmiiConfig;
@@ -253,19 +234,19 @@ typedef struct boot_params_ethernet_s{
      #define BOOT_PARAMS_SGMII_CONFIG_DIRECT_CONFIG  (1<<4)   /* set to use direct configurations */
      #define BOOT_PARAMS_SGMII_CONFIG_NO_CONFIG      (1<<5)   /* set to bypass CPSGMII config  */
 
-	 UINT16 sgmiiControl;
+     UINT16 sgmiiControl;
      #define BOOT_PARAMS_SGMII_CONTROL_MASK 0x7F
 
-	 UINT16 sgmiiMr_Adv_Ability;
+     UINT16 sgmiiMr_Adv_Ability;
      #define BOOT_PARAMS_SGMII_ABILITY_MASK 0x0000FFFF
 
      /* These registers are the serdes configuration registers */
-	 UINT16 sgmiiTx_Cfg_h;
-	 UINT16 sgmiiTx_Cfg_l;
-	 UINT16 sgmiiRx_Cfg_h;
-	 UINT16 sgmiiRx_Cfg_l;
-	 UINT16 sgmiiAux_Cfg_h;
-	 UINT16 sgmiiAux_Cfg_l;
+     UINT16 sgmiiTx_Cfg_h;
+     UINT16 sgmiiTx_Cfg_l;
+     UINT16 sgmiiRx_Cfg_h;
+     UINT16 sgmiiRx_Cfg_l;
+     UINT16 sgmiiAux_Cfg_h;
+     UINT16 sgmiiAux_Cfg_l;
 
      UINT16 pktPllCfg_msw;      /* Packet subsystem PLL configuration */
      UINT16 pktPllCfg_lsw;
@@ -934,12 +915,7 @@ typedef struct bootEmif4Tbl_s  {
 #define TIBOOT_ERR_HIBERNATION_ADDR_MISALIGNED  -2
 #define TIBOOT_ERR_HIBERNATION_ADDR_INVALID     -3
 
-/* Boot mode values */
-#define BOOT_MODE_I2C               40
-#define BOOT_MODE_SPI               50
 
-/* ROM boot loader enter address */
-#define BOOT_ROM_ENTER_ADDRESS      0x20b00000
 
 #endif  /* __TIBOOT_H__ */
 

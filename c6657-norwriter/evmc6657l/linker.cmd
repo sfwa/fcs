@@ -56,7 +56,7 @@ SECTIONS
     .cppi       >       L2SRAM
     .linkram    >       L2SRAM
     .mac_buffer >       L2SRAM
-    .platform_lib >     L2SRAM
+    platform_lib >     L2SRAM
     .text       >       L2SRAM
     GROUP (NEAR_DP)
     {

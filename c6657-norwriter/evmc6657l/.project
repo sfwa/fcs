@@ -83,11 +83,6 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>README.txt</name>
-			<type>1</type>
-			<locationURI>TI_MCSDK_WRITER_DIR/nor/docs/README.txt</locationURI>
-		</link>
-		<link>
 			<name>norwriter.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/src/norwriter.c</locationURI>

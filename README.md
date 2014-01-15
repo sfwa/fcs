@@ -32,6 +32,19 @@ tests can then manually be run (with more detailed reporting) by running
 `./unittest` in the build directory.
 
 
+## Copying firmware to SPI flash
+
+After building the `fcs` project, CCS will generate an `fcs.btbl` file which
+is used as the basis for the firmware image.
+
+Run `cd fcs/ccs-scripts && make fcs.debug.dat` (or `fcs.release.dat`) to build
+the necessary firmware image conversion tools and output the firmeware image
+to `fcs.debug.dat` in the `fcs/ccs-scripts` directory.
+
+Move that file to `c6657-norwriter/bin/app.dat`, then follow "Steps to program
+the NOR" in `c6657-norwriter/docs/README.txt`.
+
+
 ## Overview
 
 Main bootloader executes AHRS on core 0, and NMPC on core 1.
