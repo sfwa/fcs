@@ -175,10 +175,11 @@ void fcs_board_init_platform(void) {
     -- we wait for the I/O board comms to time out and reset the links to
     ensure we get a clean start.
     */
-    assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT0, 868056u) == FCS_STREAM_OK);
-    assert(
-        fcs_stream_set_rate(FCS_STREAM_UART_INT1, 868056u) == FCS_STREAM_OK);
+    enum fcs_stream_result_t result;
+    result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 868056u);
+    assert(result == FCS_STREAM_OK);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 868056u);
+    assert(result == FCS_STREAM_OK);
 
 #ifdef __TI_COMPILER_VERSION__
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
@@ -319,7 +320,7 @@ void fcs_board_tick(void) {
     uint8_t i;
     for (i = 0; i < 2; i++){
         if (_fcs_read_ioboard_packet(
-                FCS_STREAM_UART_INT0 + i, i,
+                (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), i,
                 &fcs_global_ahrs_state.measurements)) {
             ioboard_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
         }
@@ -331,8 +332,8 @@ void fcs_board_tick(void) {
         If the time since last I/O board tick/reset is too high, the stream
         should be reset.
         */
-        if (fcs_stream_check_error(FCS_STREAM_UART_INT0 + i) ==
-                FCS_STREAM_ERROR) {
+        if (fcs_stream_check_error((enum fcs_stream_device_t)
+        		(FCS_STREAM_UART_INT0 + i)) == FCS_STREAM_ERROR) {
             fcs_global_counters.ioboard_packet_rx_err[i]++;
         }
 
@@ -344,8 +345,10 @@ void fcs_board_tick(void) {
             ioboard_timeout[i] = FCS_IOBOARD_RESET_TIMEOUT;
             fcs_global_counters.ioboard_resets[i]++;
 
-            assert(fcs_stream_open(FCS_STREAM_UART_INT0 + i) ==
-                   FCS_STREAM_OK);
+            enum fcs_stream_result_t result;
+            result = fcs_stream_open(
+                (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i));
+            assert(result == FCS_STREAM_OK);
         } else if (ioboard_timeout[i] > INT16_MIN) {
             ioboard_timeout[i]--;
         }

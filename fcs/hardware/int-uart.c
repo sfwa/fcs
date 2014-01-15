@@ -333,7 +333,6 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
     /* Read out the LSR and RBR to reset status */
     uint8_t dummy = uart[uart_idx]->LSR;
     dummy = uart[uart_idx]->RBR;
-    #pragma unused(dummy);
 }
 
 void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
@@ -406,8 +405,7 @@ uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
             edma3->TPCC_EMCR = 1u << rx_edma_event[uart_idx];
 
             /* Read out RBR and LSR to reset error status */
-            uint8_t dummy = uart[uart_idx]->RBR;
-            #pragma unused(dummy);
+            volatile uint8_t dummy = uart[uart_idx]->RBR;
 
             lsr = uart[uart_idx]->LSR;
 
@@ -528,9 +526,8 @@ uint16_t buf_size) {
     edma3->TPCC_ECR = 1u << rx_edma_event[uart_idx];
 
     /* Read out the LSR and RBR to reset status */
-    uint8_t dummy = uart[uart_idx]->LSR;
+    volatile uint8_t dummy = uart[uart_idx]->LSR;
     dummy = uart[uart_idx]->RBR;
-    #pragma unused(dummy);
 
     /* Clear the RX FIFO: DMAMODE + RXCLR + FIFOEN */
     uart[uart_idx]->FCR = 0x9u;
@@ -772,8 +769,7 @@ uint16_t buf_size) {
 
     /* Put the UART TX into reset -- clear UTRST in PWREMU_MGMT (bit 14) */
     uart[uart_idx]->PWREMU_MGMT &= 0xFFFFBFFF;
-    uint8_t dummy = uart[uart_idx]->LSR;
-    #pragma unused(dummy);
+    volatile uint8_t dummy = uart[uart_idx]->LSR;
 
     /* Clear the TX FIFO: DMAMODE + TXCLR + FIFOEN */
     uart[uart_idx]->FCR = 0xDu;

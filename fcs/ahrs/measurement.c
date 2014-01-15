@@ -33,6 +33,7 @@ SOFTWARE.
 #include "../drivers/stream.h"
 #include "../stats/stats.h"
 #include "../TRICAL/TRICAL.h"
+#include "../ukf/cukf.h"
 #include "measurement.h"
 #include "ahrs.h"
 

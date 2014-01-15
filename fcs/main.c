@@ -62,6 +62,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "config/config.h"
 #include "hardware/board.h"
 #include "TRICAL/TRICAL.h"
+#include "ukf/cukf.h"
 #include "ahrs/measurement.h"
 #include "ahrs/ahrs.h"
 #include "nmpc/nmpc.h"

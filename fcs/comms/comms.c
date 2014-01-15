@@ -33,6 +33,7 @@ SOFTWARE.
 #include "../drivers/stream.h"
 #include "../drivers/peripheral.h"
 #include "../TRICAL/TRICAL.h"
+#include "../ukf/cukf.h"
 #include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
@@ -255,7 +256,6 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
         IN_CPU_PACKET,
         ENDED_CPU_PACKET
     } state = UNKNOWN;
-    bool result = false;
 
     nbytes = fcs_stream_read(dev, buf, 255u);
     for (i = 0; i < nbytes && state != ENDED_RFD900_PACKET &&

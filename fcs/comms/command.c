@@ -31,6 +31,7 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../TRICAL/TRICAL.h"
+#include "../ukf/cukf.h"
 #include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"

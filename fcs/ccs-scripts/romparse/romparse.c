@@ -505,7 +505,7 @@ void assignKeyVal (int field, int value)
 
 #if (defined(c66x) || defined(c665x))
         case SWPLL_PREDIV:    current_table.common.swPllCfg_lsw &= 0x00ff;
-                              current_table.common.swPllCfg_lsw |= ((value & 0xff) << 16);
+                              current_table.common.swPllCfg_lsw |= ((value & 0xff) << 8);
                               break;
 
         case SWPLL_MULT:      current_table.common.swPllCfg_msw &= 0xc000;
@@ -904,10 +904,10 @@ void createOutput (void)
             boot_params[progFile[i].tag[j]].spi.read_addr_lsw = (progFile[i].addressBytes & 0xffff);
             boot_params[progFile[i].tag[j]].spi.read_addr_msw = (progFile[i].addressBytes  >> 16) & 0xffff;
             continue;
+          } else {
+            boot_params[progFile[i].tag[j]].i2c.dev_addr = (progFile[i].addressBytes & 0xffff);
           }
         #endif
-
-        boot_params[progFile[i].tag[j]].i2c.dev_addr = (progFile[i].addressBytes & 0xffff);
       }
     }
   }

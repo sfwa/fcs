@@ -405,7 +405,6 @@ const float q2[4]) {
 static void matrix_multiply_d(double *restrict C, const double B[],
 const double A[], const size_t AR, const size_t AC, const size_t BR,
 const size_t BC, const double mul) {
-#pragma unused(BC)
     /*
     Calculate C = AB, where A has AN rows and AM columns, and B has BN rows
     and BM columns. C must be AN x BM.
@@ -434,7 +433,6 @@ const size_t BC, const double mul) {
 static void matrix_multiply_f(float *restrict C, const float B[],
 const float A[], const size_t AR, const size_t AC, const size_t BR,
 const size_t BC, const float mul) {
-#pragma unused(BC)
     /*
     Calculate C = AB, where A has AN rows and AM columns, and B has BN rows
     and BM columns. C must be AN x BM.

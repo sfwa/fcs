@@ -38,6 +38,7 @@ SOFTWARE.
 #include "../ukf/cukf.h"
 #include "../stats/stats.h"
 #include "../TRICAL/TRICAL.h"
+#include "../ukf/cukf.h"
 #include "measurement.h"
 #include "wmm.h"
 #include "ahrs.h"
@@ -855,7 +856,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
 
     switch (mode) {
         case FCS_MODE_INITIALIZING:
-            ukf_choose_dynamics(0);
+            ukf_choose_dynamics(UKF_MODEL_NONE);
             break;
         case FCS_MODE_CALIBRATING:
             /* Start up clean */
@@ -867,7 +868,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
                 &fcs_global_ahrs_state.ukf_process_noise[21], 1e-7, 3u);
             break;
         case FCS_MODE_SAFE:
-            ukf_choose_dynamics(0);
+            ukf_choose_dynamics(UKF_MODEL_NONE);
 
             vector_set_d(
                 &fcs_global_ahrs_state.ukf_process_noise[9], 1e-8, 3u);

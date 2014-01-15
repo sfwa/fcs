@@ -31,3 +31,6 @@ fcs/ccs-scripts/b2i2c
 fcs/ccs-scripts/bconvert64x
 fcs/ccs-scripts/byteswapccs
 fcs/ccs-scripts/romparse/romparse
+c6657-norwriter/evm6657l/Debug
+c6657-norwriter/evm6657l/Makefile
+c6657-norwriter/evm6657l/bin

@@ -21,7 +21,7 @@ license:
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-util/cobsr.c is distributed under the MIT license:
+fcs/util/cobsr.c is distributed under the MIT license:
 
     Copyright (c) 2010 Craig McQueen
 
@@ -43,12 +43,12 @@ util/cobsr.c is distributed under the MIT license:
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
 
-util/crc32.c is distributed under an unrestricted license:
+fcs/util/crc32.c is distributed under an unrestricted license:
 
     Copyright (C) 1986 Gary S. Brown. You may use this program, or
     code or tables extracted from it, as desired without restriction.
 
-util/crc8.c is distributed under the ISC license:
+fcs/util/crc8.c is distributed under the ISC license:
 
     Copyright (c) 2011 Broadcom Corporation
 
@@ -64,7 +64,7 @@ util/crc8.c is distributed under the ISC license:
     ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
     IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-c66x-csl is distributed under license from Texas Instruments Incorporated:
+fcs/c66x-csl is distributed under license from Texas Instruments Incorporated:
 
     Copyright (c) Texas Instruments Incorporated 2002, 2003, 2004, 2005, 2006,
     2008
@@ -97,40 +97,7 @@ c66x-csl is distributed under license from Texas Instruments Incorporated:
     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-hardware/spi-flash.c is distributed under license from Texas Instruments
-Incorporated:
-
-    Copyright (c) 2011-2012 Texas Instruments Incorporated - http://www.ti.com
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions
-    are met:
-
-      Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-      Redistributions in binary form must reproduce the above copyright
-      notice, this list of conditions and the following disclaimer in the
-      documentation and/or other materials provided with the
-      distribution.
-
-      Neither the name of Texas Instruments Incorporated nor the names of
-      its contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-The PLL and DDR3 setup code in hardware/core/c6657.c is distributed under
+The PLL and DDR3 setup code in fcs/hardware/core/c6657.c is distributed under
 license from Texas Instruments Incorporated:
 
     Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
@@ -163,9 +130,9 @@ license from Texas Instruments Incorporated:
     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ahrs/wmm.c and ahrs/wmm2010_coeff.h are in the public domain, as they consist
-primarily of code written by a US government agency. The license information
-incuded with the current version of the upstream code is:
+fcs/ahrs/wmm.c and fcs/ahrs/wmm2010_coeff.h are in the public domain, as they
+consist primarily of code written by a US government agency. The license
+information incuded with the current version of the upstream code is:
 
     "The WMM source code is in the public domain and not licensed or under
     copyright.
@@ -192,7 +159,7 @@ disclaimer applies:
     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ccs-scripts are derived from the TI MCSDK 2.01.01.04. These files are
+fcs/ccs-scripts are derived from the TI MCSDK 2.01.01.04. These files are
 distributed under the following license:
 
     Copyright (C) 2010 Texas Instruments Incorporated - http://www.ti.com/
@@ -225,9 +192,9 @@ distributed under the following license:
     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ccs-scripts/romparse/rparse.tab.c and ccs-scripts/romparse/rparse.tab.h are
-generated by GNU Bison 2.4.1 from scripts developed by Texas Instruments, and
-subject to the following license. For clarity, these files are distributed
+fcs/ccs-scripts/romparse/rparse.tab.c and ccs-scripts/romparse/rparse.tab.h
+are generated by GNU Bison 2.4.1 from scripts developed by Texas Instruments,
+and subject to the following license. For clarity, these files are distributed
 under the terms of the Texas Instruments license above, and NOT under the
 terms of the GNU General Public License:
 
@@ -259,3 +226,35 @@ terms of the GNU General Public License:
 
     This special exception was added by the Free Software Foundation in
     version 2.2 of Bison.
+
+c6657-norwriter is distributed under license from Texas Instruments:
+
+    Copyright (c) 2011 Texas Instruments Incorporated - http://www.ti.com
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+      Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+      Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the
+      distribution.
+
+      Neither the name of Texas Instruments Incorporated nor the names of
+      its contributors may be used to endorse or promote products derived
+      from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
