@@ -26,17 +26,29 @@ fcs/Release
 *.dat
 *.i2c
 *.rom
+*.bin
 cpld/db
 cpld/incremental_db
 cpld/output_files
 .metadata
 
 # TI tool build junk
+.launches/
 fcs/ccs-scripts/b2i2c
 fcs/ccs-scripts/b2ccs
 fcs/ccs-scripts/bconvert64x
 fcs/ccs-scripts/byteswapccs
 fcs/ccs-scripts/bootbuild
+fcs/ccs-scripts/ccs2bin
 c6657-norwriter/evmc6657l/Debug
 c6657-norwriter/evmc6657l/Makefile
-c6657-norwriter/evmc6657l/bin
+c6657-norwriter/evmc6657l/bin/app.bin
+c6657-norwriter/evmc6657l/bin/norwriter_evm6657l.map
+c6657-norwriter/evmc6657l/bin/norwriter_evm6657l.out
+c6657-norwriter/evmc6657l/.launches/
+
+# Altera junk
+cpld/cpuboard_test_assignment_defaults.qdf
+cpld/cpuboard_test_description.txt
+cpld/cpuboard_test_nativelink_simulation.rpt
+cpld/simulation

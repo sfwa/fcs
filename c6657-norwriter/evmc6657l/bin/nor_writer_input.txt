@@ -1,4 +1,4 @@
-file_name  = app.dat
+file_name  = app.bin
 start_addr = 0
 
 

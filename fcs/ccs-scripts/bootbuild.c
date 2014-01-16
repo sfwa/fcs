@@ -382,13 +382,12 @@ int createOutput(void)
     printf("from %s ... %d %d %d %d %d\n",szExeFile,a,b,c,d,num32BitWords);
 
     /* Update the boot table */
-    spiBootParamTable.length         = sizeof(spiBootParamTable);
-    spiBootParamTable.length        += 4 - (4-(spiBootParamTable.length % 4));
+    spiBootParamTable.length         = 0x50; /* 80 bytes */
     spiBootParamTable.checksum       = 0;
-    spiBootParamTable.read_addr_lsw  = spiBootParamTable.length;
+    spiBootParamTable.read_addr_lsw  = 0x400; /* Allow 1KB at the start */
 
     /* Output header record for .ccs */
-    fprintf(fpOut,"%d %d %d %d %x\n",a,b,c,d,num32BitWords+(spiBootParamTable.length)/4);
+    fprintf(fpOut,"%d %d %d %d %x\n",a,b,c,d,num32BitWords + 256);
 
     /* Output the spiBootParamTable  */
     value = formWord(0, (unsigned char *)&spiBootParamTable); fprintf(fpOut,"0x%08x\n",value);
@@ -401,6 +400,11 @@ int createOutput(void)
     value = formWord(28,(unsigned char *)&spiBootParamTable); fprintf(fpOut,"0x%08x\n",value);
     value = formWord(32,(unsigned char *)&spiBootParamTable); fprintf(fpOut,"0x%08x\n",value);
     value = formWord(36,(unsigned char *)&spiBootParamTable); fprintf(fpOut,"0x%08x\n",value);
+
+    /* Output the remainder of the padding */
+    for (i = 40; i < 1024; i += 4) {
+        fprintf(fpOut, "0x00000000\n");
+    }
 
     /* Append the .ccs file to the output "i2crom.ccs" */
     for (i=0; i<num32BitWords; i++)
