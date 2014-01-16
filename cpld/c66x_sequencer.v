@@ -163,7 +163,7 @@ parameter boot_endian_little = 1'b1,
           boot_device_none = 3'b0,
           boot_device_spiflash = 3'b110,
           boot_config_none = 10'b0,
-          boot_config_spi_mode = 2'b00,
+          boot_config_spi_mode = 2'b10, /* CPOL=0, CPHA=0 */
           boot_config_spi_pins_4 = 1'b0,
           boot_config_spi_pins_5 = 1'b1,
           boot_config_spi_addrwidth_24 = 1'b1,

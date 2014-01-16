@@ -79,6 +79,12 @@ the boot config registers.
 #define FCS_DDR3_PLL_MUL 39
 #define FCS_DDR3_PLL_DIV 2
 
+/*
+Use the following for 1333MHz:
+#define FCS_DDR3_PLL_MUL 79
+#define FCS_DDR3_PLL_DIV 2
+*/
+
 static void _fcs_core_pll_setup(void) {
     assert(DNUM == 0);
 

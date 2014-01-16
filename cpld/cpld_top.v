@@ -174,7 +174,8 @@ Global system enable -- wait until the board power supplies are good
 */
 assign sys_enable = pg_3v3 & pg_5v;
 
-assign gpio[4:0] = 5'bz;
+assign gpio[4:0] = { 1'bz, spi_flash_cs_INV, spi_flash_clk, spi_flash_mosi,
+                     spi_flash_miso };
 assign smbus_cntrl = 1'bz;
 assign smbus_clk = 1'bz;
 assign smbus_data = 1'bz;
