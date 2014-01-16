@@ -82,7 +82,7 @@
 						</tool>
 					</fileInfo>
 					<sourceEntries>
-						<entry excluding="ccs-scripts/Makefile|ccs-scripts/byteswapccs.c|ccs-scripts/bconvert64x.c|ccs-scripts/b2i2c.c|ccs-scripts/romparse|ukf/ukf.a|test" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="ccs-scripts/ccs2bin.c|ccs-scripts/bootbuild.c|ccs-scripts/b2ccs.c|ccs-scripts/Makefile|ccs-scripts/byteswapccs.c|ccs-scripts/bconvert64x.c|ccs-scripts/b2i2c.c|ccs-scripts/romparse|ukf/ukf.a|test" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -169,7 +169,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="ccs-scripts/byteswapccs.c|ccs-scripts/bconvert64x.c|ccs-scripts/b2i2c.c|ccs-scripts/romparse|ukf/ukf.a|test" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="ccs-scripts/ccs2bin.c|ccs-scripts/bootbuild.c|ccs-scripts/b2ccs.c|ccs-scripts/byteswapccs.c|ccs-scripts/bconvert64x.c|ccs-scripts/b2i2c.c|ccs-scripts/romparse|ukf/ukf.a|test" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

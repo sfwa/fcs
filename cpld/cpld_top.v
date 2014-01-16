@@ -265,6 +265,11 @@ always @(*) begin
 		cpu_ext_uart0_rx = ioboard_uart0_rx;
 		cpu_ext_uart1_rx = ioboard_uart1_rx;
 		ext_uart0_tx = dsp_int_uart1_tx;
+
+		spi_flash_cs_INV = dsp_spi_cs0_INV;
+		spi_flash_mosi = dsp_spi_mosi;
+		spi_flash_clk = dsp_spi_clk;
+		dsp_spi_miso = spi_flash_miso;
 	end else begin
 		dsp_int_uart0_rx = 1'b0;
 		ioboard_uart0_tx = 1'b0;
@@ -278,6 +283,11 @@ always @(*) begin
 		cpu_ext_uart0_rx = 1'b0;
 		cpu_ext_uart1_rx = 1'b0;
 		ext_uart0_tx = 1'b0;
+
+		spi_flash_cs_INV = 1'b1;
+		spi_flash_mosi = 1'b0;
+		spi_flash_clk = 1'b0;
+		dsp_spi_miso = 1'b0;
 	end
 end
 

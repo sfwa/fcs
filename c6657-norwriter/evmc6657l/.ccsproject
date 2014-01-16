@@ -7,5 +7,5 @@
 	<isElfFormat value="true"/>
 	<rts value="rts6600_elf.lib"/>
 	<deviceFamily value="C6000"/>
-	<isTargetManual value="false"/>
+	<isTargetManual value="true"/>
 </projectOptions>

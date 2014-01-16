@@ -43,8 +43,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "platform.h"
-#include "types.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include "spi-flash.h"
 
 /* NOR writer utility version */
 char version[] = "01.00.00.03";
@@ -108,18 +109,6 @@ void Osal_platformSpiCsExit (void)
 }
 
 /******************************************************************************
- * Function:    print_platform_errno
- ******************************************************************************/
-void
-print_platform_errno
-(
-    void
-)
-{
-    printf ("Returned platform error number is %d\n", platform_errno);
-}
-
-/******************************************************************************
  * Function:    form_block
  *
  *      Form a block of data to write to the NOR. The block is
@@ -150,26 +139,25 @@ formBlock
  * Function:    flash_nor
  *
  *              Write the image to flash.
- *              Returns TRUE if the image is written successfully
- *                      FALSE if the image write fails
+ *              Returns true if the image is written successfully
+ *                      false if the image write fails
  ******************************************************************************/
-Bool
+bool
 flash_nor
-(
-    PLATFORM_DEVICE_info    *p_device
-)
+()
 {
     uint32_t      wPos, wLen;
     uint32_t      block, start_block;
-    uint8_t       *scrach_block;
+    uint8_t       *scratch_block;
+    NOR_STATUS              result;
 
     if (swap_byte)
     {
-        scrach_block = malloc(norWriterInfo.blockSizeBytes);
-        if (scrach_block == NULL)
+        scratch_block = malloc(norWriterInfo.blockSizeBytes);
+        if (scratch_block == NULL)
         {
             printf ("Can not allocate scratch block memory!\n");
-            return (FALSE);
+            return (false);
         }
     }
 
@@ -188,116 +176,115 @@ flash_nor
 
         if (swap_byte)
         {
-            formBlock((uint32_t *)(&norWriterInfo.writeData[wPos]), norWriterInfo.blockSizeBytes, scrach_block);
+            formBlock((uint32_t *)(&norWriterInfo.writeData[wPos]), norWriterInfo.blockSizeBytes, scratch_block);
         }
         else
         {
-            scrach_block = &norWriterInfo.writeData[wPos];
+            scratch_block = &norWriterInfo.writeData[wPos];
         }
-        if (platform_device_write(p_device->handle,
-                                  block*norWriterInfo.blockSizeBytes,
-                                  scrach_block,
-                                  wLen) != Platform_EOK)
-        {
-            printf ("platform_nor_write sector # %d failed!\n", block);
-            print_platform_errno();
-            if (swap_byte) free (scrach_block);
-            return (FALSE);
+
+        result = nor_erase(block);
+        if (result != NOR_EOK) {
+            printf ("nor_erase sector # %d failed!\n", block);
+            if (swap_byte) free (scratch_block);
+            return (false);
+        }
+
+        result = nor_write(block * norWriterInfo.blockSizeBytes, wLen,
+                           scratch_block);
+        if (result != NOR_EOK) {
+            printf ("nor_write sector # %d failed!\n", block);
+            if (swap_byte) free (scratch_block);
+            return (false);
         }
     }
 
-    if (swap_byte) free (scrach_block);
-    return (TRUE);
+    if (swap_byte) free (scratch_block);
+    return (true);
 }
 
 /******************************************************************************
  * Function:    flash_verify
  *
  *              Read back the data file that was just flashed. On errors mark the block as bad.
- *              Returns TRUE if the image verified correctly.
- *                      FALSE if the image verification failed
+ *              Returns true if the image verified correctly.
+ *                      false if the image verification failed
  ******************************************************************************/
-Bool
+bool
 flash_verify
-(
-    PLATFORM_DEVICE_info    *p_device
-)
+()
 {
     uint32_t      rPos, rLen;
     uint32_t      i, j;
     uint32_t      block, start_block;
-    uint8_t       *scrach_block;
+    uint8_t       *scratch_block;
     uint32_t      *read_data_w;
+    NOR_STATUS              result;
 
     if (swap_byte)
     {
-        scrach_block = malloc(norWriterInfo.blockSizeBytes);
-        if (scrach_block == NULL)
+        scratch_block = malloc(norWriterInfo.blockSizeBytes);
+        if (scratch_block == NULL)
         {
             printf ("Can not allocate scratch block memory!\n");
-            return (FALSE);
+            return (false);
         }
     }
 
     start_block = norWriterInfo.startAddr / norWriterInfo.blockSizeBytes;
 
-    for (block = start_block, rPos = 0; rPos < norWriterInfo.writeBytes; block++, rPos += norWriterInfo.blockSizeBytes)
-    {
-        printf ("Reading and verifying sector %d (%d bytes of %d)\n", block, rPos, norWriterInfo.writeBytes);
+    for (block = start_block, rPos = 0; rPos < norWriterInfo.writeBytes;
+            block++, rPos += norWriterInfo.blockSizeBytes) {
+        printf("Reading and verifying sector %d (%d bytes of %d)\n", block, rPos, norWriterInfo.writeBytes);
 
-        if (!swap_byte)
-        {
-            scrach_block = &norWriterInfo.readData[rPos];
-
+        if (!swap_byte) {
+            scratch_block = &norWriterInfo.readData[rPos];
         }
+        result = nor_read(block * norWriterInfo.blockSizeBytes,
+                          norWriterInfo.blockSizeBytes, scratch_block);
+
         /* Read a sector of data */
-        if(platform_device_read(p_device->handle,
-                                block*norWriterInfo.blockSizeBytes,
-                                scrach_block,
-                                norWriterInfo.blockSizeBytes) != Platform_EOK)
-        {
+        if (result != NOR_EOK) {
             printf ("Failure in sector %d\n", block);
-            print_platform_errno();
-            if (swap_byte) free (scrach_block);
-            return (FALSE);
+            if (swap_byte) free (scratch_block);
+            return (false);
         }
 
         /* Convert the packed data */
-        if (swap_byte)
-        {
+        if (swap_byte) {
             read_data_w = (uint32_t *)(&norWriterInfo.readData[rPos]);
             for  (i = 0, j = 0; i < norWriterInfo.blockSizeBytes; i += 4)
-                read_data_w[j++] = (scrach_block[i+0] << 24) | (scrach_block[i+1] << 16) | (scrach_block[i+2] << 8) | scrach_block[i+3];
+                read_data_w[j++] = (scratch_block[i+0] << 24) |
+                                   (scratch_block[i+1] << 16) |
+                                   (scratch_block[i+2] << 8) |
+                                   scratch_block[i+3];
         }
 
         /* Read the data from the file */
         rLen = norWriterInfo.blockSizeBytes;
-        if (norWriterInfo.writeBytes - rPos < norWriterInfo.blockSizeBytes)
-        {
+        if (norWriterInfo.writeBytes - rPos < norWriterInfo.blockSizeBytes) {
             rLen = norWriterInfo.writeBytes - rPos;
         }
 
-        for (i = rPos; i < rLen; i++)
-        {
-            if (norWriterInfo.readData[i] != norWriterInfo.writeData[i])
-            {
+        for (i = rPos; i < rLen; i++) {
+            if (norWriterInfo.readData[i] != norWriterInfo.writeData[i]) {
                 printf ("Failure in sector %d, at byte %d, (at byte %d in the data file) expected 0x%08x, read 0x%08x\n",
                         block, i, rPos, norWriterInfo.writeData[i], norWriterInfo.readData[i]);
-                if (swap_byte) free (scrach_block);
-                return (FALSE);
+                if (swap_byte) free (scratch_block);
+                return (false);
             }
         }
 
     }
 
-    if (swap_byte) free (scrach_block);
-    return (TRUE);
+    if (swap_byte) free (scratch_block);
+    return (true);
 }
 
 /******************************************************************************
  * Function:    parse_input_file
  ******************************************************************************/
-static Bool
+static bool
 parse_input_file
 (
     FILE*               fp
@@ -315,12 +302,12 @@ parse_input_file
 
     if(strlen(data) == 0)
     {
-       return FALSE;
+       return false;
     }
 
     if(strcmp(key, FILE_NAME) != 0)
     {
-        return FALSE;
+        return false;
     }
 
     strcpy (norWriterInfo.file_name, data);
@@ -331,23 +318,23 @@ parse_input_file
 
     if(strlen(data) == 0)
     {
-       return FALSE;
+       return false;
     }
 
     if(strcmp(key, START_ADDR) != 0)
     {
-        return FALSE;
+        return false;
     }
 
     norWriterInfo.startAddr = (uint32_t)atoi(data);
 
-    return TRUE;
+    return true;
 }
 
 /******************************************************************************
  * Function:    find_file_length
  ******************************************************************************/
-static Bool
+static bool
 find_file_length
 (
     FILE*               fp
@@ -387,16 +374,14 @@ find_file_length
     if (data_len > (norWriterInfo.deviceTotalBytes - norWriterInfo.startAddr))
     {
         printf ("The data file is too big to fit into the device.\n");
-        return FALSE;
+        return false;
     }
 
     norWriterInfo.writeBytes = data_len;
-    if (write_addr != WRITE_DATA_ADDRESS)
-        write_addr = WRITE_DATA_ADDRESS;
-    norWriterInfo.writeData  = (uint8_t *)write_addr;
-    norWriterInfo.readData   = (uint8_t *)(write_addr + norWriterInfo.deviceTotalBytes);
+    norWriterInfo.writeData  = (uint8_t *)WRITE_DATA_ADDRESS;
+    norWriterInfo.readData   = (uint8_t *)(WRITE_DATA_ADDRESS + data_len + 1);
 
-    return TRUE;
+    return true;
 }
 
 /******************************************************************************
@@ -405,10 +390,8 @@ find_file_length
 void main ()
 {
     FILE                    *fp;
-    platform_init_flags     init_flags;
-    platform_init_config    init_config;
-    PLATFORM_DEVICE_info    *p_device;
-    Bool                    ret;
+    NOR_STATUS              result;
+    bool                    ret;
 
     printf("NOR Writer Utility Version %s\n\n", version);
 
@@ -422,36 +405,21 @@ void main ()
     ret = parse_input_file(fp);
     fclose (fp);
 
-    if (ret == FALSE)
+    if (ret == false)
     {
         printf("Error in parsing %s input file\n", input_file);
         return;
     }
 
     /* Initialize main Platform lib */
-    memset(&init_config, 0, sizeof(platform_init_config));
-    memset(&init_flags, 1, sizeof(platform_init_flags));
-    init_flags.pll = 0;
-    init_flags.ddr = 0;
-    if (platform_init(&init_flags, &init_config) != Platform_EOK)
-    {
-        printf ("Platform init failed!\n");
-        print_platform_errno();
+    result = nor_init();
+    if (result != NOR_EOK) {
+        printf ("NOR init failed!\n");
         return;
     }
-#if !(defined(_EVMC6657L_))
-    p_device = platform_device_open(PLATFORM_DEVID_NORN25Q128, 0);
-#else
-    p_device = platform_device_open(PLATFORM_DEVID_NORN25Q032A, 0);
-#endif
-    if (p_device == NULL)
-    {
-        printf ("NOR device open failed!\n");
-        print_platform_errno();
-        return;
-    }
-    norWriterInfo.deviceTotalBytes  = p_device->block_count * p_device->page_count * p_device->page_size;
-    norWriterInfo.blockSizeBytes    = p_device->page_count * p_device->page_size;
+
+    norWriterInfo.deviceTotalBytes  = SPI_NOR_MAX_FLASH_SIZE;
+    norWriterInfo.blockSizeBytes    = SPI_NOR_SECTOR_SIZE;
 
     if ((norWriterInfo.startAddr % norWriterInfo.blockSizeBytes) != 0)
     {
@@ -467,40 +435,33 @@ void main ()
     if (fp == NULL)
     {
       printf ("Failed to open file %s\n", norWriterInfo.file_name);
-      platform_device_close(p_device->handle);
       return;
     }
 
     /* Parse the CCS format file */
     ret = find_file_length(fp);
     fclose (fp);
-    if (ret == FALSE)
+    if (ret == false)
     {
         printf("Error in parsing CCS file %s\n", norWriterInfo.file_name);
-        platform_device_close(p_device->handle);
         return;
     }
 
     /* Write the flash */
-    if (flash_nor (p_device) == FALSE)
+    if (flash_nor() == false)
     {
         printf ("NOR write failed\n");
-        platform_device_close(p_device->handle);
         return;
     }
 
     /* verify the flash */
-    if(flash_verify (p_device) == FALSE)
+    if(flash_verify() == false)
     {
         printf ("NOR read verify failed\n");
-        platform_device_close(p_device->handle);
         return;
     }
 
-
     printf ("NOR programming completed successfully\n");
-
-    platform_device_close(p_device->handle);
 
     return;
 }

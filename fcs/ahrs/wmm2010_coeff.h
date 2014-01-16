@@ -47,8 +47,8 @@ struct wmm_record_t {
     double dhnm;
 };
 
-static double wmm_epoch = 2010.0;
-static struct wmm_record_t wmm_coeffs[] = {
+static const double wmm_epoch = 2010.0;
+static const struct wmm_record_t wmm_coeffs[] = {
     /* N   M        GNM        HNM        DGNM        DHNM */
     {  1,  0,  -29496.6,       0.0,       11.6,        0.0},
     {  1,  1,   -1586.3,    4944.4,       16.5,      -25.9},

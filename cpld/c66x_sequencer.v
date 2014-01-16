@@ -166,17 +166,21 @@ parameter boot_endian_little = 1'b1,
           boot_config_spi_mode = 2'b00,
           boot_config_spi_pins_4 = 1'b0,
           boot_config_spi_pins_5 = 1'b1,
-          boot_config_spi_addrwidth_16 = 1'b0,
           boot_config_spi_addrwidth_24 = 1'b1,
-          boot_config_spi_chipselect = 2'b0,
+          /*
+          Why yes, a CS value of 2'b10 does mean CS0 enabled:
+          http://e2e.ti.com/support/dsp/c6000_multi-core_dsps/f/639/t/283454.aspx
+          */
+          boot_config_spi_chipselect = 2'b10,
           boot_config_spi_param_table_idx = 4'b0;
 
 wire[15:0] default_bootmode = {boot_config_none, boot_device_none,
                          boot_endian_little};
 wire[15:0] spi_bootmode = {boot_config_spi_mode, boot_config_spi_pins_4,
-                     boot_config_spi_addrwidth_16,
                      boot_config_spi_addrwidth_24,
-                     boot_config_spi_param_table_idx};
+                     boot_config_spi_chipselect,
+                     boot_config_spi_param_table_idx,
+                     boot_device_spiflash, boot_endian_little};
 
 /* Mapping between current state and outputs */
 always @(*) begin
@@ -254,7 +258,7 @@ always @(*) begin
             reset_INV = 1'b1;
             vid_oe_INV = 1'b0;
             dsp_bank_en = 1'b1;
-            bootmode = default_bootmode;
+            bootmode = spi_bootmode;
         end
         startup_awaiting_resetstat_INV: begin
             cvdd_en = 1'b1;
@@ -267,7 +271,7 @@ always @(*) begin
             resetfull_INV = 1'b1;
             vid_oe_INV = 1'b0;
             dsp_bank_en = 1'b1;
-            bootmode = default_bootmode;
+            bootmode = spi_bootmode;
         end
         on: begin
             cvdd_en = 1'b1;

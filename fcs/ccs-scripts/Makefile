@@ -15,6 +15,9 @@ byteswapccs:
 bootbuild:
 	$(CC) -o bootbuild bootbuild.c
 
+ccs2bin:
+	$(CC) -o ccs2bin ccs2bin.c
+
 # Run bconvert54x on the output to ensure that sections with sizes that are
 # not multiples of 32 are loaded correctly
 fcs.debug.bc64: bconvert64x
@@ -55,5 +58,12 @@ fcs.debug.dat: byteswapccs fcs.debug.rom
 fcs.release.dat: byteswapccs fcs.release.rom
 	./byteswapccs fcs.release.rom fcs.release.dat
 
+# ccs2bin does the same, but maybe better?
+fcs.debug.bin: ccs2bin fcs.debug.rom
+	./ccs2bin -swap fcs.debug.rom fcs.debug.bin
+
+fcs.release.bin: ccs2bin fcs.release.rom
+	./ccs2bin -swap fcs.release.rom fcs.release.bin
+
 clean:
-	rm -f *.o bootbuild b2ccs b2i2c byteswapccs *.btbl *.i2c *.ccs *.rom *.dat
+	rm -f *.o bootbuild b2ccs b2i2c byteswapccs ccs2bin *.btbl *.i2c *.ccs *.rom *.dat *.bin

@@ -83,14 +83,39 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>cslr.h</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/include/cslr.h</locationURI>
+		</link>
+		<link>
+			<name>cslr_device.h</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/include/cslr_device.h</locationURI>
+		</link>
+		<link>
+			<name>cslr_spi.h</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/include/cslr_spi.h</locationURI>
+		</link>
+		<link>
 			<name>norwriter.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/src/norwriter.c</locationURI>
 		</link>
 		<link>
-			<name>types.h</name>
+			<name>spi-flash.c</name>
 			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/include/types.h</locationURI>
+			<locationURI>PARENT-1-PROJECT_LOC/src/spi-flash.c</locationURI>
+		</link>
+		<link>
+			<name>spi-flash.h</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/src/spi-flash.h</locationURI>
+		</link>
+		<link>
+			<name>tistdtypes.h</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/include/tistdtypes.h</locationURI>
 		</link>
 	</linkedResources>
 	<variableList>
