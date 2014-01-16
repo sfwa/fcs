@@ -224,7 +224,7 @@ int yyparse(void)
                     if (isFieldAndValue(&line[index],"param_index",&val))        {spiBootParamTable.portNum             = val;}
                     if (isFieldAndValue(&line[index],"sw_pll_flags",&val))       {spiBootParamTable.swPllCfg_msw       |= (UINT16)(0x0000C000 & (val<<14));}
                     if (isFieldAndValue(&line[index],"sw_pll_mult",&val))        {spiBootParamTable.swPllCfg_msw       |= (UINT16)(0x00003FFF & (val<<0));}
-                    if (isFieldAndValue(&line[index],"sw_pll_prediv",&val))      {spiBootParamTable.swPllCfg_msw       |= (UINT16)(0x0000FF00 & (val<<8));}
+                    if (isFieldAndValue(&line[index],"sw_pll_prediv",&val))      {spiBootParamTable.swPllCfg_lsw       |= (UINT16)(0x0000FF00 & (val<<8));}
                     if (isFieldAndValue(&line[index],"sw_pll_postdiv",&val))     {spiBootParamTable.swPllCfg_lsw       |= (UINT16)(0x000000FF & (val<<0));}
                     if (isFieldAndValue(&line[index],"options",&val))            {spiBootParamTable.options             = val;}
                     if (isFieldAndValue(&line[index],"addr_width",&val))         {spiBootParamTable.addrWidth           = val;}
