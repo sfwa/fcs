@@ -9,16 +9,13 @@ bconvert64x:
 b2i2c:
 	$(CC) -o b2i2c b2i2c.c
 
-byteswapccs:
-	$(CC) -o byteswapccs byteswapccs.c
-
 bootbuild:
 	$(CC) -o bootbuild bootbuild.c
 
 ccs2bin:
 	$(CC) -o ccs2bin ccs2bin.c
 
-# Run bconvert54x on the output to ensure that sections with sizes that are
+# Run bconvert64x on the output to ensure that sections with sizes that are
 # not multiples of 32 are loaded correctly
 fcs.debug.bc64: bconvert64x
 	./bconvert64x -le ../Debug/fcs.btbl fcs.debug.bc64
@@ -51,13 +48,6 @@ fcs.release.rom: bootbuild fcs.release.ccs
 	./bootbuild spi-Release.map
 	mv i2crom.ccs fcs.release.rom
 
-# byteswapccs converts the image to big-endian for the RBL
-fcs.debug.dat: byteswapccs fcs.debug.rom
-	./byteswapccs fcs.debug.rom fcs.debug.dat
-
-fcs.release.dat: byteswapccs fcs.release.rom
-	./byteswapccs fcs.release.rom fcs.release.dat
-
 # ccs2bin does the same, but maybe better?
 fcs.debug.bin: ccs2bin fcs.debug.rom
 	./ccs2bin -swap fcs.debug.rom fcs.debug.bin
@@ -66,4 +56,4 @@ fcs.release.bin: ccs2bin fcs.release.rom
 	./ccs2bin -swap fcs.release.rom fcs.release.bin
 
 clean:
-	rm -f *.o bootbuild b2ccs b2i2c byteswapccs ccs2bin *.btbl *.i2c *.ccs *.rom *.dat *.bin
+	rm -f *.o bootbuild b2ccs b2i2c ccs2bin *.btbl *.i2c *.ccs *.rom *.dat *.bin
