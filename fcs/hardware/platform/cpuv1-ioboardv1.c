@@ -176,9 +176,9 @@ void fcs_board_init_platform(void) {
     ensure we get a clean start.
     */
     enum fcs_stream_result_t result;
-    result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 868056u);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 2604168u);
     assert(result == FCS_STREAM_OK);
-    result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 868056u);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 2604168u);
     assert(result == FCS_STREAM_OK);
 
 #ifdef __TI_COMPILER_VERSION__
@@ -382,7 +382,6 @@ Read, deserialize and validate a full I/O board packet from `dev`. Since we
 get two of these every tick there's no point doing this incrementally; we just
 need to make sure we can deal with partial/corrupted packets.
 */
-#include <stdio.h>
 bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements) {
     assert(out_measurements);

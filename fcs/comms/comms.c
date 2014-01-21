@@ -138,13 +138,13 @@ void fcs_comms_tick(void) {
     /*
     Write the log values to internal stream 1 -- the CPLD will route this to
     the CPU UART
+    */
 
     comms_buf_len = fcs_measurement_log_serialize(
         comms_buf, sizeof(comms_buf), &fcs_global_ahrs_state.measurements);
     write_len = fcs_stream_write(FCS_STREAM_UART_INT1, comms_buf,
                                  comms_buf_len);
     assert(comms_buf_len == write_len);
-    */
 
     /* Check for packets from both the CPU and comms UARTs */
     _fcs_comms_parse_packets(FCS_STREAM_UART_EXT0);
