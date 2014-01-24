@@ -43,6 +43,7 @@ SOFTWARE.
 #include "../../TRICAL/TRICAL.h"
 #include "../../ahrs/measurement.h"
 #include "../../ahrs/ahrs.h"
+#include "../../control/control.h"
 
 struct sensor_packet_t {
     /* Base fields */
@@ -167,7 +168,7 @@ bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes,
 enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements);
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
-const double *restrict control_values);
+const uint16_t *restrict control_values, uint8_t gpout);
 
 void fcs_board_init_platform(void) {
     /*
@@ -355,19 +356,38 @@ void fcs_board_tick(void) {
     }
 
     /*
+    Work out the nominal current control position, taking into account the
+    control response time configured in control_rates. Log the result.
+    */
+    struct fcs_measurement_t control_log;
+    const struct fcs_control_channel_t *restrict control;
+    float proportional_pos;
+
+    #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
+    for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
+        control = &fcs_global_control_state.controls[i];
+        proportional_pos = (control->setpoint - control->min) /
+                           (control->max - control->min);
+        control_log.data.u16[i] = (uint16_t)(proportional_pos * UINT16_MAX);
+    }
+
+    fcs_measurement_set_header(&control_log, 16u, 4u);
+    fcs_measurement_set_sensor(&control_log, 0,
+                               FCS_MEASUREMENT_TYPE_CONTROL_POS);
+    fcs_measurement_log_add(&fcs_global_ahrs_state.measurements,
+                            &control_log);
+
+    /*
     Write current control values to I/O boards -- the CPLD replicates the I/O
     board output stream so we only need to write to one.
     */
-
-    /* TODO: Read control set values from NMPC */
-    double control_set[4] = { 0.0, 0.0, 0.0, 0.0 };
-
     size_t control_len;
     uint8_t control_buf[16];
     control_len = _fcs_format_control_packet(
         control_buf,
         (uint8_t)(fcs_global_ahrs_state.solution_time & 0xFFu),
-        control_set
+        control_log.data.u16,
+        0
     );
     assert(control_len < 16u);
     fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
@@ -606,7 +626,7 @@ invalid:
 Serialize a control packet containing `control_values` into `buf`.
 */
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
-const double *restrict control_values) {
+const uint16_t *restrict control_values, uint8_t gpout) {
     assert(buf);
     assert(control_values);
 
@@ -614,15 +634,14 @@ const double *restrict control_values) {
 
     packet.tick = tick;
     packet.msg_type = MSG_TYPE_CONTROL;
-    packet.gpout = 0;
+    packet.gpout = gpout;
 
     double val;
     uint8_t i;
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
-        val = min(max(1.0, control_values[i] * 65535.0), 65535.0);
         /* Swap bytes for big-endian AVR32 */
-        packet.pwm[i] = swap_uint16((uint16_t)val);
+        packet.pwm[i] = swap_uint16((uint16_t)control_values[i]);
     }
 
     /* Calculate the packet's CRC8 */

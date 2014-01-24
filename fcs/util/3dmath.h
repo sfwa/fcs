@@ -164,6 +164,24 @@ static inline void vector_set_f(float *restrict v1, float value, size_t n) {
     }
 }
 
+static inline void vector3_scale_d(double *restrict v, double scale) {
+    assert(v);
+    _nassert((size_t)v % 8 == 0);
+
+    v[0] *= scale;
+    v[1] *= scale;
+    v[2] *= scale;
+}
+
+static inline void vector3_scale_f(float *restrict v, float scale) {
+    assert(v);
+    _nassert((size_t)v % 4 == 0);
+
+    v[0] *= scale;
+    v[1] *= scale;
+    v[2] *= scale;
+}
+
 static inline double vector3_norm_d(const double *restrict v1) {
     assert(v1);
     _nassert((size_t)v1 % 8 == 0);
@@ -179,9 +197,9 @@ static inline float vector3_norm_f(const float *restrict v1) {
 }
 
 static inline void vector3_cross_d(double *restrict result,
-const double *restrict v1,
-const double *restrict v2) {
-    assert(result && v1 && v2 && result != v1 && result != v2 && v1 != v2);
+const double *v1,
+const double *v2) {
+    assert(result && v1 && v2 && result != v1 && result != v2);
     _nassert((size_t)result % 8 == 0);
     _nassert((size_t)v1 % 8 == 0);
     _nassert((size_t)v2 % 8 == 0);
@@ -201,9 +219,9 @@ const double *restrict v2) {
 }
 
 static inline void vector3_cross_f(float *restrict result,
-const float *restrict v1,
-const float *restrict v2) {
-    assert(result && v1 && v2 && result != v1 && result != v2 && v1 != v2);
+const float *v1,
+const float *v2) {
+    assert(result && v1 && v2 && result != v1 && result != v2);
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)v1 % 4 == 0);
     _nassert((size_t)v2 % 4 == 0);

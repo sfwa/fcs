@@ -38,7 +38,7 @@ SOFTWARE.
 #include "ahrs.h"
 
 /* Internal API for making and reading fields of various types */
-static inline enum fcs_measurement_type_t _fcs_extract_sensor_type(
+static inline enum fcs_measurement_type_t _extract_sensor_type(
 const uint8_t *buf) {
     assert(buf);
 
@@ -53,7 +53,7 @@ const uint8_t *buf) {
     return type;
 }
 
-static inline uint8_t _fcs_extract_sensor_id(const uint8_t *buf) {
+static inline uint8_t _extract_sensor_id(const uint8_t *buf) {
     assert(buf);
 
     uint8_t sensor_id;
@@ -67,7 +67,7 @@ static inline uint8_t _fcs_extract_sensor_id(const uint8_t *buf) {
     return sensor_id;
 }
 
-static inline size_t _fcs_extract_num_values(const uint8_t *buf) {
+static inline size_t _extract_num_values(const uint8_t *buf) {
     assert(buf);
 
     size_t num_values;
@@ -81,7 +81,7 @@ static inline size_t _fcs_extract_num_values(const uint8_t *buf) {
     return num_values;
 }
 
-static inline size_t _fcs_extract_precision_bits(const uint8_t *buf) {
+static inline size_t _extract_precision_bits(const uint8_t *buf) {
     assert(buf);
 
     size_t precision_bits;
@@ -95,12 +95,12 @@ static inline size_t _fcs_extract_precision_bits(const uint8_t *buf) {
     return precision_bits;
 }
 
-static inline size_t _fcs_extract_measurement_length(const uint8_t *buf) {
+static inline size_t _extract_measurement_length(const uint8_t *buf) {
     assert(buf);
 
     size_t num_values, precision_bits, length;
-    num_values = _fcs_extract_num_values(buf);
-    precision_bits = _fcs_extract_precision_bits(buf);
+    num_values = _extract_num_values(buf);
+    precision_bits = _extract_precision_bits(buf);
 
     /*
     Header length + num values * bytes required to contain precision_bits
@@ -111,7 +111,7 @@ static inline size_t _fcs_extract_measurement_length(const uint8_t *buf) {
     return length;
 }
 
-static inline uint8_t _fcs_make_measurement_header(size_t precision_bits,
+static inline uint8_t _make_measurement_header(size_t precision_bits,
 size_t num_values) {
     assert(precision_bits <= FCS_MEASUREMENT_PRECISION_BITS_MAX);
     assert(num_values <= FCS_MEASUREMENT_NUM_VALUES_MAX);
@@ -132,7 +132,7 @@ size_t num_values) {
          & FCS_MEASUREMENT_HEADER_NUM_VALUES_MASK);
 }
 
-static inline uint8_t _fcs_make_measurement_sensor(uint8_t sensor_id,
+static inline uint8_t _make_measurement_sensor(uint8_t sensor_id,
 enum fcs_measurement_type_t type) {
     assert(sensor_id <= FCS_MEASUREMENT_SENSOR_ID_MAX);
     assert(type < FCS_MEASUREMENT_TYPE_LAST);
@@ -147,42 +147,42 @@ enum fcs_measurement_type_t type) {
 /* Public, typed wrappers for the above functions */
 enum fcs_measurement_type_t fcs_measurement_get_sensor_type(
 const struct fcs_measurement_t *measurement) {
-    return _fcs_extract_sensor_type((const uint8_t*)measurement);
+    return _extract_sensor_type((const uint8_t*)measurement);
 }
 
 uint8_t fcs_measurement_get_sensor_id(
 const struct fcs_measurement_t *restrict measurement) {
-    return _fcs_extract_sensor_id((const uint8_t*)measurement);
+    return _extract_sensor_id((const uint8_t*)measurement);
 }
 
 size_t fcs_measurement_get_num_values(
 const struct fcs_measurement_t *restrict measurement) {
-    return _fcs_extract_num_values((const uint8_t*)measurement);
+    return _extract_num_values((const uint8_t*)measurement);
 }
 
 size_t fcs_measurement_get_precision_bits(
 const struct fcs_measurement_t *restrict measurement) {
-    return _fcs_extract_precision_bits((const uint8_t*)measurement);
+    return _extract_precision_bits((const uint8_t*)measurement);
 }
 
 size_t fcs_measurement_get_length(
 const struct fcs_measurement_t *restrict measurement) {
-    return _fcs_extract_measurement_length((const uint8_t*)measurement);
+    return _extract_measurement_length((const uint8_t*)measurement);
 }
 
 void fcs_measurement_set_header(
 struct fcs_measurement_t *restrict measurement, size_t precision_bits,
 size_t num_values) {
     assert(measurement);
-    measurement->header = _fcs_make_measurement_header(precision_bits,
-                                                       num_values);
+    measurement->header = _make_measurement_header(precision_bits,
+                                                   num_values);
 }
 
 void fcs_measurement_set_sensor(
 struct fcs_measurement_t *restrict measurement, uint8_t sensor_id,
 enum fcs_measurement_type_t type) {
     assert(measurement);
-    measurement->sensor = _fcs_make_measurement_sensor(sensor_id, type);
+    measurement->sensor = _make_measurement_sensor(sensor_id, type);
 }
 
 enum fcs_calibration_type_t fcs_calibration_get_type(
@@ -198,6 +198,14 @@ const struct fcs_calibration_t *restrict calibration) {
     assert(type < FCS_CALIBRATION_LAST);
 
     return type;
+}
+
+struct fcs_calibration_t* fcs_measurement_get_calibration(
+struct fcs_calibration_map_t *cmap,
+enum fcs_measurement_type_t measurement_type, uint8_t measurement_id) {
+    uint8_t sensor_key = _make_measurement_sensor(measurement_type,
+                                                  measurement_id);
+    return &(cmap->sensor_calibration[sensor_key]);
 }
 
 /* Initialize a log packet with a packet index of `frame_id` */
@@ -291,10 +299,10 @@ struct fcs_measurement_t *restrict out_measurement) {
     uint8_t search_key;
     size_t i, measurement_length;
 
-    search_key = _fcs_make_measurement_sensor(measurement_id, type);
+    search_key = _make_measurement_sensor(measurement_id, type);
 
     for (i = 5u; i < mlog->length;) {
-        measurement_length = _fcs_extract_measurement_length(&mlog->data[i]);
+        measurement_length = _extract_measurement_length(&mlog->data[i]);
         if (mlog->data[i + 1u] == search_key) {
             memcpy(out_measurement, &mlog->data[i], measurement_length);
             return true;
@@ -352,8 +360,8 @@ double *out_offset, double prescale) {
     /* Start scanning at index 5, first byte after the log record header */
     for (i = 5u, n_measurements = 0; i < mlog->length;
             i += measurement_length) {
-        measurement_length = _fcs_extract_measurement_length(&mlog->data[i]);
-        measurement_type = _fcs_extract_sensor_type(&mlog->data[i]);
+        measurement_length = _extract_measurement_length(&mlog->data[i]);
+        measurement_type = _extract_sensor_type(&mlog->data[i]);
 
         if (measurement_type != type) {
             continue;

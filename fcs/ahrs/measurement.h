@@ -285,7 +285,7 @@ applied.
 */
 void fcs_measurement_calibrate(
 const struct fcs_measurement_t *restrict measurement,
-const struct fcs_calibration_map_t * restrict cmap,
+const struct fcs_calibration_map_t *restrict cmap,
 double out_value[4], double *out_error, double *restrict out_offset,
 double prescale);
 
@@ -295,5 +295,13 @@ Returns the number of values in the measurement.
 */
 size_t fcs_measurement_get_values(
 const struct fcs_measurement_t *restrict measurement, double out_value[4]);
+
+/*
+Return a calibration map entry given a calibration map, a measurement type,
+and a measurement ID
+*/
+struct fcs_calibration_t* fcs_measurement_get_calibration(
+struct fcs_calibration_map_t *cmap,
+enum fcs_measurement_type_t measurement_type, uint8_t measurement_id);
 
 #endif

@@ -151,7 +151,7 @@ def reset():
     _fcs.fcs_util_init()
     _fcs.fcs_comms_init()
     _fcs.fcs_ahrs_init()
-    _fcs.fcs_nmpc_init()
+    _fcs.fcs_control_init()
 
 
 def tick():
@@ -167,7 +167,7 @@ def tick():
 
     _fcs.fcs_board_tick()
     _fcs.fcs_ahrs_tick()
-    _fcs.fcs_nmpc_tick()
+    _fcs.fcs_control_tick()
     _fcs.fcs_comms_tick()
 
 
@@ -260,12 +260,12 @@ def init(dll_path):
     _fcs.fcs_board_tick.argtypes = []
     _fcs.fcs_board_tick.restype = None
 
-    # From nmpc/nmpc.h
-    _fcs.fcs_nmpc_init.argtypes = []
-    _fcs.fcs_nmpc_init.restype = None
+    # From control/control.h
+    _fcs.fcs_control_init.argtypes = []
+    _fcs.fcs_control_init.restype = None
 
-    _fcs.fcs_nmpc_tick.argtypes = []
-    _fcs.fcs_nmpc_tick.restype = None
+    _fcs.fcs_control_tick.argtypes = []
+    _fcs.fcs_control_tick.restype = None
 
     # From util/util.h
     _fcs.fcs_util_init.argtypes = []

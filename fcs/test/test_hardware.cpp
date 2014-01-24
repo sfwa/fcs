@@ -46,7 +46,7 @@ size_t maxlen);
 bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements);
 uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
-const double *restrict control_values);
+const uint16_t *restrict control_values, uint8_t gpout);
 }
 
 TEST(Hardware, ReadIOBoardPacket) {
@@ -251,13 +251,13 @@ TEST(Hardware, ReadIOBoardPacketAfterPacket) {
 TEST(Hardware, SerializeControlPacket) {
     uint32_t len;
     uint8_t buf[16];
-    double values[4] = { 0.1, 0.2, 0.3, 0.4 };
+    uint16_t values[4] = { 0, 128u, 1024u, 65535u };
     uint8_t tick = 1;
 
-    len = _fcs_format_control_packet(buf, tick, values);
+    len = _fcs_format_control_packet(buf, tick, values, 5u);
     EXPECT_EQ(14u, len);
 
     EXPECT_EQ(0, buf[0]);
     EXPECT_EQ(0, buf[14]);
-    EXPECT_STREQ("\x4" "B\x1\x1" "f\x19\x99" "33L\xCC" "f", (char*)&buf[1]);
+    EXPECT_STREQ("\x5\xFA\x1\x1\x5\x1\x1\x3\x80\x4\xFF\xFF", (char*)&buf[1]);
 }

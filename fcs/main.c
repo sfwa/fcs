@@ -65,7 +65,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ukf/cukf.h"
 #include "ahrs/measurement.h"
 #include "ahrs/ahrs.h"
-#include "nmpc/nmpc.h"
+#include "control/control.h"
 #include "util/util.h"
 #include "drivers/peripheral.h"
 #include "stats/stats.h"
@@ -93,8 +93,8 @@ int main(void) {
     if (core == FCS_CORE_AHRS) {
         fcs_ahrs_init();
     }
-    if (core == FCS_CORE_NMPC) {
-        fcs_nmpc_init();
+    if (core == FCS_CORE_CONTROL) {
+        fcs_control_init();
     }
 
     /*
@@ -121,8 +121,8 @@ int main(void) {
         if (core == FCS_CORE_AHRS) {
             fcs_ahrs_tick();
         }
-        if (core == FCS_CORE_NMPC) {
-            fcs_nmpc_tick();
+        if (core == FCS_CORE_CONTROL) {
+            fcs_control_tick();
         }
         if (core == FCS_CORE_COMMS) {
             fcs_comms_tick();

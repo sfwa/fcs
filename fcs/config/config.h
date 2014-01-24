@@ -24,7 +24,7 @@ SOFTWARE.
 #define _FCS_CONFIG_H
 
 #define FCS_CORE_AHRS 0
-#define FCS_CORE_NMPC 1u
+#define FCS_CORE_CONTROL 1u
 #define FCS_CORE_UTIL 0
 #define FCS_CORE_COMMS 0
 #define FCS_CORE_CONFIG 0

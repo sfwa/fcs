@@ -63,6 +63,7 @@ ADD_EXECUTABLE(unittest
     ../ahrs/measurement.c
     ../ahrs/ahrs.c
     test_ahrs.cpp
+    ../control/control.c
     ../hardware/platform/cpuv1-ioboardv1.c
     test_hardware.cpp)
 
@@ -99,7 +100,7 @@ ADD_LIBRARY(fcs SHARED
     ../util/crc16sbp.c
     ../util/crc32.c
     ../util/util.c
-    ../nmpc/nmpc.c
+    ../control/control.c
     ../drivers/stream.c
     ../drivers/peripheral.c
     ../comms/comms.c
@@ -110,7 +111,8 @@ ADD_LIBRARY(fcs SHARED
     ../hardware/platform/cpuv1-ioboardv1.c
     ../ahrs/measurement.c
     ../ahrs/wmm.c
-    ../ahrs/ahrs.c)
+    ../ahrs/ahrs.c
+    ../control/control.c)
 
 ADD_DEPENDENCIES(fcs ukf)
 ADD_DEPENDENCIES(fcs TRICAL)
