@@ -358,6 +358,11 @@ void fcs_board_tick(void) {
     /*
     Work out the nominal current control position, taking into account the
     control response time configured in control_rates. Log the result.
+
+    We don't need to worry about mutexes for this -- all reads on these data
+    types are atomic, so there's no risk of reading a corrupted value. It's
+    possible that not all control values will be part of the same control
+    output frame, but that's not going to make a difference to anything.
     */
     struct fcs_measurement_t control_log;
     const struct fcs_control_channel_t *restrict control;
@@ -387,7 +392,7 @@ void fcs_board_tick(void) {
         control_buf,
         (uint8_t)(fcs_global_ahrs_state.solution_time & 0xFFu),
         control_log.data.u16,
-        0
+        fcs_global_control_state.gpio_state
     );
     assert(control_len < 16u);
     fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);

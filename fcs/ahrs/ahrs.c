@@ -364,7 +364,7 @@ static void _update_wmm(struct fcs_ahrs_state_t *state) {
         WMM returns the field in nT; the magnetometer sensitivity is in Gauss
         (1G = 100 000nT). Convert the field norm to G.
         */
-        state->wmm_field_norm *= (1.0f / 100000.0f);
+        state->wmm_field_norm *= (1.0 / 100000.0);
     }
 }
 

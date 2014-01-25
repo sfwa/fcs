@@ -78,6 +78,9 @@ struct fcs_control_state_t {
     */
     uint16_t plan_stack_count;
     uint16_t plan_stack_ids[FCS_CONTROL_MAX_PLANS];
+
+    /* I/O board GPIO state */
+    uint8_t gpio_state;
 };
 
 extern struct fcs_control_state_t fcs_global_control_state;

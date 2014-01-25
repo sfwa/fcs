@@ -56,4 +56,4 @@ fcs.release.bin: ccs2bin fcs.release.rom
 	./ccs2bin -swap fcs.release.rom fcs.release.bin
 
 clean:
-	rm -f *.o bootbuild b2ccs b2i2c ccs2bin *.btbl *.i2c *.ccs *.rom *.dat *.bin
+	rm -f *.o bootbuild b2ccs b2i2c ccs2bin *.bc64 *.btbl *.i2c *.ccs *.rom *.dat *.bin

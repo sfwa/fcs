@@ -46,6 +46,9 @@ void fcs_control_init(void) {
     - Initialize default plans and waypoints lists
     */
 
+    /* Clear GPIO outs */
+    fcs_global_control_state.gpio_state = 0;
+
     /*
     Configure throttle control: 0-18000 RPM, cruise at 15000, rate change at
     9000 RPM/sec
@@ -97,5 +100,7 @@ void fcs_control_tick(void) {
       trajectory
     - Evaluate the control problem based on the latest state
     - Output the control values for the next frame
+    - Check mission boundary
+    - Check error conditions
     */
 }

@@ -203,8 +203,8 @@ const struct fcs_calibration_t *restrict calibration) {
 struct fcs_calibration_t* fcs_measurement_get_calibration(
 struct fcs_calibration_map_t *cmap,
 enum fcs_measurement_type_t measurement_type, uint8_t measurement_id) {
-    uint8_t sensor_key = _make_measurement_sensor(measurement_type,
-                                                  measurement_id);
+    uint8_t sensor_key = _make_measurement_sensor(measurement_id,
+                                                  measurement_type);
     return &(cmap->sensor_calibration[sensor_key]);
 }
 
