@@ -38,6 +38,12 @@ ExternalProject_Add(TRICAL
   INSTALL_COMMAND ""
 )
 
+# Add NMPC library
+ExternalProject_Add(nmpc
+  GIT_REPOSITORY git+ssh://git@github.com/sfwa/nmpc.git
+  INSTALL_COMMAND ""
+)
+
 INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
 
 # Add test executable target
@@ -67,10 +73,11 @@ ADD_EXECUTABLE(unittest
     ../hardware/platform/cpuv1-ioboardv1.c
     test_hardware.cpp)
 
-# Create dependency of test on googletest, ukf and TRICAL
+# Create dependency of test on googletest, ukf, TRICAL, and nmpc
 ADD_DEPENDENCIES(unittest googletest)
 ADD_DEPENDENCIES(unittest ukf)
 ADD_DEPENDENCIES(unittest TRICAL)
+ADD_DEPENDENCIES(unittest nmpc)
 
 # Specify test's link libraries
 ExternalProject_Get_Property(googletest binary_dir)
@@ -88,6 +95,11 @@ TARGET_LINK_LIBRARIES(unittest
 ExternalProject_Get_Property(TRICAL binary_dir)
 TARGET_LINK_LIBRARIES(unittest
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}TRICALstatic.a)
+
+# Find NMPC library build location
+ExternalProject_Get_Property(nmpc binary_dir)
+TARGET_LINK_LIBRARIES(unittest
+    ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}fcsnmpc.a)
 
 ADD_TEST(unittest unittest)
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
@@ -116,6 +128,7 @@ ADD_LIBRARY(fcs SHARED
 
 ADD_DEPENDENCIES(fcs ukf)
 ADD_DEPENDENCIES(fcs TRICAL)
+ADD_DEPENDENCIES(fcs nmpc)
 
 ExternalProject_Get_Property(ukf binary_dir)
 TARGET_LINK_LIBRARIES(fcs
@@ -124,3 +137,7 @@ TARGET_LINK_LIBRARIES(fcs
 ExternalProject_Get_Property(TRICAL binary_dir)
 TARGET_LINK_LIBRARIES(fcs
     ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}TRICALstatic.a)
+
+ExternalProject_Get_Property(ukf binary_dir)
+TARGET_LINK_LIBRARIES(fcs
+    ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsnmpc.a)
