@@ -126,6 +126,34 @@ void fcs_control_tick(void) {
     nmpc_preparation_step();
 
     /*
+    Get the latest data from the AHRS. Since we don't lock anything here, it's
+    possible for the UKF to start updating the data under us, but the
+    worst-case scenario is that we get some data from 1ms later, which
+    shouldn't be an issue.
+
+    TODO: Work out what to do with the lat/lon/alt to NED conversion -- base
+    everything on a static reference point, or treat vehicle coordinates as
+    0, 0, 0 and shift the reference trajectory each time?
+    */
+    state[0] = 0.0f;
+    state[1] = 0.0f;
+    state[2] = 0.0f;
+    state[3] = fcs_global_ahrs_state.velocity[0];
+    state[4] = fcs_global_ahrs_state.velocity[1];
+    state[5] = fcs_global_ahrs_state.velocity[2];
+    state[6] = fcs_global_ahrs_state.attitude[0];
+    state[7] = fcs_global_ahrs_state.attitude[1];
+    state[8] = fcs_global_ahrs_state.attitude[2];
+    state[9] = fcs_global_ahrs_state.attitude[3];
+    state[10] = fcs_global_ahrs_state.angular_velocity[0];
+    state[11] = fcs_global_ahrs_state.angular_velocity[1];
+    state[12] = fcs_global_ahrs_state.angular_velocity[2];
+
+    wind[0] = fcs_global_ahrs_state.wind_velocity[0];
+    wind[1] = fcs_global_ahrs_state.wind_velocity[1];
+    wind[2] = fcs_global_ahrs_state.wind_velocity[2];
+
+    /*
     Feedback with the latest state data. This solves the QP and generates the
     control values. Set the wind based on the latest UKF estimate as well.
     */

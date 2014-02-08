@@ -778,7 +778,7 @@ uint32_t _fcs_init_core0(void) {
     have to use the address directly. See this thread for details:
     http://e2e.ti.com/support/dsp/c6000_multi-core_dsps/f/639/t/215377.aspx
     */
-    *(uint32_t*)0x02620580 = 0x0CCF0000u;
+    *(volatile uint32_t*)0x02620580 = 0x0CCF0000u;
 
     /*
     Each GPIO bank has DIR, OUT_DATA, SET_DATA, CLR_DATA, IN_DATA,
@@ -793,6 +793,31 @@ uint32_t _fcs_init_core0(void) {
     gpio->BANK_REGISTERS[0].DIR &= 0xF33FFFFFu;
     gpio->BANK_REGISTERS[0].OUT_DATA = 0x0CC00000u;
 
+    /*
+    Start booting core 1:
+    - Populate BOOT_MAGIC_ADDRESS for CorePac 1, which should be the same as
+      for CorePac 0.
+    - Send an IPC interrupt to CorePac 1 (IPCGR1.IPCG) to wake it up.
+
+    0x0087FFFCu is the boot magic address for the local core (it's at the end
+    of L2 SRAM). Here, we convert that local address for CorePac 1's L2 SRAM
+    to a global address, then copy the value of CorePac 0's boot magic address
+    to it.
+    */
+    *(volatile uint32_t*)(GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x0087FFFCu)) =
+        *(volatile uint32_t*)0x0087FFFCu;
+    /*
+    IPCGRn: IPC Generation Registers (section 3.3.12 in SPRS814A)
+
+    Bit   Field          Value         Description
+    31:4  SRCSx          0             Interrupt source indication
+    3:1   Reserved
+    0     IPCG           0             Generate an IPC interrupt
+                                       0 = no interrupt
+                                       1 = generate an interrupt
+    */
+    cfg->IPCGR[1] |= 0x1u;
+
     KICK_LOCK();
 
     return (FCS_CLOCK_HZ / FCS_CORE0_TICK_HZ);
@@ -801,18 +826,9 @@ uint32_t _fcs_init_core0(void) {
 uint32_t _fcs_init_core1(void) {
     /*
     Most of the platform config has been done by core 0. Here we just need to
-    wait until core 0 is done, then enable EDC on the local SRAMs.
-
-    Query core 0's boot semaphore until it's released, then start ourselves.
-    If we reach 100000000 cycles (0.1s or 1s depending on PLL), abort.
+    enable EDC on the local SRAMs.
     */
-    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
     volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
-
-    uint32_t start_t = TSCL;
-    while (!semaphore->QSEM[FCS_SEMAPHORE_CORE0_BOOT] &&
-           TSCL - start_t < 100000000u);
-    assert(TSCL - start_t < 100000000u);
 
     KICK_UNLOCK();
     _fcs_enable_edc();
@@ -825,28 +841,8 @@ uint32_t fcs_board_init_core(void) {
     uint8_t core = DNUM & 0xFFu;
     uint32_t result_cycles;
 
-    volatile CSL_SemRegs *const semaphore = (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-
     /* Start TSC, if it's not already running */
     TSCL = 1u;
-
-    /* Wait for the semaphore module to be ready, or for 1us/10us to elapse */
-    uint32_t start_t = TSCL;
-    while (!(semaphore->SEM_RST_RUN & 1u) && TSCL - start_t < 1000u);
-    assert(TSCL - start_t < 1000u);
-
-    /*
-    Acquire the boot semaphore for our core by reading it. See SPRUGS3A for
-    details on how this process works, but basically if the read returns 1
-    we've got it.
-
-    For some reason semaphore 0 is always busy, so use 1-31.
-    */
-    uint32_t sem_val = semaphore->SEM[core + 1u];
-    assert(sem_val == 1u);
-
-    /* Wait a little to make sure both semaphores have been acquired */
-    _fcs_delay_cycles(1000u); /* 1us to 10us depending on PLL state */
 
     if (core == 0) {
         result_cycles = _fcs_init_core0();
@@ -855,9 +851,6 @@ uint32_t fcs_board_init_core(void) {
     } else {
         assert(false);
     }
-
-    /* Release the boot semaphore by writing 1 back to the register */
-    semaphore->SEM[core + 1u] = 1u;
 
     /*
     Return the number of cycles per tick which should be run by this core

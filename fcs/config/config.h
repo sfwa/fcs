@@ -34,11 +34,4 @@ SOFTWARE.
 #define FCS_CORE0_TICK_HZ 1000u
 #define FCS_CORE1_TICK_HZ 50u
 
-/* Semaphore 0 always seems to be busy, so don't use it */
-#define FCS_SEMAPHORE_CORE0_BOOT 1u
-#define FCS_SEMAPHORE_CORE1_BOOT 2u
-#define FCS_SEMAPHORE_GLOBAL_STATE 3u
-#define FCS_SEMAPHORE_GLOBAL_WAYPOINTS 4u
-#define FCS_SEMAPHORE_GLOBAL_CONTROL 5u
-
 #endif

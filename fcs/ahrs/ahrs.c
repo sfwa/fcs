@@ -27,11 +27,6 @@ SOFTWARE.
 #include <math.h>
 #include <assert.h>
 
-#ifdef __TI_COMPILER_VERSION__
-#include "../c66x-csl/ti/csl/cslr_device.h"
-#include "../c66x-csl/ti/csl/cslr_sem.h"
-#endif
-
 #include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
@@ -105,13 +100,6 @@ void fcs_ahrs_init(void) {
     assert(ukf_config_get_control_dim() == 4u);
     assert(ukf_config_get_measurement_dim() == 20u);
     assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the global state semaphore */
-    volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
-#endif
 
     fcs_wmm_init();
 
@@ -329,24 +317,8 @@ static void _reset_state(struct fcs_ahrs_state_t *state) {
 
 static void _update_state(struct fcs_ahrs_state_t *state,
 double *restrict ukf_state, double *restrict ukf_error) {
-#ifdef __TI_COMPILER_VERSION__
-    /*
-    Use a semaphore to prevent the NMPC code accessing the state while we're
-    updating it.
-    */
-    volatile CSL_SemRegs *const semaphore =
-        (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE];
-    assert(sem_val == 1u);
-#endif
-
     vector_copy_d(&state->lat, ukf_state, 25u);
     vector_copy_d(&state->lat_error, ukf_error, 24u);
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_GLOBAL_STATE] = 1u;
-#endif
 }
 
 static void _update_wmm(struct fcs_ahrs_state_t *state) {

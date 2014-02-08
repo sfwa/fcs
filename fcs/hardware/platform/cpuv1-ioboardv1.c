@@ -641,7 +641,6 @@ const uint16_t *restrict control_values, uint8_t gpout) {
     packet.msg_type = MSG_TYPE_CONTROL;
     packet.gpout = gpout;
 
-    double val;
     uint8_t i;
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
