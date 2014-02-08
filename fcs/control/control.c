@@ -37,25 +37,34 @@ SOFTWARE.
 #include "../ahrs/ahrs.h"
 #include "control.h"
 
+#include "../nmpc/config.h"
+#include "../nmpc/cnmpc.h"
+
 struct fcs_control_state_t fcs_global_control_state;
 
 void fcs_control_init(void) {
-    /*
-    TODO
-    - Configure NMPC data structures
-    - Initialize default plans and waypoints lists
-    */
+    float state_weights[NMPC_DELTA_DIM] = {
+        1e-1, 1e-1, 1e1, 1e0, 1e0, 1e0, 1e-1, 1e0, 1e0, 7e0, 7e-1, 1e-2
+    };
+    float terminal_weights[NMPC_DELTA_DIM] = {
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    };
+    float control_weights[NMPC_CONTROL_DIM] = { 1e-7, 1e-3, 1e-3 };
+    float lower_control_bound[NMPC_CONTROL_DIM];
+    float upper_control_bound[NMPC_CONTROL_DIM];
+    float reference[NMPC_REFERENCE_DIM];
+    size_t i;
 
     /* Clear GPIO outs */
     fcs_global_control_state.gpio_state = 0;
 
     /*
-    Configure throttle control: 0-18000 RPM, cruise at 15000, rate change at
+    Configure throttle control: 0-12000 RPM, cruise at 9000, rate change at
     9000 RPM/sec
     */
-    fcs_global_control_state.controls[0].setpoint = 15000.0f;
+    fcs_global_control_state.controls[0].setpoint = 9000.0f;
     fcs_global_control_state.controls[0].min = 0.0f;
-    fcs_global_control_state.controls[0].max = 18000.0f;
+    fcs_global_control_state.controls[0].max = 12000.0f;
     fcs_global_control_state.controls[0].rate = 9000.0f;
 
     /*
@@ -79,28 +88,86 @@ void fcs_control_init(void) {
     fcs_global_control_state.controls[3].min = 0.0f;
     fcs_global_control_state.controls[3].max = 1.0f;
     fcs_global_control_state.controls[3].rate = 1.0f;
+
+    /*
+    Set up NMPC parameters -- state and control weights as well as control
+    bounds
+    */
+    for (i = 0; i < NMPC_CONTROL_DIM; i++) {
+        lower_control_bound[i] = fcs_global_control_state.controls[i].min;
+        upper_control_bound[i] = fcs_global_control_state.controls[i].max;
+    }
+
+    nmpc_set_state_weights(state_weights);
+    nmpc_set_control_weights(control_weights);
+    nmpc_set_terminal_weights(terminal_weights);
+    nmpc_set_lower_control_bound(lower_control_bound);
+    nmpc_set_upper_control_bound(upper_control_bound);
+
+    /* Initialise the NMPC system */
+    nmpc_init();
+
+    /* TODO: Fill the horizon based on the current path */
+    for (i = 0; i < OCP_HORIZON_LENGTH; i++) {
+        nmpc_set_reference_point(reference, i);
+    }
 }
 
 void fcs_control_tick(void) {
-    /*
-    TODO
-    - Iterate over waypoints in current trajectory (including the current
-      state as the first waypoint, and the projection of the current position
-      onto the path between the previous waypoint and the current waypoint
-      as the second waypoint)
-      - The reference heading of each waypoint is the midpoint of the entry
-        track (from previous waypoint) and the exit track (to next waypoint)
-      - If the difference between entry and exit tracks is more than X,
-        generate a Dubins path from the previous waypoint to the current
-        waypoint, and the current waypoint to the next waypoint
-      - Interpolate linearly between all arc endpoints
-      - Terminate iteration once the NMPC horizon has been filled
+    enum nmpc_result_t result;
+    float controls[NMPC_CONTROL_DIM], state[NMPC_STATE_DIM],
+          reference[NMPC_REFERENCE_DIM], wind[3];
+    size_t i;
 
-    - Pass the interpolated waypoint list to the NMPC code as a reference
-      trajectory
-    - Evaluate the control problem based on the latest state
-    - Output the control values for the next frame
-    - Check mission boundary
-    - Check error conditions
+    /*
+    Run preparation -- this does nothing in the current implementation but
+    might in future.
+    */
+    nmpc_preparation_step();
+
+    /*
+    Feedback with the latest state data. This solves the QP and generates the
+    control values. Set the wind based on the latest UKF estimate as well.
+    */
+    nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
+    nmpc_feedback_step(state);
+
+    /* Get the control values and update the global state. */
+    result = nmpc_get_controls(controls);
+    for (i = 0; i < NMPC_CONTROL_DIM; i++) {
+        fcs_global_control_state.controls[i].setpoint = controls[i];
+    }
+
+    /*
+    Update the horizon with the next reference trajectory step. The first
+    NMPC_STATE_DIM values are the reference state (position, velocity,
+    attitude, angular velocity), and the next NMPC_CONTROL_DIM values are the
+    reference control values.
+    */
+    reference[NMPC_STATE_DIM + 0] = 9000.0f;
+    reference[NMPC_STATE_DIM + 1u] = 0.0f;
+    reference[NMPC_STATE_DIM + 2u] = 0.0f;
+    nmpc_update_horizon(reference);
+}
+
+void _start_plan(struct fcs_plan_t *plan) {
+    /*
+    TODO:
+    Path definition -- waypoint IDs and connecting line type.
+
+    Interpolation state -- track current segment and t parameter along segment
+    based on position (10m waypoint crossing and 10m cross-track error).
+
+    If > 10m from the path, add a curve segment from the current
+    position/heading to the next unvisited point.
+
+    Interpolation function -- return a sequence of points separated by N
+    metres; entire plan conducted at a set speed.
+
+    Line interpolation -- linear interpolation between points; reference
+    heading and speed derived from the deltas.
+
+    Dubins curve interpolation type -- see
+    https://github.com/AndrewWalker/Dubins-Curves/blob/master/src/dubins.c
     */
 }

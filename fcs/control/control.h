@@ -28,6 +28,7 @@ SOFTWARE.
 #define FCS_CONTROL_MAX_PLANS 16u
 #define FCS_CONTROL_BOUNDARY_MAX_WAYPOINTS 64u
 #define FCS_CONTROL_PLAN_MAX_WAYPOINTS 512u
+#define FCS_CONTROL_HORIZON_LENGTH 500u
 
 struct fcs_control_channel_t {
     float setpoint;
@@ -47,18 +48,26 @@ struct fcs_waypoint_t {
 struct fcs_plan_t {
     uint16_t waypoint_count;
     uint16_t waypoint_ids[FCS_CONTROL_PLAN_MAX_WAYPOINTS];
-    uint16_t next_waypoint_id_index;
     uint16_t chained_plan_id;
     uint8_t flags;
 };
 
 /* Marker for empty chained plan ID */
-#define FCS_CONTROL_PLAN_ID_INVALID 0xFFFFu
+#define FCS_CONTROL_INVALID_PLAN_ID 0xFFFFu
+
+/* Marker for 'hold at current position' waypoint ID */
+#define FCS_CONTROL_HOLD_WAYPOINT_ID 0xFFFFu
 
 struct fcs_boundary_t {
     uint16_t num_waypoint_ids;
     uint16_t waypoint_ids[FCS_CONTROL_BOUNDARY_MAX_WAYPOINTS];
     uint8_t flags;
+};
+
+struct fcs_plan_execution_state_t {
+    struct fcs_plan_t *plan;
+    uint16_t waypoint_from_ids[FCS_CONTROL_HORIZON_LENGTH];
+    uint16_t waypoint_to_ids[FCS_CONTROL_HORIZON_LENGTH];
 };
 
 struct fcs_control_state_t {
@@ -78,6 +87,9 @@ struct fcs_control_state_t {
     */
     uint16_t plan_stack_count;
     uint16_t plan_stack_ids[FCS_CONTROL_MAX_PLANS];
+
+    /* Index of the next waypoint for each plan in the stack */
+    uint16_t plan_stack_next_waypoint_indexes[FCS_CONTROL_MAX_PLANS];
 
     /* I/O board GPIO state */
     uint8_t gpio_state;
