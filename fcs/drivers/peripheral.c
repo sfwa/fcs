@@ -27,4 +27,5 @@ SOFTWARE.
 
 #include "peripheral.h"
 
+#pragma DATA_SECTION(fcs_global_peripheral_state, ".shared")
 struct fcs_peripheral_state_t fcs_global_peripheral_state;

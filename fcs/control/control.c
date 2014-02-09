@@ -40,6 +40,7 @@ SOFTWARE.
 #include "../nmpc/config.h"
 #include "../nmpc/cnmpc.h"
 
+#pragma DATA_SECTION(fcs_global_control_state, ".shared")
 struct fcs_control_state_t fcs_global_control_state;
 
 void fcs_control_init(void) {
@@ -171,6 +172,8 @@ void fcs_control_tick(void) {
     NMPC_STATE_DIM values are the reference state (position, velocity,
     attitude, angular velocity), and the next NMPC_CONTROL_DIM values are the
     reference control values.
+
+    TODO: get the next reference value from the trajectory generator.
     */
     reference[NMPC_STATE_DIM + 0] = 9000.0f;
     reference[NMPC_STATE_DIM + 1u] = 0.0f;

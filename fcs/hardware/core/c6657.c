@@ -795,10 +795,18 @@ uint32_t _fcs_init_core0(void) {
 
     /*
     Start booting core 1:
+    - Copy all code/data in CorePac 0 L2 to CorePac 1 L2
     - Populate BOOT_MAGIC_ADDRESS for CorePac 1, which should be the same as
       for CorePac 0.
     - Send an IPC interrupt to CorePac 1 (IPCGR1.IPCG) to wake it up.
+    */
+    memcpy(
+        (uint8_t*)GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x00800000u),
+        (uint8_t*)0x00800000u,
+        0x00100000u
+    );
 
+    /*
     0x0087FFFCu is the boot magic address for the local core (it's at the end
     of L2 SRAM). Here, we convert that local address for CorePac 1's L2 SRAM
     to a global address, then copy the value of CorePac 0's boot magic address
@@ -806,6 +814,7 @@ uint32_t _fcs_init_core0(void) {
     */
     *(volatile uint32_t*)(GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x0087FFFCu)) =
         *(volatile uint32_t*)0x0087FFFCu;
+
     /*
     IPCGRn: IPC Generation Registers (section 3.3.12 in SPRS814A)
 
