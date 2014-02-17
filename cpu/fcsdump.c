@@ -41,12 +41,13 @@ int set_interface_attribs(int fd, int speed) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        printf("Usage: fcsdump /PATH/TO/FILE");
+        printf("Usage: fcsdump /PATH/TO/DIR");
         return 1;
     }
 
+    char *fname = tempnam(argv[1], "fcs-");
     FILE *f1;
-    f1 = fopen(argv[1], "wb");
+    f1 = fopen(fname, "wb");
 
     int ifd1 = open("/dev/ttySAC0", O_RDWR | O_NOCTTY | O_NDELAY);
     if (ifd1 < 0) {
@@ -65,7 +66,7 @@ int main(int argc, char** argv) {
             fwrite(buf, 1, n, f1);
             n_written += n;
         }
-        if (n_written > 65536) {
+        if (n_written > 1024) {
             fflush(f1);
         }
     }

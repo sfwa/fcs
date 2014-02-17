@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 
-#define RD_BUFSIZE 64u
+#define RD_BUFSIZE 256u
 #define WR_BUFSIZE 256u
 
 int set_interface_attribs(int fd, int speed) {
@@ -40,14 +40,14 @@ int set_interface_attribs(int fd, int speed) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        printf("Usage: iodump /PATH/TO/FILE1 /PATH/TO/FILE2");
+    if (argc < 2) {
+        printf("Usage: measdump /PATH/TO/DIR");
         return 1;
     }
 
-    FILE *f1, *f2;
-    f1 = fopen(argv[1], "wb");
-    f2 = fopen(argv[2], "wb");
+    char *fname = tempnam(argv[1], "meas-");
+    FILE *f1;
+    f1 = fopen(fname, "wb");
 
     int ifd1 = open("/dev/ttySAC2", O_RDWR | O_NOCTTY | O_NDELAY);
     if (ifd1 < 0) {
@@ -55,14 +55,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    int ifd2 = open("/dev/ttySAC3", O_RDWR | O_NOCTTY | O_NDELAY);
-    if (ifd2 < 0) {
-        printf("error %d opening /dev/ttySAC3: %s", errno, strerror(errno));
-        return 1;
-    }
-
-    set_interface_attribs(ifd1, 868056);
-    set_interface_attribs(ifd2, 868056);
+    set_interface_attribs(ifd1, 2604168);
 
     uint64_t n_written = 0;
     char *buf = malloc(RD_BUFSIZE);
@@ -73,14 +66,8 @@ int main(int argc, char** argv) {
             fwrite(buf, 1, n, f1);
             n_written += n;
         }
-        n = read(ifd2, buf, RD_BUFSIZE);
-        if (n > 0) {
-            fwrite(buf, 1, n, f2);
-            n_written += n;
-        }
         if (n_written > 65536) {
             fflush(f1);
-            fflush(f2);
         }
     }
 }

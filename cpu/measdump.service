@@ -1,0 +1,14 @@
+# /etc/systemd/system/measdump.service
+
+[Unit]
+Description=Measurement dump
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/root/measdump /root/log/
+TimeoutSec=10
+
+[Install]
+WantedBy=multi-user.target

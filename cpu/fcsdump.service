@@ -1,0 +1,14 @@
+# /etc/systemd/system/fcsdump.service
+
+[Unit]
+Description=FCS dump
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/root/fcsdump /root/log/
+TimeoutSec=10
+
+[Install]
+WantedBy=multi-user.target
