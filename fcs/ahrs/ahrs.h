@@ -152,6 +152,9 @@ struct fcs_ahrs_state_t {
     /* Mode */
     uint64_t mode_start_time;
     enum fcs_mode_t mode;
+
+    /* Payload presence */
+    bool payload_present;
 };
 
 void fcs_ahrs_init(void);

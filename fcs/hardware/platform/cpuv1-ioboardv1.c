@@ -51,7 +51,7 @@ struct sensor_packet_t {
     uint16_t tick;
     uint8_t sensor_update_flags;
     uint8_t cpu_load;
-    uint16_t status;
+    uint16_t pwm_in; /* PWM input value; channel is tick % 4 */
 
     /* Sensor fields */
     struct {
@@ -95,18 +95,6 @@ struct sensor_packet_t {
 
 #define SENSOR_PACKET_LEN 60u
 
-#define SENSOR_STATUS_TXERR_MASK   0x00000001u
-#define SENSOR_STATUS_RXERR_MASK   0x00000002u
-#define SENSOR_STATUS_GPS_MASK     0x0000001cu
-#define SENSOR_STATUS_GPS_OFFSET   2u
-#define SENSOR_STATUS_BAROMETER_MASK  0x000000e0u
-#define SENSOR_STATUS_BAROMETER_OFFSET 5u
-#define SENSOR_STATUS_ACCEL_GYRO_MASK 0x00000700u
-#define SENSOR_STATUS_ACCEL_GYRO_OFFSET 8u
-#define SENSOR_STATUS_MAGNETOMETER_MASK 0x00003800u
-#define SENSOR_STATUS_MAGNETOMETER_OFFSET 11u
-#define SENSOR_STATUS_UNUSED_MASK  0xC000u
-
 #define UPDATED_ACCEL 0x01u
 #define UPDATED_GYRO 0x02u
 #define UPDATED_BAROMETER 0x04u
@@ -146,6 +134,8 @@ enum msg_type_t {
 
 #define FCS_IOBOARD_RESET_TIMEOUT 50
 #define FCS_IOBOARD_PACKET_TIMEOUT 5
+
+static uint16_t pwm_state[2][FCS_CONTROL_CHANNELS];
 
 /* Endian swap functions -- AVR32s are big-endian */
 static inline uint16_t swap_uint16(uint16_t val) {
@@ -376,8 +366,9 @@ void fcs_board_tick(void) {
         control_log.data.u16[i] = (uint16_t)(proportional_pos * UINT16_MAX);
     }
 
+    /* Log to sensor ID 1, because sensor ID 0 is the RC PWM input. */
     fcs_measurement_set_header(&control_log, 16u, 4u);
-    fcs_measurement_set_sensor(&control_log, 0,
+    fcs_measurement_set_sensor(&control_log, 1u,
                                FCS_MEASUREMENT_TYPE_CONTROL_POS);
     fcs_measurement_log_add(&fcs_global_ahrs_state.measurements,
                             &control_log);
@@ -488,6 +479,7 @@ bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes,
 enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements) {
     uint8_t checksum;
+    size_t i;
     struct sensor_packet_t packet;
     struct fcs_cobsr_decode_result result;
 
@@ -617,6 +609,50 @@ struct fcs_measurement_log_t *out_measurements) {
             packet.gps_info.fix_mode_num_satellites & 0xFu;
         measurement.data.u8[2] = packet.gps_info.pos_err;
         fcs_measurement_log_add(out_measurements, &measurement);
+    }
+
+    /*
+    Update the current PWM state for the appropriate channel, then save all
+    PWM values in the measurement control log.
+    */
+    pwm_state[board_id][(packet.gpin_state & 0xF0u) >> 4u] = swap_uint16(packet.pwm_in);
+    if (board_id == 0) {
+    	for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
+    	    measurement.data.u16[i] = pwm_state[board_id][i];
+    	}
+    	fcs_measurement_set_header(&measurement, 16u, 4u);
+    	fcs_measurement_set_sensor(&measurement, 0,
+    	                           FCS_MEASUREMENT_TYPE_CONTROL_POS);
+    	fcs_measurement_log_add(out_measurements, &measurement);
+    } else if (board_id == 1u) {
+        /* Set payload presence based on GPIN 0 (high == present). */
+        if (packet.gpin_state & 0x1u) {
+            fcs_global_ahrs_state.payload_present = false;
+        } else {
+            fcs_global_ahrs_state.payload_present = true;
+        }
+
+        /*
+        FIXME: this is a temporary addition to enable payload release via
+        RC PWM control. Should be removed once we have waypoint-based support
+        for payload release.
+        */
+
+        /* Trigger payload release after 25 consecutive pulses > 1.5ms. */
+        static uint16_t payload_release_ticks;
+        if (pwm_state[board_id][2] > 32767) {
+            payload_release_ticks++;
+        } else {
+            payload_release_ticks = 0;
+        }
+
+        if (payload_release_ticks > 25u && payload_release_ticks < 525u) {
+            /* Re-trigger to keep magnet going for up to half a second. */
+            fcs_global_control_state.gpio_state =
+                payload_release_ticks & 0x1u;
+        } else {
+            fcs_global_control_state.gpio_state = 0;
+        }
     }
 
     fcs_global_counters.ioboard_packet_rx[dev]++;
