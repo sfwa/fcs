@@ -37,11 +37,11 @@ tests can then manually be run (with more detailed reporting) by running
 After building the `fcs` project, CCS will generate an `fcs.btbl` file which
 is used as the basis for the firmware image.
 
-Run `cd fcs/ccs-scripts && make fcs.debug.dat` (or `fcs.release.dat`) to build
+Run `cd fcs/ccs-scripts && make fcs.debug.bin` (or `fcs.release.bin`) to build
 the necessary firmware image conversion tools and output the firmeware image
-to `fcs.debug.dat` in the `fcs/ccs-scripts` directory.
+to `fcs.debug.bin` in the `fcs/ccs-scripts` directory.
 
-Move that file to `c6657-norwriter/bin/app.dat`, then follow "Steps to program
+Move that file to `c6657-norwriter/bin/app.bin`, then follow "Steps to program
 the NOR" in `c6657-norwriter/docs/README.txt`.
 
 
