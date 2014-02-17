@@ -582,11 +582,17 @@ static void _fcs_enable_edc(void) {
 
     /* L1P EDC enable */
     cgem->L1PEDCMD = 1u;
+    /*
+    FIXME -- this doesn't work on the repaired board:
     assert(cgem->L1PEDSTAT);
+    */
 
     /* L2 EDC enable */
     cgem->L2EDCMD = 1u;
+    /*
+    FIXME -- this doesn't work on the repaired board:
     assert(cgem->L2EDSTAT);
+    */
 
     cgem->L2EDCEN |= 0x1Fu;
 
