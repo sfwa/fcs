@@ -23,6 +23,7 @@ SOFTWARE.
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
 #include <math.h>
 #include <assert.h>
@@ -40,8 +41,35 @@ SOFTWARE.
 #include "../nmpc/config.h"
 #include "../nmpc/cnmpc.h"
 
+#define WGS84_A 6378137.0
+
 #pragma DATA_SECTION(fcs_global_control_state, ".shared")
 struct fcs_control_state_t fcs_global_control_state;
+
+#pragma DATA_SECTION(fcs_global_nav_state, ".shared")
+struct fcs_nav_state_t fcs_global_nav_state;
+
+
+static float _control_next_point_from_path(struct fcs_waypoint_t *new_point,
+const struct fcs_waypoint_t *last_point, const struct fcs_waypoint_t *start,
+const struct fcs_waypoint_t *end, enum fcs_path_type_t type, float t);
+static void _ned_from_point_diff(float *restrict ned,
+struct fcs_waypoint_t *restrict ref, struct fcs_waypoint_t *restrict point);
+static void _control_get_ahrs_state(float *restrict state,
+float *restrict wind, volatile struct fcs_ahrs_state_t *ahrs_state,
+const struct fcs_waypoint_t *restrict reference);
+static void _control_make_reference(float *restrict reference,
+const struct fcs_waypoint_t *current_point,
+const struct fcs_waypoint_t *last_point, const float *restrict wind);
+static void _control_next_point(struct fcs_waypoint_t *restrict new_point,
+uint16_t *restrict new_point_path_id,
+const struct fcs_waypoint_t *restrict last_point,
+const uint16_t *restrict last_point_path_id, struct fcs_nav_state_t *nav);
+static void _control_shift_horizon(struct fcs_nav_state_t *nav,
+const float *restrict wind);
+static void _control_recalculate_horizon(struct fcs_nav_state_t *nav,
+const float *restrict wind);
+
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
@@ -108,17 +136,29 @@ void fcs_control_init(void) {
     /* Initialise the NMPC system */
     nmpc_init();
 
-    /* TODO: Fill the horizon based on the current path */
-    for (i = 0; i < OCP_HORIZON_LENGTH; i++) {
-        nmpc_set_reference_point(reference, i);
-    }
+    /* Fill the horizon with zeros -- it'll be re-calculated next tick. */
+    memset(fcs_global_nav_state->reference_trajectory, 0,
+           sizeof(fcs_global_nav_state->reference_trajectory));
+    memset(fcs_global_nav_state->reference_path_id, 0xFFu,
+           sizeof(fcs_global_nav_state->reference_path_id));
 }
 
 void fcs_control_tick(void) {
+    /*
+    Early return -- if we're not in armed/active/holding there's nothing much
+    to do.
+    */
+    if (fcs_global_ahrs_state.mode != FCS_MODE_ARMED &&
+        fcs_global_ahrs_state.mode != FCS_MODE_ACTIVE &&
+        fcs_global_ahrs_state.mode != FCS_MODE_HOLDING) {
+        return;
+    }
+
     enum nmpc_result_t result;
-    float controls[NMPC_CONTROL_DIM], state[NMPC_STATE_DIM],
-          reference[NMPC_REFERENCE_DIM], wind[3];
-    size_t i;
+    float controls[NMPC_CONTROL_DIM], state[NMPC_STATE_DIM], wind[3];
+    uint16_t original_path_id;
+    struct fcs_waypoint_t *waypoint;
+    bool on_track;
 
     /*
     Run preparation -- this does nothing in the current implementation but
@@ -127,78 +167,518 @@ void fcs_control_tick(void) {
     nmpc_preparation_step();
 
     /*
-    Get the latest data from the AHRS. Since we don't lock anything here, it's
-    possible for the UKF to start updating the data under us, but the
-    worst-case scenario is that we get some data from 1ms later, which
-    shouldn't be an issue.
-
-    TODO: Work out what to do with the lat/lon/alt to NED conversion -- base
-    everything on a static reference point, or treat vehicle coordinates as
-    0, 0, 0 and shift the reference trajectory each time?
+    Read the relevant parts of the AHRS output and convert them to a format
+    usable by the control system.
     */
-    state[0] = 0.0f;
-    state[1] = 0.0f;
-    state[2] = 0.0f;
-    state[3] = fcs_global_ahrs_state.velocity[0];
-    state[4] = fcs_global_ahrs_state.velocity[1];
-    state[5] = fcs_global_ahrs_state.velocity[2];
-    state[6] = fcs_global_ahrs_state.attitude[0];
-    state[7] = fcs_global_ahrs_state.attitude[1];
-    state[8] = fcs_global_ahrs_state.attitude[2];
-    state[9] = fcs_global_ahrs_state.attitude[3];
-    state[10] = fcs_global_ahrs_state.angular_velocity[0];
-    state[11] = fcs_global_ahrs_state.angular_velocity[1];
-    state[12] = fcs_global_ahrs_state.angular_velocity[2];
-
-    wind[0] = fcs_global_ahrs_state.wind_velocity[0];
-    wind[1] = fcs_global_ahrs_state.wind_velocity[1];
-    wind[2] = fcs_global_ahrs_state.wind_velocity[2];
+    _control_get_ahrs_state(state, wind, &fcs_global_ahrs_state,
+                            fcs_global_nav_state.reference_trajectory);
 
     /*
-    Feedback with the latest state data. This solves the QP and generates the
-    control values. Set the wind based on the latest UKF estimate as well.
+    Three options here:
+    1. The current position is fairly near the expected position, so we're
+       following the path OK.
+    2. The current position is more than N metres from the expected position,
+       so we need to add a new path to get back on track.
+    3. There's no expected position, because the path hasn't been initialized.
+
+    If option 1, we get the next point from the planner and update the last
+    point in the horizon. This is the common case.
+
+    If option 2, we effectively need to add a path between the current point
+    and the first point in the reference trajectory. Once that's done we
+    re-calculate the entire reference trajectory in one go.
+
+    If option 3, we switch to the hold path around the current position.
+
+    The offset between current and expected position is given by the first
+    three elements of `state`, since all positions are given in NED relative
+    to the first point in the reference trajectory.
     */
-    nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
-    nmpc_feedback_step(state);
+    if (vector3_norm_f(state) < FCS_CONTROL_POSITION_TOLERANCE) {
+        /*
+        Feedback with the latest state data. This solves the QP and generates
+        the control values.
+        */
+        nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
+        nmpc_feedback_step(state);
+
+        /* Move on to the next reference point in the horizon */
+        _control_shift_horizon(&fcs_global_nav_state, wind);
+    } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID) {
+        /*
+        TODO: Construct a path sequence that gets the vehicle back to the next
+        point in the reference trajectory. This is done in two parts: a
+        resume path, which represents the un-flown portion of the current path
+        (from the first point in the reference trajectory to the end of that
+        path), and an interpolation path, which represents the path to get
+        from the current vehicle state to the first point in the reference
+        trajectory.
+
+        If we're currently attempting to interpolate back to the resume path
+        (from a previous recovery event), we can skip the resume path updates
+        and just re-calculate the interpolation path.
+
+        Otherwise, create a path in FCS_CONTROL_RESUME_PATH_ID with the
+        current path type, navigating between FCS_CONTROL_RESUME_WAYPOINT_ID
+        and the end_waypoint_id and next_path_id of the current path.
+        */
+        if (nav->reference_path_id[0] != FCS_CONTROL_INTERPOLATE_PATH_ID) {
+            original_path_id = nav->reference_path_id[0];
+            memcpy(&nav->paths[FCS_CONTROL_RESUME_PATH_ID],
+                   &nav->paths[original_path_id], sizeof(struct fcs_path_t));
+
+            /*
+            The resume waypoint is set to the next point in the reference
+            trajectory.
+            */
+            memcpy(
+                &nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID],
+                &nav->waypoints[
+                    nav->paths[original_path_id].start_waypoint_id],
+                sizeof(struct fcs_waypoint_t));
+
+            /*
+            Set the starting point of the resume path to the resume waypoint.
+            */
+            nav->paths[FCS_CONTROL_RESUME_PATH_ID].start_waypoint_id =
+                FCS_CONTROL_RESUME_WAYPOINT_ID;
+        }
+
+        /*
+        Then, we create a path in FCS_CONTROL_INTERPOLATE_PATH_ID with the
+        current state as the starting point, and the end waypoint as
+        FCS_CONTROL_RESUME_WAYPOINT_ID. The path type is
+        FCS_PATH_CURVE_SHORTEST, and the next_path_id is
+        FCS_CONTROL_RESUME_PATH_ID.
+        */
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].start_waypoint_id =
+            FCS_CONTROL_INTERPOLATE_WAYPOINT_ID;
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
+            FCS_CONTROL_RESUME_WAYPOINT_ID;
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].type =
+            FCS_PATH_CURVE_SHORTEST;
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].flags = 0;
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].next_path_id =
+            FCS_CONTROL_RESUME_PATH_ID;
+
+        /*
+        Set the interpolate waypoint position and heading to the current AHRS
+        state; the pitch and roll are cleared, because we don't want anything
+        too violent, and the airspeed is pulled from the resume waypoint,
+        since that will presumably be reasonable.
+        */
+        waypoint = &nav->waypoints[FCS_CONTROL_INTERPOLATE_WAYPOINT_ID];
+        waypoint->lat = fcs_global_ahrs_state.lat;
+        waypoint->lat = fcs_global_ahrs_state.lon;
+        waypoint->alt = (float)fcs_global_ahrs_state.alt;
+        waypoint->airspeed =
+            nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID].airspeed;
+
+        double qx, qy, qz, qw;
+        qx = -fcs_global_ahrs_state.attitude[X];
+        qy = -fcs_global_ahrs_state.attitude[Y];
+        qz = -fcs_global_ahrs_state.attitude[Z];
+        qw = fcs_global_ahrs_state.attitude[W];
+
+        waypoint->yaw = atan2(2.0f * (qx * qy + qw * qz),
+                              qw * qw - qz * qz - qy * qy + qx * qx);
+        waypoint->pitch = 0.0;
+        waypoint->roll = 0.0;
+
+        /*
+        We need to recalculate the horizon from scratch before the control
+        input will mean anything.
+        */
+        _control_recalculate_horizon(&fcs_global_nav_state, wind);
+
+        /* Now that's done, grab the latest state data and run the feedback */
+        _control_get_ahrs_state(state, wind, &fcs_global_ahrs_state,
+                                fcs_global_nav_state.reference_trajectory);
+        nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
+        nmpc_feedback_step(state);
+    } else {
+        /*
+        Path uninitialized; enter a holding pattern. First, configure the
+        holding path.
+        */
+        nav->paths[FCS_CONTROL_HOLD_PATH_ID].start_waypoint_id =
+            FCS_CONTROL_HOLD_WAYPOINT_ID;
+        nav->paths[FCS_CONTROL_HOLD_PATH_ID].end_waypoint_id =
+            FCS_CONTROL_HOLD_WAYPOINT_ID;
+        nav->paths[FCS_CONTROL_HOLD_PATH_ID].type = FCS_PATH_FIGURE_EIGHT;
+        nav->paths[FCS_CONTROL_HOLD_PATH_ID].flags = 0;
+        nav->paths[FCS_CONTROL_HOLD_PATH_ID].next_path_id =
+            FCS_CONTROL_HOLD_PATH_ID;
+
+        /*
+        Set up the initial waypoint (current position and a standard
+        airspeed, arbitrary yaw/pitch/roll).
+        */
+        waypoint = &nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID];
+        waypoint->lat = fcs_global_ahrs_state.lat;
+        waypoint->lat = fcs_global_ahrs_state.lon;
+        waypoint->alt = (float)fcs_global_ahrs_state.alt;
+        waypoint->airspeed = 20.0;
+        waypoint->yaw = 0.0;
+        waypoint->pitch = 0.0;
+        waypoint->roll = 0.0;
+
+        /* Initialize the first path ID in the reference trajectory. */
+        nav->reference_path_id[0] = FCS_CONTROL_HOLD_PATH_ID;
+
+        /* Re-calculate the trajectory, then run the feedback step. */
+        _control_recalculate_horizon(&fcs_global_nav_state, wind);
+        _control_get_ahrs_state(state, wind, &fcs_global_ahrs_state,
+                                fcs_global_nav_state.reference_trajectory);
+        nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
+        nmpc_feedback_step(state);
+    }
 
     /* Get the control values and update the global state. */
     result = nmpc_get_controls(controls);
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {
         fcs_global_control_state.controls[i].setpoint = controls[i];
     }
+}
+
+static float _control_interpolate_linear(struct fcs_waypoint_t *new_point,
+const struct fcs_waypoint_t *last_point, const float *restrict wind,
+const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
+float t) {
+    float t_used = t, delta_lat, delta_lon;
+    /*
+    Linear interpolation of lat, lon, alt, airspeed and roll; pitch is set
+    based on climb rate, and yaw is set based on heading between start
+    and end points.
+
+    The interpolation parameter used is based on the position of
+    last_point on the line between start and end.
+    */
+    if (absval(start->lat - end->lat) > absval(start->lon - end->lon)) {
+        /*
+        Use the latitude difference to determine interpolation parameter
+        */
+        x = (last_point->lat - start->lat) / (end->lat - start->lat);
+    } else {
+        /*
+        Use the longitude difference to determine interpolation
+        parameter
+        */
+        x = (last_point->lon - start->lon) / (end->lon - start->lon);
+    }
+
+    if (isnan(x) || x > 1.0) {
+        x = 1.0;
+    } else if (x < 0.0) {
+        x = 0.0;
+    }
+
+    delta_lat = ;
+    delta_lon = ;
+
+    new_point->lat = last_point->lat + t * (1.0f / WGS84_A) * delta_lat;
+    new_point->lon = last_point->lon +
+                     t * (1.0f / WGS84_A) * delta_lon / cos(last_point->lat);
+    new_point->alt = start->alt + x * (end->alt - start->alt);
+    new_point->airspeed = start->airspeed +
+                          x * (end->airspeed - start->airspeed);
+    new_point->yaw = atan2(start->lat - end->lat,
+                           (start->lon - end->lon) * cos(last_point->lat));
+    new_point->pitch = 0.0f; /* FIXME */
+    new_point->roll = start->roll +
+                      x * (mod_f(mod_f(end->roll - start->roll, 2.0f * M_PI) +
+                                 2.5f * M_PI, 2.0f * M_PI) - M_PI);
+
+    return t_used;
+}
+
+static float _control_next_point_from_path(struct fcs_waypoint_t *new_point,
+const struct fcs_waypoint_t *last_point, const float *restrict wind,
+const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
+enum fcs_path_type_t type, float t) {
+    if (type == FCS_PATH_LINE) {
+        return _control_interpolate_linear(new_point, last_point, wind, start,
+                                           end, t);
+    } else if (FCS_PATH_CURVE_SHORTEST <= type &&
+               type <= FCS_PATH_CURVE_LRL) {
+        /*
+        Dubins curves of various types -- SHORTEST ends up being any of the
+        other curve types depending on which one is shortest.
+
+        In each of these curves, altitude is interpolated linearly; pitch is
+        based on the climb rate, while airspeed, yaw and roll are set by the
+        curve.
+
+        TODO
+        */
+    } else if (type == FCS_PATH_FIGURE_EIGHT) {
+        /*
+        Figure-eight path with the crossover point (middle of the 8) on the
+        start waypoint. Altitude is set by the start waypoint; all other
+        values are defined by the curve.
+
+        TODO
+        */
+    } else {
+        assert(false && "Invalid path type.");
+        return 0;
+    }
+}
+
+static void _ned_from_point_diff(float *restrict ned,
+struct fcs_waypoint_t *restrict ref, struct fcs_waypoint_t *restrict point) {
+    assert(ned && ref && point);
+    _nassert((size_t)ned % 4u == 0);
+    _nassert((size_t)ref % 8u == 0);
+    _nassert((size_t)point % 8u == 0);
+
+    /*
+    Convert lat/lon to N, E by linearizing around current position -- this
+    will break around the poles, and isn't accurate over medium distances
+    (a few kilometres), but is adequate for reference trajectory calculation.
+    */
+    ned[0] = (float)((point->lat - ref->lat) * WGS84_A);
+    ned[1] = (float)((point->lon - ref->lon) * WGS84_A * cos(ref->lat));
+
+    /* D offset is just the difference in altitudes */
+    ned[2] = ref->alt - point->alt;
+}
+
+static void _control_get_ahrs_state(float *restrict state,
+float *restrict wind, volatile struct fcs_ahrs_state_t *ahrs_state,
+const struct fcs_waypoint_t *restrict reference) {
+    /*
+    Get the latest data from the AHRS. Since we don't lock anything here, it's
+    possible for the UKF to start updating the data under us, but the
+    worst-case scenario is that we get some data from 1ms later, which
+    shouldn't be an issue.
+
+    Since the NMPC code only looks at deltas between states, we can set the
+    current position to the NED offset between the lat/lon/alt of the vehicle
+    and the lat/lon/alt of the first point in the reference trajectory.
+    */
+    struct fcs_waypoint_t current_point;
+
+    current_point.lat = ahrs_state->lat;
+    current_point.lon = ahrs_state->lon;
+    current_point.alt = (float)ahrs_state->alt;
+    _ned_from_point_diff(state, reference, &current_point);
+
+    /* state[2:0] has been set by the call above */
+    state[3] = ahrs_state->velocity[0];
+    state[4] = ahrs_state->velocity[1];
+    state[5] = ahrs_state->velocity[2];
+    state[6] = ahrs_state->attitude[0];
+    state[7] = ahrs_state->attitude[1];
+    state[8] = ahrs_state->attitude[2];
+    state[9] = ahrs_state->attitude[3];
+    state[10] = ahrs_state->angular_velocity[0];
+    state[11] = ahrs_state->angular_velocity[1];
+    state[12] = ahrs_state->angular_velocity[2];
+
+    /* Set the wind based on the latest UKF estimate as well. */
+    wind[0] = ahrs_state->wind_velocity[0];
+    wind[1] = ahrs_state->wind_velocity[1];
+    wind[2] = ahrs_state->wind_velocity[2];
+}
+
+static void _control_make_reference(float *restrict reference,
+const struct fcs_waypoint_t *current_point,
+const struct fcs_waypoint_t *last_point, const float *restrict wind) {
+    assert(reference);
+    assert(current_point);
+    _nassert((size_t)reference % 4u == 0);
+    _nassert((size_t)current_point % 8u == 0);
+
+    /*
+    last_point is only used for reference climb rate determination from
+    altitude differences -- if it's not present, just use the current point so
+    the climb rate will be 0.
+    */
+    if (!last_point) {
+        last_point = current_point;
+    }
+
+    /*
+    Determine reference velocity based on airspeed, yaw and current wind;
+    determine reference attitude based on waypoint yaw, pitch and roll.
+    */
+    float next_reference_velocity[3], next_reference_attitude[4];
+
+    next_reference_velocity[0] =
+        current_point->airspeed * sin(current_point->yaw) + wind[0];
+    next_reference_velocity[1] =
+        current_point->airspeed * cos(current_point->yaw) + wind[1];
+    next_reference_velocity[2] =
+        OCP_STEP_LENGTH * (current_point->alt - last_point->alt);
+
+    quaternion_f_from_yaw_pitch_roll(
+        next_reference_attitude, current_point->yaw, current_point->pitch,
+        current_point->roll);
 
     /*
     Update the horizon with the next reference trajectory step. The first
     NMPC_STATE_DIM values are the reference state (position, velocity,
     attitude, angular velocity), and the next NMPC_CONTROL_DIM values are the
     reference control values.
-
-    TODO: get the next reference value from the trajectory generator.
     */
+    _ned_from_point_diff(reference, last_point, current_point);
+    reference[3] = next_reference_velocity[0];
+    reference[4] = next_reference_velocity[1];
+    reference[5] = next_reference_velocity[2];
+    reference[6] = next_reference_attitude[0];
+    reference[7] = next_reference_attitude[1];
+    reference[8] = next_reference_attitude[2];
+    reference[9] = next_reference_attitude[3];
+    reference[10] = 0.0;
+    reference[11] = 0.0;
+    reference[12] = 0.0;
     reference[NMPC_STATE_DIM + 0] = 9000.0f;
     reference[NMPC_STATE_DIM + 1u] = 0.0f;
     reference[NMPC_STATE_DIM + 2u] = 0.0f;
+}
+
+/*
+Determine the next point and path in the trajectory following `last_point`,
+along the path given by `last_point_path_id`. This consumes up to 10 paths in
+order to return a point OCP_STEP_LENGTH seconds ahead of `last_point`.
+*/
+static void _control_next_point(struct fcs_waypoint_t *restrict new_point,
+uint16_t *restrict new_point_path_id,
+const struct fcs_waypoint_t *restrict last_point,
+const uint16_t *restrict last_point_path_id, const float *restrict wind,
+struct fcs_nav_state_t *nav) {
+    float t;
+    struct fcs_path_t *path;
+    enum fcs_path_type path_type;
+    size_t i;
+
+    /*
+    Since we might have hit the end of a path, and it's theoretically possible
+    to skip certain degenerate paths in a single timestep (waypoints closer
+    than speed * OCP_STEP_LENGTH) we do this iteratively (but never more than
+    an arbitrarily-chosen 10 iterations).
+
+    Each time _control_next_point_from_path returns a value smaller than the
+    timestep requested, we advance to the next path.
+    */
+    t = OCP_STEP_LENGTH;
+    path = &nav->paths[*last_point_path_id];
+    t -= _control_next_point_from_path(
+        new_point, last_point, wind, &nav->waypoints[path->start_waypoint_id],
+        &nav->waypoints[path->end_waypoint_id], path->type, t);
+
+    i = 0;
+    while (t > 0.0 && i < 10u) {
+        *new_point_path_id = path->next_path_id;
+
+        /*
+        Sanity checks on consistency of path navigation -- the start waypoint
+        of path N+1 must be the same as the end waypoint of path N, and the
+        types can't both be FCS_PATH_LINE (since the headings would always
+        mismatch).
+        */
+        assert(nav->paths[*new_point_path_id].start_waypoint_id ==
+               path->end_waypoint_id);
+        assert(nav->paths[*new_point_path_id].type != FCS_PATH_LINE ||
+               path->type != FCS_PATH_LINE);
+
+        path = &nav->paths[*new_point_path_id];
+        t -= _control_next_point_from_path(
+            new_point, new_point, wind,
+            &nav->waypoints[path->start_waypoint_id],
+            &nav->waypoints[path->end_waypoint_id], path->type, t);
+
+        i++;
+    }
+}
+
+/*
+Shift the horizon by one timestep, effectively advancing the current position
+along the reference trajectory. The last step in the reference trajectory is
+calculated based on the current nav path state.
+
+This is called every timestep provided the reference trajectory is being
+followed correctly. If the vehicle state is "too far" from the reference
+trajectory, such that a recovery path is needed, _control_recalculate_horizon
+should be called instead.
+*/
+static void _control_shift_horizon(struct fcs_nav_state_t *nav,
+const float *restrict wind) {
+    float reference[NMPC_REFERENCE_DIM];
+    struct fcs_waypoint_t *ref, *new_point, *last_point;
+    uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
+
+    /*
+    Shift the reference trajectory waypoints, as well as the corresponding
+    path IDs.
+    */
+    ref = nav->reference_trajectory;
+    new_point = &ref[OCP_HORIZON_LENGTH - 1u];
+    last_point = &ref[OCP_HORIZON_LENGTH - 2u];
+
+    ref_path_id = nav->reference_path_id;
+    new_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH - 1u];
+    last_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH - 2u];
+
+    memmove(ref, &ref[1], new_point - ref);
+    memmove(ref_path_id, &ref_path_id[1], new_point_path_id - ref_path_id);
+
+    _control_next_point(new_point, new_point_path_id, last_point,
+                        last_point_path_id, wind, nav);
+
+    /* Set the hold waypoint to the end of the reference trajectory. */
+    memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+           new_point, sizeof(struct fcs_waypoint_t));
+
+    _control_make_reference(reference, new_point, last_point, wind);
     nmpc_update_horizon(reference);
 }
 
-void _start_plan(struct fcs_plan_t *plan) {
+/*
+Re-calculates the entire reference trajectory based on the current nav path
+state.
+*/
+static void _control_recalculate_horizon(struct fcs_nav_state_t *nav,
+const float *restrict wind) {
+    float reference[NMPC_REFERENCE_DIM], t;
+    struct fcs_waypoint_t *ref, *new_point, *last_point;
+    uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
+    struct fcs_path_t *path;
+    size_t i;
+
+    ref = nav->reference_trajectory;
+    ref_path_id = nav->reference_path_id;
+
     /*
-    TODO:
-    Path definition -- waypoint IDs and connecting line type.
-
-    Interpolation state -- track current segment and t parameter along segment
-    based on position (10m waypoint crossing and 10m cross-track error).
-
-    If > 10m from the path, add a curve segment from the current
-    position/heading to the next unvisited point.
-
-    Interpolation function -- return a sequence of points separated by N
-    metres; entire plan conducted at a set speed.
-
-    Line interpolation -- linear interpolation between points; reference
-    heading and speed derived from the deltas.
-
-    Dubins curve interpolation type -- see
-    https://github.com/AndrewWalker/Dubins-Curves/blob/master/src/dubins.c
+    First point; the reference path ID must already have been set, so
+    generate a t=0 point for that path.
     */
+    last_point = NULL;
+    last_point_path_id = NULL;
+
+    path = &nav->paths[ref_path_id[0]];
+    _control_next_point_from_path(
+        ref, &nav->waypoints[path->start_waypoint_id], wind,
+        &nav->waypoints[path->start_waypoint_id],
+        &nav->waypoints[path->end_waypoint_id], path->type, 0.0);
+    _control_make_reference(reference, ref, NULL, wind);
+    nmpc_set_reference_point(reference, i);
+
+    for (i = 1u; i < OCP_HORIZON_LENGTH; i++) {
+        new_point = &ref[i];
+        new_point_path_id = &ref_path_id[i];
+
+        last_point = &ref[i - 1u];
+        last_point_path_id = &ref_path_id[i - 1u];
+
+        _control_next_point(new_point, new_point_path_id, last_point,
+                            last_point_path_id, wind, nav);
+        _control_make_reference(reference, new_point, last_point, wind);
+        nmpc_set_reference_point(reference, i);
+    }
+
+    /* Set the hold waypoint to the end of the reference trajectory. */
+    memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+           new_point, sizeof(struct fcs_waypoint_t));
 }

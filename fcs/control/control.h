@@ -25,10 +25,35 @@ SOFTWARE.
 
 #define FCS_CONTROL_CHANNELS 4u
 #define FCS_CONTROL_MAX_WAYPOINTS 1000u
-#define FCS_CONTROL_MAX_PLANS 16u
+#define FCS_CONTROL_MAX_PATHS 500u
 #define FCS_CONTROL_BOUNDARY_MAX_WAYPOINTS 64u
-#define FCS_CONTROL_PLAN_MAX_WAYPOINTS 512u
-#define FCS_CONTROL_HORIZON_LENGTH 500u
+
+/*
+If the vehicle is more than 10m from where it should be, switch to a recovery
+trajectory to get back on track.
+*/
+#define FCS_CONTROL_POSITION_TOLERANCE 10.0
+
+/* Airspeed used for holding patterns etc, in m/s */
+#define FCS_CONTROL_DEFAULT_AIRSPEED 20.0
+
+/* Turn radius in metres */
+#define FCS_CONTROL_TURN_RADIUS 20.0
+
+enum fcs_path_type_t {
+    FCS_PATH_LINE,
+    FCS_PATH_CURVE_SHORTEST,
+    FCS_PATH_CURVE_LSL,
+    FCS_PATH_CURVE_LSR,
+    FCS_PATH_CURVE_RSL,
+    FCS_PATH_CURVE_RSR,
+    FCS_PATH_CURVE_RLR,
+    FCS_PATH_CURVE_LRL,
+    FCS_PATH_FIGURE_EIGHT,
+
+    /* Sentinel */
+    FCS_PATH_INVALID
+};
 
 struct fcs_control_channel_t {
     float setpoint;
@@ -42,21 +67,40 @@ struct fcs_waypoint_t {
     float alt;
     float airspeed;
     float yaw, pitch, roll;
-    uint8_t flags;
+    uint32_t flags;
 };
 
-struct fcs_plan_t {
-    uint16_t waypoint_count;
-    uint16_t waypoint_ids[FCS_CONTROL_PLAN_MAX_WAYPOINTS];
-    uint16_t chained_plan_id;
-    uint8_t flags;
+struct fcs_path_t {
+    uint16_t start_waypoint_id;
+    uint16_t end_waypoint_id;
+    enum fcs_path_type_t type;
+
+    uint16_t flags;
+    uint16_t next_path_id;
 };
 
-/* Marker for empty chained plan ID */
-#define FCS_CONTROL_INVALID_PLAN_ID 0xFFFFu
+/* Invalid/uninitialized path ID */
+#define FCS_CONTROL_INVALID_PATH_ID 0xFFFFu
 
-/* Marker for 'hold at current position' waypoint ID */
-#define FCS_CONTROL_HOLD_WAYPOINT_ID 0xFFFFu
+/* Marker for 'hold at HOLD_WAYPOINT_ID' path */
+#define FCS_CONTROL_HOLD_PATH_ID (FCS_CONTROL_MAX_PATHS - 1u)
+
+/* Marker for 'interpolate from an arbitrary state to the next path' path */
+#define FCS_CONTROL_INTERPOLATE_PATH_ID (FCS_CONTROL_MAX_PATHS - 2u)
+
+/* Marker for 'resume following a partially-flown path' path */
+#define FCS_CONTROL_RESUME_PATH_ID (FCS_CONTROL_MAX_PATHS - 3u)
+
+/* Marker for 'last plan position' waypoint ID */
+#define FCS_CONTROL_HOLD_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 1u)
+
+/*
+Marker for 'interpolate from an arbitrary state to the next path' waypoint ID
+*/
+#define FCS_CONTROL_INTERPOLATE_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 2u)
+
+/* Marker for 'partially-flown path resume position' waypoint ID */
+#define FCS_CONTROL_RESUME_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 3u)
 
 struct fcs_boundary_t {
     uint16_t num_waypoint_ids;
@@ -64,38 +108,24 @@ struct fcs_boundary_t {
     uint8_t flags;
 };
 
-struct fcs_plan_execution_state_t {
-    struct fcs_plan_t *plan;
-    uint16_t waypoint_from_ids[FCS_CONTROL_HORIZON_LENGTH];
-    uint16_t waypoint_to_ids[FCS_CONTROL_HORIZON_LENGTH];
-};
-
 struct fcs_control_state_t {
     struct fcs_control_channel_t controls[FCS_CONTROL_CHANNELS];
-    struct fcs_plan_t plans[FCS_CONTROL_MAX_PLANS];
+    uint8_t gpio_state;
+
+    enum fcs_control_status_t status;
+};
+
+struct fcs_global_nav_state_t {
+    struct fcs_path_t paths[FCS_CONTROL_MAX_PATHS];
     struct fcs_waypoint_t waypoints[FCS_CONTROL_MAX_WAYPOINTS];
     struct fcs_boundary_t boundary;
 
-    /*
-    The plan at the top of the stack (plan_stack_ids[plan_stack_count-1])
-    is currently running. Once it concludes, chained_plan_id will replace it
-    on the stack unless it's FCS_CONTROL_PLAN_ID_INVALID.
-
-    If the plan at the top of the stack concludes without a chained plan being
-    set, it is removed from the stack and execution of the next plan down
-    resumes.
-    */
-    uint16_t plan_stack_count;
-    uint16_t plan_stack_ids[FCS_CONTROL_MAX_PLANS];
-
-    /* Index of the next waypoint for each plan in the stack */
-    uint16_t plan_stack_next_waypoint_indexes[FCS_CONTROL_MAX_PLANS];
-
-    /* I/O board GPIO state */
-    uint8_t gpio_state;
+    struct fcs_waypoint_t reference_trajectory[OCP_HORIZON_LENGTH];
+    uint16_t reference_path_id[OCP_HORIZON_LENGTH];
 };
 
 extern struct fcs_control_state_t fcs_global_control_state;
+extern struct fcs_nav_state_t fcs_global_nav_state;
 
 void fcs_control_init(void);
 void fcs_control_tick(void);

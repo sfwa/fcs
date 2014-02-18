@@ -73,6 +73,11 @@ double pdynamic, double temp) {
                 (pow(pdynamic / pstatic + 1.0, 2.0 / 7.0) - 1.0));
 }
 
+/* Take modulus of a floating-point number */
+static inline float mod_f(float x, float y) {
+    return x - y * floor(x / y);
+}
+
 #ifndef absval
 #define absval(x) ((x) < 0 ? -x : x)
 #endif
@@ -418,6 +423,28 @@ const float q2[4]) {
 
     float qdot = q1[W]*q2[W] + q1[X]*q2[X] + q1[Y]*q2[Y] + q1[Z]*q2[Z];
     return (float)acos(2.0f * qdot - 1.0f);
+}
+
+static inline void quaternion_f_from_yaw_pitch_roll(float *restrict result,
+float yaw, float pitch, float roll) {
+    assert(result);
+    _nassert((size_t)result % 4 == 0);
+
+    /*
+    Convert yaw, pitch and roll to a quaternion, following the Tait-Bryan/
+    Euler 321 sequence. This corresponds to ZYX order.
+
+    Refer to:
+    http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+    */
+    double sz = sin(yaw * 0.5f), sy = sin(pitch * 0.5f),
+           sx = sin(roll * 0.5f), cz = cos(yaw * 0.5f),
+           cy = cos(pitch * 0.5f), cx = cos(roll * 0.5f);
+
+    result[3] = (float)(cx * cy * cz + sx * sy * sz);
+    result[0] = (float)(sx * cy * cz - cx * sy * sz);
+    result[1] = (float)(cx * sy * cz + sx * cy * sz);
+    result[2] = (float)(cx * cy * sz - sx * sy * cz);
 }
 
 static void matrix_multiply_d(double *restrict C, const double B[],

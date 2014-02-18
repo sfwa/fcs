@@ -14,15 +14,15 @@ MEMORY
 
 SECTIONS
 {
-    .csl_vect    >       L2SRAM
-    .text        >       L2SRAM
+    .csl_vect    >      L2SRAM
+    .stack       >      L2SRAM
+    .text        >      L2SRAM
     GROUP (NEAR_DP)
     {
         .neardata
         .rodata
         .bss
     } load       >      L2SRAM
-    .stack       >      L2SRAM
     .cinit       >      L2SRAM
     .cio         >      L2SRAM
     .const       >      L2SRAM
