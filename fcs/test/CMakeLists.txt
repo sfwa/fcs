@@ -101,6 +101,9 @@ TARGET_LINK_LIBRARIES(unittest
 #TARGET_LINK_LIBRARIES(unittest
 #    ${binary_dir}/${CMAKE_FIND_LIBRARY_PREFIXES}fcsnmpc.a)
 
+TARGET_LINK_LIBRARIES(unittest
+    ${binary_dir}/../../../nmpc_build/ccs-c66x/libfcsnmpc.a)
+
 ADD_TEST(unittest unittest)
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
 
@@ -141,3 +144,6 @@ TARGET_LINK_LIBRARIES(fcs
 #ExternalProject_Get_Property(nmpc binary_dir)
 #TARGET_LINK_LIBRARIES(fcs
 #    ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsnmpc.a)
+
+TARGET_LINK_LIBRARIES(unittest
+    ${binary_dir}/../../../nmpc_build/ccs-c66x/libfcsnmpc.a)

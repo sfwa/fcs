@@ -32,6 +32,7 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../ukf/cukf.h"
+#include "../nmpc/cnmpc.h"
 #include "../stats/stats.h"
 #include "../TRICAL/TRICAL.h"
 #include "../ahrs/measurement.h"
@@ -51,10 +52,12 @@ struct fcs_nav_state_t fcs_global_nav_state;
 
 
 static float _control_next_point_from_path(struct fcs_waypoint_t *new_point,
-const struct fcs_waypoint_t *last_point, const struct fcs_waypoint_t *start,
-const struct fcs_waypoint_t *end, enum fcs_path_type_t type, float t);
+const struct fcs_waypoint_t *last_point, const float *restrict wind,
+const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
+enum fcs_path_type_t type, float t);
 static void _ned_from_point_diff(float *restrict ned,
-struct fcs_waypoint_t *restrict ref, struct fcs_waypoint_t *restrict point);
+const struct fcs_waypoint_t *restrict ref,
+const struct fcs_waypoint_t *restrict point);
 static void _control_get_ahrs_state(float *restrict state,
 float *restrict wind, volatile struct fcs_ahrs_state_t *ahrs_state,
 const struct fcs_waypoint_t *restrict reference);
@@ -64,7 +67,8 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind);
 static void _control_next_point(struct fcs_waypoint_t *restrict new_point,
 uint16_t *restrict new_point_path_id,
 const struct fcs_waypoint_t *restrict last_point,
-const uint16_t *restrict last_point_path_id, struct fcs_nav_state_t *nav);
+const uint16_t *restrict last_point_path_id, const float *restrict wind,
+struct fcs_nav_state_t *nav);
 static void _control_shift_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind);
 static void _control_recalculate_horizon(struct fcs_nav_state_t *nav,
@@ -137,10 +141,16 @@ void fcs_control_init(void) {
     nmpc_init();
 
     /* Fill the horizon with zeros -- it'll be re-calculated next tick. */
-    memset(fcs_global_nav_state->reference_trajectory, 0,
-           sizeof(fcs_global_nav_state->reference_trajectory));
-    memset(fcs_global_nav_state->reference_path_id, 0xFFu,
-           sizeof(fcs_global_nav_state->reference_path_id));
+    memset(fcs_global_nav_state.reference_trajectory, 0,
+           sizeof(fcs_global_nav_state.reference_trajectory));
+    memset(fcs_global_nav_state.reference_path_id, 0xFFu,
+           sizeof(fcs_global_nav_state.reference_path_id));
+
+    /*
+    Set the reference path to invalid, so it gets recalculated once the AHRS
+    is ready.
+    */
+    fcs_global_nav_state.reference_path_id[0] = FCS_CONTROL_INVALID_PATH_ID;
 }
 
 void fcs_control_tick(void) {
@@ -155,10 +165,12 @@ void fcs_control_tick(void) {
     }
 
     enum nmpc_result_t result;
+    struct fcs_nav_state_t *nav = &fcs_global_nav_state;
     float controls[NMPC_CONTROL_DIM], state[NMPC_STATE_DIM], wind[3];
     uint16_t original_path_id;
     struct fcs_waypoint_t *waypoint;
     bool on_track;
+    size_t i;
 
     /*
     Run preparation -- this does nothing in the current implementation but
@@ -171,7 +183,7 @@ void fcs_control_tick(void) {
     usable by the control system.
     */
     _control_get_ahrs_state(state, wind, &fcs_global_ahrs_state,
-                            fcs_global_nav_state.reference_trajectory);
+                            nav->reference_trajectory);
 
     /*
     Three options here:
@@ -203,7 +215,7 @@ void fcs_control_tick(void) {
         nmpc_feedback_step(state);
 
         /* Move on to the next reference point in the horizon */
-        _control_shift_horizon(&fcs_global_nav_state, wind);
+        _control_shift_horizon(nav, wind);
     } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID) {
         /*
         TODO: Construct a path sequence that gets the vehicle back to the next
@@ -289,11 +301,11 @@ void fcs_control_tick(void) {
         We need to recalculate the horizon from scratch before the control
         input will mean anything.
         */
-        _control_recalculate_horizon(&fcs_global_nav_state, wind);
+        _control_recalculate_horizon(nav, wind);
 
         /* Now that's done, grab the latest state data and run the feedback */
         _control_get_ahrs_state(state, wind, &fcs_global_ahrs_state,
-                                fcs_global_nav_state.reference_trajectory);
+                                nav->reference_trajectory);
         nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
         nmpc_feedback_step(state);
     } else {
@@ -311,15 +323,24 @@ void fcs_control_tick(void) {
             FCS_CONTROL_HOLD_PATH_ID;
 
         /*
-        Set up the initial waypoint (current position and a standard
-        airspeed, arbitrary yaw/pitch/roll).
+        Set up the initial waypoint (current position and yaw, standard
+        airspeed, and arbitrary pitch/roll).
         */
         waypoint = &nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID];
         waypoint->lat = fcs_global_ahrs_state.lat;
         waypoint->lat = fcs_global_ahrs_state.lon;
         waypoint->alt = (float)fcs_global_ahrs_state.alt;
-        waypoint->airspeed = 20.0;
-        waypoint->yaw = 0.0;
+        waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+
+        double qx, qy, qz, qw;
+        qx = -fcs_global_ahrs_state.attitude[X];
+        qy = -fcs_global_ahrs_state.attitude[Y];
+        qz = -fcs_global_ahrs_state.attitude[Z];
+        qw = fcs_global_ahrs_state.attitude[W];
+
+        waypoint->yaw = atan2(2.0f * (qx * qy + qw * qz),
+                              qw * qw - qz * qz - qy * qy + qx * qx);
+
         waypoint->pitch = 0.0;
         waypoint->roll = 0.0;
 
@@ -327,9 +348,9 @@ void fcs_control_tick(void) {
         nav->reference_path_id[0] = FCS_CONTROL_HOLD_PATH_ID;
 
         /* Re-calculate the trajectory, then run the feedback step. */
-        _control_recalculate_horizon(&fcs_global_nav_state, wind);
+        _control_recalculate_horizon(nav, wind);
         _control_get_ahrs_state(state, wind, &fcs_global_ahrs_state,
-                                fcs_global_nav_state.reference_trajectory);
+                                nav->reference_trajectory);
         nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
         nmpc_feedback_step(state);
     }
@@ -345,7 +366,7 @@ static float _control_interpolate_linear(struct fcs_waypoint_t *new_point,
 const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t) {
-    float t_used = t, delta_lat, delta_lon;
+    float t_avail = t, delta_n, delta_e, x;
     /*
     Linear interpolation of lat, lon, alt, airspeed and roll; pitch is set
     based on climb rate, and yaw is set based on heading between start
@@ -373,23 +394,135 @@ float t) {
         x = 0.0;
     }
 
-    delta_lat = ;
-    delta_lon = ;
+    /*
+    Convert the end point to a NED offset from the last point. Move in the
+    direction of the offset, based on the airspeed, heading and wind vector.
 
-    new_point->lat = last_point->lat + t * (1.0f / WGS84_A) * delta_lat;
+    If we move past the last point, clip to the last point and return the
+    "unused" time.
+    */
+    float end_ned[3], distance;
+    _ned_from_point_diff(end_ned, last_point, end);
+
+    distance = 1.0 / sqrt(end_ned[0] * end_ned[0] + end_ned[1] * end_ned[1]);
+
+    delta_n = (end_ned[0] * distance) * last_point->airspeed - wind[0];
+    delta_e = (end_ned[1] * distance) * last_point->airspeed - wind[1];
+
+    if (absval(delta_n) * t > absval(end_ned[0]) ||
+        absval(delta_e) * t > absval(end_ned[1])) {
+        /*
+        Past the last point, work out how much t we should use. Base the
+        calculation on whichever delta is larger, to improve the accuracy of
+        the result.
+        */
+        if (absval(delta_n) > absval(delta_e)) {
+            t = end_ned[0] / delta_n;
+        } else {
+            t = end_ned[1] / delta_e;
+        }
+    }
+
+    new_point->lat = last_point->lat + t * (1.0f/WGS84_A) * delta_n;
     new_point->lon = last_point->lon +
-                     t * (1.0f / WGS84_A) * delta_lon / cos(last_point->lat);
+                     t * (1.0f/WGS84_A) * delta_e / cos(last_point->lat);
+
+    /*
+    Everything else is interpolated based on x, which is derived from the
+    position. If the last point is at the midpoint between start and end, this
+    x will be 0.5; this is not mathematically correct (e.g. since airspeed is
+    interpolated, if there's an airspeed change over the path the roll rate
+    will change).
+    */
     new_point->alt = start->alt + x * (end->alt - start->alt);
     new_point->airspeed = start->airspeed +
                           x * (end->airspeed - start->airspeed);
+    /* In theory we don't need to update this during the path, but whatever */
     new_point->yaw = atan2(start->lat - end->lat,
                            (start->lon - end->lon) * cos(last_point->lat));
     new_point->pitch = 0.0f; /* FIXME */
+    /* Interpolate roll in whichever direction is the shortest. */
     new_point->roll = start->roll +
                       x * (mod_f(mod_f(end->roll - start->roll, 2.0f * M_PI) +
                                  2.5f * M_PI, 2.0f * M_PI) - M_PI);
 
-    return t_used;
+    return t_avail - t;
+}
+
+static float _control_interpolate_figure_eight(
+struct fcs_waypoint_t *new_point, const struct fcs_waypoint_t *last_point,
+const float *restrict wind, const struct fcs_waypoint_t *start,
+const struct fcs_waypoint_t *end, float t) {
+    /*
+    Figure-eight path with the crossover point (middle of the 8) on the
+    start waypoint. Altitude is set by the start waypoint; all other
+    values are defined by the curve.
+
+    We construct the figure-eight using two circles touching at the start/end
+    point. The first circle involves a clockwise turn (banking to starboard),
+    and the second a counter-clockwise turn (banking to port). The turn radius
+    is FCS_CONTROL_TURN_RADIUS.
+
+    The yaw value of the starting point determines the orientation of the
+    pattern; the centres of the circles are FCS_CONTROL_TURN_RADIUS metres
+    directly to the port and starboard of the start pose.
+
+    Each circle takes
+        2 * pi * FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED
+    seconds to complete, so the yaw rate is just
+        FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED.
+
+    The sign of last point's roll value determines whether that value is added
+    to or subtracted from last point's yaw value to get the new yaw value;
+    every full circle, the roll value is negated.
+
+    The new point's lat and lon are determined from the start lat/lon and the
+    new yaw.
+    */
+    float yaw_rate, offset_n, offset_e, sd, cd, sy, cy;
+
+    yaw_rate = FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED;
+    if (last_point->roll < 0.0) {
+        yaw_rate *= -1.0;
+    }
+
+    /* Work out next yaw value, constraining to 0..2*pi. */
+    new_point->yaw = mod_f(last_point->yaw + yaw_rate * t, 2.0 * M_PI);
+
+    sd = sin(new_point->yaw - start->yaw);
+    sy = sin(start->yaw);
+    cd = cos(new_point->yaw - start->yaw);
+    cy = cos(start->yaw);
+
+    if (last_point->roll < 0.0) {
+        /* Bank to the left, so the circle origin is to port. */
+        offset_n = sd * -cy + (cd - 1.0) * -sy;
+        offset_e = sd * -sy - (cd - 1.0) * -cy;
+    } else {
+        offset_n = sd * cy + (cd - 1.0) * sy;
+        offset_e = sd * sy - (cd - 1.0) * cy;
+    }
+
+    offset_n *= FCS_CONTROL_DEFAULT_AIRSPEED;
+    offset_e *= FCS_CONTROL_DEFAULT_AIRSPEED;
+
+    new_point->lat = start->lat + (1.0f/WGS84_A) * offset_n;
+    new_point->lon = start->lon + (1.0f/WGS84_A) * offset_e / cos(start->lat);
+
+    /* If delta yaw > start yaw - last yaw, it's time to change direction. */
+    if (mod_f(start->yaw - last_point->yaw, 2.0 * M_PI) <
+            absval(yaw_rate) * t) {
+        new_point->roll = -last_point->roll;
+    } else {
+        new_point->roll = last_point->roll;
+    }
+
+    new_point->alt = start->alt;
+    new_point->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+    new_point->pitch = 0.0f; /* FIXME? */
+
+    /* Always returning 0 means we never advance to the next path. */
+    return 0.0;
 }
 
 static float _control_next_point_from_path(struct fcs_waypoint_t *new_point,
@@ -412,21 +545,18 @@ enum fcs_path_type_t type, float t) {
         TODO
         */
     } else if (type == FCS_PATH_FIGURE_EIGHT) {
-        /*
-        Figure-eight path with the crossover point (middle of the 8) on the
-        start waypoint. Altitude is set by the start waypoint; all other
-        values are defined by the curve.
-
-        TODO
-        */
+        return _control_interpolate_figure_eight(new_point, last_point, wind,
+                                                 start, end, t);
     } else {
         assert(false && "Invalid path type.");
-        return 0;
     }
+
+    return 0.0;
 }
 
 static void _ned_from_point_diff(float *restrict ned,
-struct fcs_waypoint_t *restrict ref, struct fcs_waypoint_t *restrict point) {
+const struct fcs_waypoint_t *restrict ref,
+const struct fcs_waypoint_t *restrict point) {
     assert(ned && ref && point);
     _nassert((size_t)ned % 4u == 0);
     _nassert((size_t)ref % 8u == 0);
@@ -550,7 +680,7 @@ const uint16_t *restrict last_point_path_id, const float *restrict wind,
 struct fcs_nav_state_t *nav) {
     float t;
     struct fcs_path_t *path;
-    enum fcs_path_type path_type;
+    enum fcs_path_type_t path_type;
     size_t i;
 
     /*
@@ -570,7 +700,11 @@ struct fcs_nav_state_t *nav) {
 
     i = 0;
     while (t > 0.0 && i < 10u) {
-        *new_point_path_id = path->next_path_id;
+        if (path->next_path_id == FCS_CONTROL_INVALID_PATH_ID) {
+            *new_point_path_id = FCS_CONTROL_HOLD_PATH_ID;
+        } else {
+            *new_point_path_id = path->next_path_id;
+        }
 
         /*
         Sanity checks on consistency of path navigation -- the start waypoint

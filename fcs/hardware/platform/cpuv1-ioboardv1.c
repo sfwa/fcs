@@ -38,6 +38,7 @@ SOFTWARE.
 #include "../../util/util.h"
 #include "../../util/3dmath.h"
 #include "../../ukf/cukf.h"
+#include "../../nmpc/cnmpc.h"
 #include "../../drivers/stream.h"
 #include "../../stats/stats.h"
 #include "../../TRICAL/TRICAL.h"

@@ -34,6 +34,7 @@ SOFTWARE.
 #include "../stats/stats.h"
 #include "../TRICAL/TRICAL.h"
 #include "../ukf/cukf.h"
+#include "../nmpc/cnmpc.h"
 #include "../control/control.h"
 #include "measurement.h"
 #include "wmm.h"
