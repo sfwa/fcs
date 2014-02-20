@@ -53,6 +53,6 @@ Definitions for parameters used to calculated MRP vectors.
 #define OCP_HORIZON_LENGTH 100
 
 /* OCP control step length (seconds). */
-#define OCP_STEP_LENGTH ((real_t)(1.0/50.0))
+#define OCP_STEP_LENGTH ((float)(1.0/50.0))
 
 #endif

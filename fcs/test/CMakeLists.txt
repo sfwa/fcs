@@ -70,6 +70,7 @@ ADD_EXECUTABLE(unittest
     ../ahrs/ahrs.c
     test_ahrs.cpp
     ../control/control.c
+    test_control.cpp
     ../hardware/platform/cpuv1-ioboardv1.c
     test_hardware.cpp)
 

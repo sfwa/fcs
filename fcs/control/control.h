@@ -40,15 +40,19 @@ trajectory to get back on track.
 /* Turn radius in metres */
 #define FCS_CONTROL_TURN_RADIUS 20.0
 
+/*
+Dubins curve heading error tolerance for "straight" sections -- works out to
+about 5 degree error, but since curve segments aren't meant to be used for
+long distances that'll be OK.
+
+Improving accuracy here would require _interpolate_dubins to support mixing
+left/straight/right control actions within a single timestep.
+*/
+#define FCS_CONTROL_TURN_TOLERANCE (M_PI * 0.03)
+
 enum fcs_path_type_t {
     FCS_PATH_LINE,
-    FCS_PATH_CURVE_SHORTEST,
-    FCS_PATH_CURVE_LSL,
-    FCS_PATH_CURVE_LSR,
-    FCS_PATH_CURVE_RSL,
-    FCS_PATH_CURVE_RSR,
-    FCS_PATH_CURVE_RLR,
-    FCS_PATH_CURVE_LRL,
+    FCS_PATH_DUBINS_CURVE,
     FCS_PATH_FIGURE_EIGHT,
 
     /* Sentinel */
