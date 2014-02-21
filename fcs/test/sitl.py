@@ -82,8 +82,8 @@ ahrs_tick = 0
 
 
 sim_state = {
-    "lat": 0.0,
-    "lon": 0.0,
+    "lat": None,
+    "lon": None,
     "alt": 0.0,
     "velocity": [0.0, 0.0, 0.0],
     "attitude": [0.0, 0.0, 0.0, 1.0],
@@ -97,7 +97,8 @@ sim_ref = {
     "wind_d": 0.0,
     "attitude_yaw": 0.0,
     "attitude_pitch": 0.0,
-    "attitude_roll": 0.0
+    "attitude_roll": 0.0,
+    "airspeed": 0.0
 }
 
 
@@ -479,6 +480,7 @@ def connect_to_xplane():
     sock.sendall("sub sim/weather/wind_now_x_msc\n")
     sock.sendall("sub sim/weather/wind_now_y_msc\n")
     sock.sendall("sub sim/weather/wind_now_z_msc\n")
+    sock.sendall("sub sim/flightmodel/position/true_airspeed 0\n")
     sock.sendall("extplane-set update_interval 0.02\n")
 
     # Wait for some data
@@ -488,6 +490,8 @@ def connect_to_xplane():
 
 
 def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
+    disable_xplane_sim()
+
     s.sendall("world-set -37.8136 144.9 100\n")
     time.sleep(1.0)
 
@@ -527,10 +531,13 @@ def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
 
 
 def enable_xplane_sim(s):
-    update = "set sim/operation/override/override_planepath [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n"
-    s.sendall(update)
-
+    s.sendall("set sim/operation/override/override_planepath [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n")
     s.setblocking(0)
+
+
+def disable_xplane_sim(s):
+    s.setblocking(1)
+    sock.sendall("set sim/operation/override/override_planepath [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n")
 
 
 def recv_state_from_xplane(s):
@@ -572,6 +579,8 @@ def recv_state_from_xplane(s):
                 sim_ref["wind_d"] = -float(fields[2])
             elif fields[1] == "sim/weather/wind_now_z_msc":
                 sim_ref["wind_n"] = -float(fields[2])
+            elif fields[1] == "sim/flightmodel/position/true_airspeed":
+                sim_ref["airspeed"] = float(fields[2])
     except socket.error:
         pass
 
@@ -611,18 +620,57 @@ if __name__ == "__main__":
 
     enable_xplane_sim(sock)
 
-    while True:
-        iter_start = time.time()
+    time.sleep(0.02)
 
-        recv_state_from_xplane(sock)
-        controls = tick()
-        print "T: %08.6f   L: %08.6f   R: %08.6f" % tuple(controls[0:3])
-        send_control_to_xplane(sock, controls)
+    print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
 
-        #print "\n".join(repr(w) for w in list(nav_state.reference_trajectory))
+    t = 0
+    try:
+        while True:
+            iter_start = time.time()
 
-        slack_time = 0.02 - (time.time() - iter_start)
-        if slack_time > 0:
-            time.sleep(slack_time)
-        else:
-            print "DEADLINE MISSED: %.3fs late" % -slack_time
+            recv_state_from_xplane(sock)
+
+            # Skip the rest until we have a full set of data
+            if sim_state["lat"] is None or sim_state["lon"] is None:
+                time.sleep(0.02)
+                continue
+
+            controls = tick()
+            send_control_to_xplane(sock, controls)
+
+            print "%d,%.9f,%.9f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
+                t * 0.02,
+                math.degrees(nav_state.reference_trajectory[0].lat),
+                math.degrees(nav_state.reference_trajectory[0].lon),
+                nav_state.reference_trajectory[0].alt,
+                nav_state.reference_trajectory[0].airspeed,
+                math.degrees(nav_state.reference_trajectory[0].yaw),
+                math.degrees(sim_state["lat"]),
+                math.degrees(sim_state["lon"]),
+                sim_state["alt"],
+                sim_ref["airspeed"],
+                math.degrees(sim_ref["attitude_yaw"]),
+                sim_ref["wind_n"],
+                sim_ref["wind_e"],
+                sim_ref["wind_d"],
+                controls[0],
+                controls[1],
+                controls[2]
+            )
+
+            t += 1
+
+            if abs(sim_state["alt"] - nav_state.reference_trajectory[0].alt) > 50.0:
+                print "LOST CONTROL"
+                print "Reference trajectory was:"
+                print "\n".join(("    " + repr(w)) for w in list(nav_state.reference_trajectory))
+                raise StopIteration()
+
+            slack_time = 0.02 - (time.time() - iter_start)
+            if slack_time > 0:
+                time.sleep(slack_time)
+            else:
+                print "DEADLINE MISSED: %.3fs late" % -slack_time
+    finally:
+        disable_xplane_sim(sock)
