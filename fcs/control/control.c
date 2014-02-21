@@ -97,12 +97,12 @@ const float *restrict wind);
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
-        1e-1, 1e-1, 1e1, 1e0, 1e0, 1e0, 1e-1, 1e0, 1e0, 7e0, 7e-1, 1e-2
+        1, 1, 1, 1, 1, 1, 1, 1, 1e1, 7e-1, 7e-1, 1e1
     };
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 1e-7, 1e-3, 1e-3 };
+    float control_weights[NMPC_CONTROL_DIM] = { 1e-1, 1e3, 1e3 };
     float lower_control_bound[NMPC_CONTROL_DIM];
     float upper_control_bound[NMPC_CONTROL_DIM];
     float reference[NMPC_REFERENCE_DIM];
@@ -115,26 +115,26 @@ void fcs_control_init(void) {
     Configure throttle control: 0-12000 RPM, cruise at 9000, rate change at
     9000 RPM/sec
     */
-    fcs_global_control_state.controls[0].setpoint = 9000.0f;
+    fcs_global_control_state.controls[0].setpoint = 0.6f;
     fcs_global_control_state.controls[0].min = 0.0f;
-    fcs_global_control_state.controls[0].max = 12000.0f;
-    fcs_global_control_state.controls[0].rate = 9000.0f;
+    fcs_global_control_state.controls[0].max = 1.0f;
+    fcs_global_control_state.controls[0].rate = 0.5f;
 
     /*
-    Configure left elevon: neutral setpoint, +/- 45 deg travel, 60 deg/s rate
+    Configure left elevon: neutral setpoint, +/- 36 deg travel, 60 deg/s rate
     */
-    fcs_global_control_state.controls[1].setpoint = 0.0f;
-    fcs_global_control_state.controls[1].min = -M_PI * 0.25f;
-    fcs_global_control_state.controls[1].max = M_PI * 0.25f;
-    fcs_global_control_state.controls[1].rate = M_PI * 0.3333333f;
+    fcs_global_control_state.controls[1].setpoint = 0.5f;
+    fcs_global_control_state.controls[1].min = 0.0f;
+    fcs_global_control_state.controls[1].max = 1.0f;
+    fcs_global_control_state.controls[1].rate = 3.0f;
 
     /*
-    Configure right elevon: neutral setpoint, +/- 45 deg travel, 60 deg/s rate
+    Configure right elevon: neutral setpoint, +/- 36 deg travel, 60 deg/s rate
     */
-    fcs_global_control_state.controls[2].setpoint = 0.0f;
-    fcs_global_control_state.controls[2].min = -M_PI * 0.25f;
-    fcs_global_control_state.controls[2].max = M_PI * 0.25f;
-    fcs_global_control_state.controls[2].rate = M_PI * 0.3333333f;
+    fcs_global_control_state.controls[2].setpoint = 0.5f;
+    fcs_global_control_state.controls[2].min = 0.0f;
+    fcs_global_control_state.controls[2].max = 1.0f;
+    fcs_global_control_state.controls[2].rate = 3.0f;
 
     /* Set final (unused) control channel */
     fcs_global_control_state.controls[3].setpoint = 0.0f;
@@ -163,14 +163,12 @@ void fcs_control_init(void) {
     /* Fill the horizon with zeros -- it'll be re-calculated next tick. */
     memset(fcs_global_nav_state.reference_trajectory, 0,
            sizeof(fcs_global_nav_state.reference_trajectory));
-    memset(fcs_global_nav_state.reference_path_id, 0xFFu,
-           sizeof(fcs_global_nav_state.reference_path_id));
-
     /*
     Set the reference path to invalid, so it gets recalculated once the AHRS
     is ready.
     */
-    fcs_global_nav_state.reference_path_id[0] = FCS_CONTROL_INVALID_PATH_ID;
+    memset(fcs_global_nav_state.reference_path_id, 0xFFu,
+           sizeof(fcs_global_nav_state.reference_path_id));
 }
 
 void fcs_control_tick(void) {
@@ -385,7 +383,7 @@ float _interpolate_linear(struct fcs_waypoint_t *new_point,
 const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t) {
-    float t_avail = t, delta_n, delta_e, x, end_ned[3], distance, target_roll;
+    float delta_n, delta_e, x, end_ned[3], distance, target_roll;
     /*
     Linear interpolation of lat, lon, alt, airspeed and roll; pitch is set
     based on climb rate, and yaw is set based on heading between start
@@ -482,7 +480,7 @@ float t) {
         new_point->roll += M_PI * 2.0f;
     }
 
-    return t_avail - t;
+    return t;
 }
 
 float _interpolate_figure_eight(struct fcs_waypoint_t *new_point,
@@ -517,7 +515,7 @@ float t) {
     */
     float yaw_rate, offset_n, offset_e, sd, cd, sy, cy, target_yaw;
 
-    yaw_rate = FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED;
+    yaw_rate = (FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED);
     if (last_point->roll < 0.0) {
         yaw_rate = -yaw_rate;
     }
@@ -532,11 +530,11 @@ float t) {
 
     if (yaw_rate > 0.0 && target_yaw > 0.0 && target_yaw < yaw_rate * t) {
         new_point->roll = -M_PI * 0.25;
-        yaw_rate = -FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED;
+        yaw_rate = -(FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED);
     } else if (yaw_rate < 0.0 && target_yaw < 0.0 &&
                target_yaw > yaw_rate * t) {
         new_point->roll = M_PI * 0.25;
-        yaw_rate = FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED;
+        yaw_rate = (FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED);
     } else {
         new_point->roll = last_point->roll < 0.0 ? -M_PI * 0.25 : M_PI * 0.25;
     }
@@ -546,7 +544,6 @@ float t) {
     if (new_point->yaw > 2.0 * M_PI) {
         new_point->yaw -= 2.0 * M_PI;
     }
-
 
     sy = sin(start->yaw);
     cy = cos(start->yaw);
@@ -576,8 +573,8 @@ float t) {
     new_point->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     new_point->pitch = 0.0f; /* FIXME? */
 
-    /* Always returning 0 means we never advance to the next path. */
-    return 0.0;
+    /* Always returning t means we never advance to the next path. */
+    return t;
 }
 
 float _interpolate_dubins(struct fcs_waypoint_t *new_point,
@@ -591,7 +588,7 @@ float t) {
     based on the climb rate, while airspeed, yaw and roll are set by the
     curve.
     */
-    float t_avail = t, mean_yaw, delta_n, delta_e, delta_d, distance,
+    float mean_yaw, delta_n, delta_e, delta_d, distance,
           end_ned[3], target_turn_angle;
     int8_t action = 0; /* -1 = left, 0 = straight, 1 = right */
 
@@ -750,7 +747,7 @@ float t) {
     /* Set the roll based on the turn direction, if a turn is in progress. */
     new_point->roll = (float)action * M_PI * 0.25f;
 
-    return t_avail - t;
+    return t;
 }
 
 float _next_point_from_path(struct fcs_waypoint_t *new_point,
@@ -882,9 +879,10 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind) {
     reference[10] = 0.0;
     reference[11] = 0.0;
     reference[12] = 0.0;
-    reference[NMPC_STATE_DIM + 0] = 9000.0f;
-    reference[NMPC_STATE_DIM + 1u] = 0.0f;
-    reference[NMPC_STATE_DIM + 2u] = 0.0f;
+    /* FIXME: reference points should be specified in the control config. */
+    reference[NMPC_STATE_DIM + 0] = 0.6f;
+    reference[NMPC_STATE_DIM + 1u] = 0.5f;
+    reference[NMPC_STATE_DIM + 2u] = 0.5f;
 }
 
 /*
@@ -902,6 +900,8 @@ struct fcs_nav_state_t *nav) {
     enum fcs_path_type_t path_type;
     size_t i;
 
+    assert(*last_point_path_id != FCS_CONTROL_INVALID_PATH_ID);
+
     /*
     Since we might have hit the end of a path, and it's theoretically possible
     to skip certain degenerate paths in a single timestep (waypoints closer
@@ -913,6 +913,7 @@ struct fcs_nav_state_t *nav) {
     */
     t = OCP_STEP_LENGTH;
     path = &nav->paths[*last_point_path_id];
+    *new_point_path_id = *last_point_path_id;
     t -= _next_point_from_path(
         new_point, last_point, wind, &nav->waypoints[path->start_waypoint_id],
         &nav->waypoints[path->end_waypoint_id], path->type, t);
@@ -966,12 +967,12 @@ void _shift_horizon(struct fcs_nav_state_t *nav, const float *restrict wind) {
     path IDs.
     */
     ref = nav->reference_trajectory;
-    new_point = &ref[OCP_HORIZON_LENGTH - 1u];
-    last_point = &ref[OCP_HORIZON_LENGTH - 2u];
+    new_point = &ref[OCP_HORIZON_LENGTH];
+    last_point = &ref[OCP_HORIZON_LENGTH - 1u];
 
     ref_path_id = nav->reference_path_id;
-    new_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH - 1u];
-    last_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH - 2u];
+    new_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH];
+    last_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH - 1u];
 
     memmove(ref, &ref[1], new_point - ref);
     memmove(ref_path_id, &ref_path_id[1], new_point_path_id - ref_path_id);
@@ -979,9 +980,14 @@ void _shift_horizon(struct fcs_nav_state_t *nav, const float *restrict wind) {
     _next_point(new_point, new_point_path_id, last_point, last_point_path_id,
                 wind, nav);
 
-    /* Set the hold waypoint to the end of the reference trajectory. */
-    memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+    /*
+    If we're not currently in a holding pattern, shift the hold waypoint to
+    the end of the reference trajectory.
+    */
+    if (*last_point_path_id != FCS_CONTROL_HOLD_PATH_ID) {
+        memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
+    }
 
     _make_reference(reference, new_point, last_point, wind);
     nmpc_update_horizon(reference);
@@ -1015,9 +1021,9 @@ const float *restrict wind) {
         &nav->waypoints[path->start_waypoint_id],
         &nav->waypoints[path->end_waypoint_id], path->type, 0.0);
     _make_reference(reference, ref, NULL, wind);
-    nmpc_set_reference_point(reference, i);
+    nmpc_set_reference_point(reference, 0);
 
-    for (i = 1u; i < OCP_HORIZON_LENGTH; i++) {
+    for (i = 1u; i <= OCP_HORIZON_LENGTH; i++) {
         new_point = &ref[i];
         new_point_path_id = &ref_path_id[i];
 
@@ -1030,7 +1036,12 @@ const float *restrict wind) {
         nmpc_set_reference_point(reference, i);
     }
 
-    /* Set the hold waypoint to the end of the reference trajectory. */
-    memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+    /*
+    If we're not currently in a holding pattern, set the hold waypoint to
+    the end of the reference trajectory.
+    */
+    if (*last_point_path_id != FCS_CONTROL_HOLD_PATH_ID) {
+        memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
+    }
 }

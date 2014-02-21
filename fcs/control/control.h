@@ -122,8 +122,8 @@ struct fcs_nav_state_t {
     struct fcs_waypoint_t waypoints[FCS_CONTROL_MAX_WAYPOINTS];
     struct fcs_boundary_t boundary;
 
-    struct fcs_waypoint_t reference_trajectory[OCP_HORIZON_LENGTH];
-    uint16_t reference_path_id[OCP_HORIZON_LENGTH];
+    struct fcs_waypoint_t reference_trajectory[OCP_HORIZON_LENGTH + 1u];
+    uint16_t reference_path_id[OCP_HORIZON_LENGTH + 1u];
 };
 
 extern struct fcs_control_state_t fcs_global_control_state;

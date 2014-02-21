@@ -508,7 +508,7 @@ TEST(Control, InterpolateLinearPathNoWindNE) {
     memcpy(&last_point, &start, sizeof(last_point));
     result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
                                    t);
-    EXPECT_FLOAT_EQ(0.0, result_t);
+    EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(2.2172830881518887e-07, result.lat);
     EXPECT_DOUBLE_EQ(2.5307276371200866, result.lon);
     EXPECT_FLOAT_EQ(10.0, result.alt);
@@ -522,7 +522,7 @@ TEST(Control, InterpolateLinearPathNoWindNE) {
     last_point.lon = start.lon + 0.5 * (M_PI/180.0);
     result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
                                    t);
-    EXPECT_FLOAT_EQ(0.0, result_t);
+    EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(0.008726867992491014, result.lat);
     EXPECT_DOUBLE_EQ(2.5394542833842668, result.lon);
     EXPECT_FLOAT_EQ(15.0, result.alt);
@@ -535,7 +535,7 @@ TEST(Control, InterpolateLinearPathNoWindNE) {
     memcpy(&last_point, &end, sizeof(last_point));
     result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
                                    t);
-    EXPECT_FLOAT_EQ(t, result_t);
+    EXPECT_FLOAT_EQ(0.0, result_t);
     EXPECT_DOUBLE_EQ(end.lat, result.lat);
     EXPECT_DOUBLE_EQ(end.lon, result.lon);
     EXPECT_FLOAT_EQ(end.alt, result.alt);
@@ -570,7 +570,7 @@ TEST(Control, InterpolateLinearPathNoWindS) {
     memcpy(&last_point, &start, sizeof(last_point));
     result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
                                    t);
-    EXPECT_FLOAT_EQ(0.0, result_t);
+    EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(-3.1357118156861731e-07, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
     EXPECT_FLOAT_EQ(10.0, result.alt);
@@ -584,7 +584,7 @@ TEST(Control, InterpolateLinearPathNoWindS) {
     last_point.lon = start.lon;
     result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
                                    t);
-    EXPECT_FLOAT_EQ(0.0, result_t);
+    EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(-0.0087269598311532168, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
     EXPECT_FLOAT_EQ(5.0, result.alt);
@@ -597,7 +597,7 @@ TEST(Control, InterpolateLinearPathNoWindS) {
     memcpy(&last_point, &end, sizeof(last_point));
     result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
                                    t);
-    EXPECT_FLOAT_EQ(t, result_t);
+    EXPECT_FLOAT_EQ(0.0, result_t);
     EXPECT_DOUBLE_EQ(end.lat, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
     EXPECT_FLOAT_EQ(end.alt, result.alt);
@@ -633,7 +633,7 @@ TEST(Control, InterpolateLinearPathHeadwindS) {
     memcpy(&last_point, &start, sizeof(last_point));
     result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
                                    t);
-    EXPECT_FLOAT_EQ(0.0, result_t);
+    EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(-3.1357118156861731e-07 * 0.5, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
     EXPECT_FLOAT_EQ(10.0, result.alt);
@@ -662,7 +662,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
     /* Initial point (centre, heading north and turning clockwise) */
     result_t = _interpolate_figure_eight(
         &result, &last_point, wind, &start, &end, t);
-    EXPECT_FLOAT_EQ(0.0, result_t);
+    EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(6.2710056695540948e-08, result.lat);
     EXPECT_DOUBLE_EQ(6.2705954174843071e-10, result.lon);
     EXPECT_FLOAT_EQ(10.0, result.alt);
@@ -675,7 +675,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR((i + 2) * t, result.yaw, 1e-4);
     }
 
@@ -692,7 +692,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR((i + 2) * t, result.yaw, 1e-4);
     }
 
@@ -709,7 +709,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR((i + 2) * t, result.yaw, 1e-4);
     }
 
@@ -726,7 +726,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR(M_PI * 2.0 - (i - 312) * t - 0.0031, result.yaw, 1e-4);
     }
 
@@ -759,7 +759,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
     /* Initial point (centre, heading west and turning clockwise) */
     result_t = _interpolate_figure_eight(
         &result, &last_point, wind, &start, &end, t);
-    EXPECT_FLOAT_EQ(0.0, result_t);
+    EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(6.2706027183824737e-10, result.lat);
     EXPECT_DOUBLE_EQ(-6.2709995952068201e-08, result.lon);
     EXPECT_FLOAT_EQ(10.0, result.alt);
@@ -772,7 +772,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR(
             mod_f(M_PI * 1.5 + (i + 2) * t, 2.0 * M_PI), result.yaw, 1e-4);
     }
@@ -790,7 +790,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR(
             mod_f(M_PI * 1.5 + (i + 2) * t, 2.0 * M_PI), result.yaw, 1e-4);
     }
@@ -808,7 +808,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR(
             mod_f(M_PI * 1.5 + (i + 2) * t, 2.0 * M_PI), result.yaw, 1e-4);
     }
@@ -826,7 +826,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
         memcpy(&last_point, &result, sizeof(last_point));
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.0, result_t);
+        EXPECT_FLOAT_EQ(0.02, result_t);
         EXPECT_NEAR(M_PI * 1.5 - (i - 312) * t - 0.0031, result.yaw, 1e-4);
     }
 

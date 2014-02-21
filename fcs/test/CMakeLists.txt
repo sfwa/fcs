@@ -146,5 +146,5 @@ TARGET_LINK_LIBRARIES(fcs
 #TARGET_LINK_LIBRARIES(fcs
 #    ${binary_dir}/ccs-c66x/${CMAKE_FIND_LIBRARY_PREFIXES}fcsnmpc.a)
 
-TARGET_LINK_LIBRARIES(unittest
+TARGET_LINK_LIBRARIES(fcs
     ${binary_dir}/../../../nmpc_build/ccs-c66x/libfcsnmpc.a)
