@@ -495,6 +495,11 @@ def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
     s.sendall("world-set -37.8136 144.9 100\n")
     time.sleep(1.0)
 
+    # Clear the engine fire -- this happens whenever the X8 is on the ground
+    s.sendall("sub sim/operation/failures/rel_engfir0")
+    s.sendall("set sim/operation/failures/rel_engfir0 0")
+    s.sendall("unsub sim/operation/failures/rel_engfir0")
+
     if not velocity:
         velocity = [20.0, 0.0, 0.0]
 
