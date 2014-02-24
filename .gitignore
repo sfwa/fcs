@@ -1,6 +1,7 @@
 # Object files
 *.o
 *.ko
+*.pyc
 
 # Shared objects (inc. Windows DLLs)
 *.dll
