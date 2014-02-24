@@ -16,6 +16,7 @@ SVN_REPOSITORY http://googletest.googlecode.com/svn/trunk/
 TIMEOUT 30
 # Disable install step
 INSTALL_COMMAND ""
+UPDATE_COMMAND ""
 # Wrap download, configure and build steps in a script to log output
 LOG_DOWNLOAD ON
 LOG_CONFIGURE ON
@@ -30,18 +31,21 @@ ExternalProject_Add(ukf
   GIT_REPOSITORY https://github.com/sfwa/ukf.git
   BUILD_COMMAND $(MAKE) fcsukf
   INSTALL_COMMAND ""
+  UPDATE_COMMAND ""
 )
 
 # Add TRICAL library
 ExternalProject_Add(TRICAL
   GIT_REPOSITORY https://github.com/sfwa/TRICAL.git
   INSTALL_COMMAND ""
+  UPDATE_COMMAND ""
 )
 
 # Add NMPC library
 #ExternalProject_Add(nmpc
 #  GIT_REPOSITORY git+ssh://git@github.com/sfwa/nmpc.git
 #  INSTALL_COMMAND ""
+#  UPDATE_COMMAND ""
 #)
 
 INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
