@@ -32,23 +32,23 @@ SOFTWARE.
 If the vehicle is more than 10m from where it should be, switch to a recovery
 trajectory to get back on track.
 */
-#define FCS_CONTROL_POSITION_TOLERANCE 10.0
+#define FCS_CONTROL_POSITION_TOLERANCE 40.0
 
 /* Airspeed used for holding patterns etc, in m/s */
 #define FCS_CONTROL_DEFAULT_AIRSPEED 20.0
 
 /* Turn radius in metres */
-#define FCS_CONTROL_TURN_RADIUS 20.0
+#define FCS_CONTROL_TURN_RADIUS 60.0
 
 /*
 Dubins curve heading error tolerance for "straight" sections -- works out to
-about 5 degree error, but since curve segments aren't meant to be used for
+about 0.15 degree error, but since curve segments aren't meant to be used for
 long distances that'll be OK.
 
 Improving accuracy here would require _interpolate_dubins to support mixing
 left/straight/right control actions within a single timestep.
 */
-#define FCS_CONTROL_TURN_TOLERANCE (M_PI * 0.03)
+#define FCS_CONTROL_TURN_TOLERANCE (M_PI * 0.001)
 
 enum fcs_path_type_t {
     FCS_PATH_LINE,
@@ -73,6 +73,22 @@ struct fcs_waypoint_t {
     float yaw, pitch, roll;
     uint32_t flags;
 };
+
+/*
+These flags are used to identify point types in the reference trajectory
+generation system.
+*/
+#define FCS_WAYPOINT_FLAG_PARAM_MASK 0x00000003u
+#define FCS_WAYPOINT_FLAG_PARAM_OFFSET 0
+
+#define FCS_WAYPOINT_FLAG_DUBINS_RSR 0x0u
+#define FCS_WAYPOINT_FLAG_DUBINS_LSL 0x1u
+#define FCS_WAYPOINT_FLAG_DUBINS_RSL 0x2u
+#define FCS_WAYPOINT_FLAG_DUBINS_LSR 0x3u
+
+#define FCS_WAYPOINT_FLAG_SEGMENT_MASK 0x0000000Cu
+#define FCS_WAYPOINT_FLAG_SEGMENT_OFFSET 2u
+
 
 struct fcs_path_t {
     uint16_t start_waypoint_id;

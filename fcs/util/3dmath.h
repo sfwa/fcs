@@ -102,6 +102,17 @@ static inline float mod_2pi(float x) {
     return x - (M_PI * 2.0) * floor(x * (0.5 / M_PI));
 }
 
+/* Convert an angle to the range [-M_PI, M_PI) */
+static inline float delta_angle(float x) {
+    if (x >= M_PI) {
+        return x - (M_PI * 2.0);
+    } else if (x < -M_PI) {
+        return x + (M_PI * 2.0);
+    } else {
+        return x;
+    }
+}
+
 /* Non-TI compatibility */
 #ifndef __TI_COMPILER_VERSION__
 #define _nassert(x)

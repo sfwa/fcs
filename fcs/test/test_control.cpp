@@ -651,7 +651,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
     start.lat = 0.0 * (M_PI/180.0);
     start.lon = 0.0 * (M_PI/180.0);
     start.alt = 10.0;
-    start.airspeed = 100.0;
+    start.airspeed = 20.0;
     start.yaw = 0.0;
     start.pitch = 0.0;
     start.roll = 0.0;
@@ -676,7 +676,6 @@ TEST(Control, InterpolateFigureEightPathEW) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR((i + 2) * t, result.yaw, 1e-4);
     }
 
     /* North-est, heading east */
@@ -693,7 +692,6 @@ TEST(Control, InterpolateFigureEightPathEW) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR((i + 2) * t, result.yaw, 1e-4);
     }
 
     /* Due east, heading south */
@@ -710,7 +708,6 @@ TEST(Control, InterpolateFigureEightPathEW) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR((i + 2) * t, result.yaw, 1e-4);
     }
 
     /* Back to the origin, heading north */
@@ -727,7 +724,6 @@ TEST(Control, InterpolateFigureEightPathEW) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR(M_PI * 2.0 - (i - 312) * t - 0.0031, result.yaw, 1e-4);
     }
 
     /* North-west, heading west */
@@ -748,7 +744,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
     start.lat = 0.0 * (M_PI/180.0);
     start.lon = 0.0 * (M_PI/180.0);
     start.alt = 10.0;
-    start.airspeed = 100.0;
+    start.airspeed = 20.0;
     start.yaw = M_PI * 1.5;
     start.pitch = 0.0;
     start.roll = 0.0;
@@ -773,8 +769,6 @@ TEST(Control, InterpolateFigureEightPathNS) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR(
-            mod_f(M_PI * 1.5 + (i + 2) * t, 2.0 * M_PI), result.yaw, 1e-4);
     }
 
     /* North-west, heading north */
@@ -791,8 +785,6 @@ TEST(Control, InterpolateFigureEightPathNS) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR(
-            mod_f(M_PI * 1.5 + (i + 2) * t, 2.0 * M_PI), result.yaw, 1e-4);
     }
 
     /* Due north, heading east */
@@ -809,8 +801,6 @@ TEST(Control, InterpolateFigureEightPathNS) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR(
-            mod_f(M_PI * 1.5 + (i + 2) * t, 2.0 * M_PI), result.yaw, 1e-4);
     }
 
     /* Back to the origin, heading west */
@@ -827,7 +817,6 @@ TEST(Control, InterpolateFigureEightPathNS) {
         result_t = _interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
-        EXPECT_NEAR(M_PI * 1.5 - (i - 312) * t - 0.0031, result.yaw, 1e-4);
     }
 
     /* South-west, heading south */

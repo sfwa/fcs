@@ -20,8 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef NMPC_H
-#define NMPC_H
+#ifndef CNMPC_H
+#define CNMPC_H
 
 #include <stdint.h>
 #include "config.h"
@@ -31,10 +31,10 @@ extern "C" {
 #endif
 
 struct nmpc_state_t {
-    float position[3];
-    float velocity[3];
-    float attitude[4]; /* x, y, z, W */
-    float angular_velocity[3];
+    real_t position[3];
+    real_t velocity[3];
+    real_t attitude[4]; /* x, y, z, W */
+    real_t angular_velocity[3];
 };
 
 enum nmpc_result_t {
@@ -43,7 +43,12 @@ enum nmpc_result_t {
     NMPC_ERROR
 };
 
-void nmpc_init(void);
+/*
+If state_position_delta is true, the position component of each state vector
+in the reference trajectory is assumed to be relative to the previous state
+vector.
+*/
+void nmpc_init(bool state_position_delta);
 void nmpc_preparation_step(void);
 void nmpc_feedback_step(float measurement[NMPC_STATE_DIM]);
 enum nmpc_result_t nmpc_get_controls(float controls[NMPC_CONTROL_DIM]);
@@ -60,23 +65,6 @@ uint32_t i);
 
 /* Function to set the wind estimate for the dynamics model. */
 void nmpc_set_wind_velocity(float x, float y, float z);
-
-/* Functions for setting different parts of the state vector. */
-void nmpc_fixedwingdynamics_set_position(
-    float lat, float lon, float alt);
-void nmpc_fixedwingdynamics_set_velocity(
-    float x, float y, float z);
-void nmpc_fixedwingdynamics_set_attitude(
-    float w, float x, float y, float z);
-void nmpc_fixedwingdynamics_set_angular_velocity(
-    float x, float y, float z);
-
-/* Functions for getting the state vector. */
-void nmpc_fixedwingdynamics_set_state(struct nmpc_state_t *in);
-void nmpc_fixedwingdynamics_get_state(struct nmpc_state_t *in);
-
-void nmpc_fixedwingdynamics_integrate(float dt,
-float control_vector[NMPC_CONTROL_DIM]);
 
 /*
 Functions to access the compiled configuration

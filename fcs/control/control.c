@@ -42,6 +42,7 @@ SOFTWARE.
 #include "../nmpc/config.h"
 #include "../nmpc/cnmpc.h"
 
+
 #define WGS84_A 6378137.0
 
 #pragma DATA_SECTION(fcs_global_control_state, ".shared")
@@ -60,6 +61,24 @@ float _interpolate_figure_eight(struct fcs_waypoint_t *new_point,
 const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t);
+
+bool _plan_dubins_rsr(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b);
+
+bool _plan_dubins_lsl(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b);
+
+bool _plan_dubins_rsl(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b);
+
+bool _plan_dubins_lsr(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b);
+
+void _calculate_dubins_r(float *out, const float *reference, float t);
+
+void _calculate_dubins_l(float *out, const float *reference, float t);
+
+void _calculate_dubins_s(float *out, const float *reference, float t);
 
 float _interpolate_dubins(struct fcs_waypoint_t *new_point,
 const struct fcs_waypoint_t *last_point, const float *restrict wind,
@@ -81,7 +100,8 @@ const struct fcs_waypoint_t *restrict reference);
 
 void _make_reference(float *restrict reference,
 const struct fcs_waypoint_t *current_point,
-const struct fcs_waypoint_t *last_point, const float *restrict wind);
+const struct fcs_waypoint_t *last_point, const struct fcs_waypoint_t *start,
+const float *restrict wind);
 
 void _next_point(struct fcs_waypoint_t *restrict new_point,
 uint16_t *restrict new_point_path_id,
@@ -97,12 +117,12 @@ const float *restrict wind);
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
-        1, 1, 1, 1, 1, 1, 1, 1, 1e1, 7e-1, 7e-1, 1e1
+        1e1, 1e1, 1e2, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 1e-1, 1e3, 1e3 };
+    float control_weights[NMPC_CONTROL_DIM] = { 1e1, 5e2, 5e2 };
     float lower_control_bound[NMPC_CONTROL_DIM];
     float upper_control_bound[NMPC_CONTROL_DIM];
     float reference[NMPC_REFERENCE_DIM];
@@ -158,17 +178,29 @@ void fcs_control_init(void) {
     nmpc_set_upper_control_bound(upper_control_bound);
 
     /* Initialise the NMPC system */
-    nmpc_init();
+    nmpc_init(true);
 
     /* Fill the horizon with zeros -- it'll be re-calculated next tick. */
     memset(fcs_global_nav_state.reference_trajectory, 0,
            sizeof(fcs_global_nav_state.reference_trajectory));
+
     /*
     Set the reference path to invalid, so it gets recalculated once the AHRS
     is ready.
     */
     memset(fcs_global_nav_state.reference_path_id, 0xFFu,
            sizeof(fcs_global_nav_state.reference_path_id));
+
+    /* Configure the holding path */
+    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].start_waypoint_id =
+        FCS_CONTROL_HOLD_WAYPOINT_ID;
+    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].end_waypoint_id =
+        FCS_CONTROL_HOLD_WAYPOINT_ID;
+    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].type =
+        FCS_PATH_FIGURE_EIGHT;
+    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].flags = 0;
+    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].next_path_id =
+        FCS_CONTROL_HOLD_PATH_ID;
 }
 
 void fcs_control_tick(void) {
@@ -314,6 +346,9 @@ void fcs_control_tick(void) {
         waypoint->pitch = 0.0;
         waypoint->roll = 0.0;
 
+        /* Change the first reference path ID to the recovery path ID */
+        //nav->reference_path_id[0] = FCS_CONTROL_INTERPOLATE_PATH_ID;
+
         /*
         We need to recalculate the horizon from scratch before the control
         input will mean anything.
@@ -327,25 +362,14 @@ void fcs_control_tick(void) {
         nmpc_feedback_step(state);
     } else {
         /*
-        Path uninitialized; enter a holding pattern. First, configure the
-        holding path.
-        */
-        nav->paths[FCS_CONTROL_HOLD_PATH_ID].start_waypoint_id =
-            FCS_CONTROL_HOLD_WAYPOINT_ID;
-        nav->paths[FCS_CONTROL_HOLD_PATH_ID].end_waypoint_id =
-            FCS_CONTROL_HOLD_WAYPOINT_ID;
-        nav->paths[FCS_CONTROL_HOLD_PATH_ID].type = FCS_PATH_FIGURE_EIGHT;
-        nav->paths[FCS_CONTROL_HOLD_PATH_ID].flags = 0;
-        nav->paths[FCS_CONTROL_HOLD_PATH_ID].next_path_id =
-            FCS_CONTROL_HOLD_PATH_ID;
+        Path uninitialized; enter a holding pattern.
 
-        /*
         Set up the initial waypoint (current position and yaw, standard
         airspeed, and arbitrary pitch/roll).
         */
         waypoint = &nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID];
         waypoint->lat = fcs_global_ahrs_state.lat;
-        waypoint->lat = fcs_global_ahrs_state.lon;
+        waypoint->lon = fcs_global_ahrs_state.lon;
         waypoint->alt = (float)fcs_global_ahrs_state.alt;
         waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
 
@@ -383,7 +407,9 @@ float _interpolate_linear(struct fcs_waypoint_t *new_point,
 const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t) {
-    float delta_n, delta_e, x, end_ned[3], distance, target_roll;
+    float delta_n, delta_e, x, end_ned[3], distance, target_roll,
+          target_airspeed, wind_n, wind_e, wind_dot;
+
     /*
     Linear interpolation of lat, lon, alt, airspeed and roll; pitch is set
     based on climb rate, and yaw is set based on heading between start
@@ -411,6 +437,12 @@ float t) {
         x = 0.0;
     }
 
+    /* Work out the airspeed -- make sure it's never less than the default */
+    target_airspeed = start->airspeed + x * (end->airspeed - start->airspeed);
+    if (target_airspeed < FCS_CONTROL_DEFAULT_AIRSPEED) {
+        target_airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+    }
+
     /*
     Convert the end point to a NED offset from the last point. Move in the
     direction of the offset, based on the airspeed, heading and wind vector.
@@ -429,18 +461,24 @@ float t) {
     } else {
         distance = 1.0f / distance;
 
-        delta_n = (end_ned[0] * distance) * last_point->airspeed + wind[0];
-        delta_e = (end_ned[1] * distance) * last_point->airspeed + wind[1];
+        wind_dot = (end_ned[0] * distance * wind[0] +
+                    end_ned[1] * distance * wind[1]);
+        wind_n = end_ned[0] * distance * wind_dot;
+        wind_e = end_ned[1] * distance * wind_dot;
+
+        delta_n = (end_ned[0] * distance) * last_point->airspeed + wind_n;
+        delta_e = (end_ned[1] * distance) * last_point->airspeed + wind_e;
 
         /*
         If we're past the last point, work out how much t we should use. Base
         the calculation on whichever delta is larger, to improve the accuracy
         of the result.
         */
-        if (absval(delta_n) > absval(delta_e) &&
+        if (absval(end_ned[0]) > absval(end_ned[1]) &&
                 absval(delta_n) * t > absval(end_ned[0])) {
             t = end_ned[0] / delta_n;
-        } else if (absval(delta_e) * t > absval(end_ned[1])) {
+        } else if (absval(end_ned[0]) < absval(end_ned[1]) &&
+                absval(delta_e) * t > absval(end_ned[1])) {
             t = end_ned[1] / delta_e;
         }
     }
@@ -457,14 +495,12 @@ float t) {
     will change).
     */
     new_point->alt = start->alt + x * (end->alt - start->alt);
-    new_point->airspeed = start->airspeed +
-                          x * (end->airspeed - start->airspeed);
+    new_point->airspeed = target_airspeed;
     /* In theory we don't need to update this during the path, but whatever */
-    new_point->yaw = mod_f(
-        2.0 * M_PI + atan2((end->lon - start->lon) * cos(last_point->lat),
-                           end->lat - start->lat),
-        2.0 * M_PI);
-    new_point->pitch = 0.0f; /* FIXME */
+    new_point->yaw =
+        mod_2pi(atan2((end->lon - start->lon) * cos(last_point->lat),
+                      end->lat - start->lat));
+    new_point->pitch = 0.0f;
 
     /* Interpolate roll in whichever direction is the shortest. */
     target_roll = end->roll - start->roll;
@@ -502,9 +538,9 @@ float t) {
     directly to the port and starboard of the start pose.
 
     Each circle takes
-        2 * pi * FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED
+        2 * pi * FCS_CONTROL_TURN_RADIUS / airspeed
     seconds to complete, so the yaw rate is just
-        FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED.
+        FCS_CONTROL_TURN_RADIUS / airspeed.
 
     The sign of last point's roll value determines whether that value is added
     to or subtracted from last point's yaw value to get the new yaw value;
@@ -513,12 +549,30 @@ float t) {
     The new point's lat and lon are determined from the start lat/lon and the
     new yaw.
     */
-    float yaw_rate, offset_n, offset_e, sd, cd, sy, cy, target_yaw;
+    float yaw_rate, offset_n, offset_e, sd, cd, sy, cy, target_airspeed,
+          target_yaw, target_roll, tangent_n,
+          tangent_e, wind_dot, wind_yaw;
 
-    yaw_rate = (FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED);
-    if (last_point->roll < 0.0) {
-        yaw_rate = -yaw_rate;
-    }
+    /* Fly at the start speed. */
+    target_airspeed = start->airspeed;
+
+    /*
+    Work out the wind correction for yaw rate -- project the wind vector onto
+    the tangent of the path at the current point (which is the same direction
+    as our velocity/heading) and then add that number of radians to the next
+    yaw value.
+    */
+    tangent_n = cos(last_point->yaw);
+    tangent_e = sin(last_point->yaw);
+    wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
+    wind_yaw = t * wind_dot / FCS_CONTROL_TURN_RADIUS;
+
+    /*
+    Roll angle is based on airspeed and turn radius (constant):
+    roll_deg = 90 - atan(9.8 * r / v^2)
+    */
+    target_roll = M_PI * 0.5 - atan2(G_ACCEL * FCS_CONTROL_TURN_RADIUS,
+                                     (target_airspeed * target_airspeed));
 
     /* If delta yaw > start yaw - last yaw, it's time to change direction. */
     target_yaw = start->yaw - last_point->yaw;
@@ -528,22 +582,36 @@ float t) {
         target_yaw += M_PI * 2.0;
     }
 
-    if (yaw_rate > 0.0 && target_yaw > 0.0 && target_yaw < yaw_rate * t) {
-        new_point->roll = -M_PI * 0.25;
-        yaw_rate = -(FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED);
-    } else if (yaw_rate < 0.0 && target_yaw < 0.0 &&
-               target_yaw > yaw_rate * t) {
-        new_point->roll = M_PI * 0.25;
-        yaw_rate = (FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED);
-    } else {
-        new_point->roll = last_point->roll < 0.0 ? -M_PI * 0.25 : M_PI * 0.25;
+    /*
+    Determine yaw rate based on airspeed; whether it's left or right depends
+    on the current bank angle.
+    */
+    yaw_rate = target_airspeed / FCS_CONTROL_TURN_RADIUS;
+
+    if (last_point->roll > 0.0 && target_yaw > 0.0 &&
+            target_yaw < yaw_rate * t + wind_yaw) {
+        target_roll = -target_roll;
+        yaw_rate = -target_airspeed / FCS_CONTROL_TURN_RADIUS;
+        wind_yaw = -wind_yaw;
+    } else if (last_point->roll < 0.0 && target_yaw < 0.0 &&
+               target_yaw > -yaw_rate * t - wind_yaw) {
+        target_roll = target_roll;
+        yaw_rate = target_airspeed / FCS_CONTROL_TURN_RADIUS;
+    } else if (last_point->roll < 0.0) {
+        target_roll = -target_roll;
+        yaw_rate = -yaw_rate;
+        wind_yaw = -wind_yaw;
+    }
+
+    new_point->roll = target_roll;
+
+    /* Scale roll angle to resolve discontinuity during direction change */
+    if (absval(target_yaw) < 1.0) {
+        new_point->roll *= max(0.01, absval(target_yaw));
     }
 
     /* Work out next yaw value, constraining to 0..2*pi. */
-    new_point->yaw = last_point->yaw + yaw_rate * t;
-    if (new_point->yaw > 2.0 * M_PI) {
-        new_point->yaw -= 2.0 * M_PI;
-    }
+    new_point->yaw = mod_2pi(last_point->yaw + yaw_rate * t + wind_yaw);
 
     sy = sin(start->yaw);
     cy = cos(start->yaw);
@@ -559,8 +627,8 @@ float t) {
         offset_e = sd * sy - (cd - 1.0) * cy;
     }
 
-    offset_n *= FCS_CONTROL_DEFAULT_AIRSPEED;
-    offset_e *= FCS_CONTROL_DEFAULT_AIRSPEED;
+    offset_n *= FCS_CONTROL_TURN_RADIUS;
+    offset_e *= FCS_CONTROL_TURN_RADIUS;
 
     /*
     Don't need to multiply offsets by t here, since it's done in the yaw
@@ -570,11 +638,105 @@ float t) {
     new_point->lon = start->lon + (1.0/WGS84_A) * offset_e / cos(start->lat);
 
     new_point->alt = start->alt;
-    new_point->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
-    new_point->pitch = 0.0f; /* FIXME? */
+    new_point->airspeed = target_airspeed;
+    new_point->pitch = 0.0f;
 
     /* Always returning t means we never advance to the next path. */
     return t;
+}
+
+bool _plan_dubins_rsr(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b) {
+    float tmp0, tmp1, tmp2;
+
+    /* Compute RSR distance + initial turn required */
+    tmp0 = d + sa - sb;
+    tmp2 = 2.0 + d * d - 2.0 * ca_b + 2.0 * d * (sa - sb);
+
+    if (tmp2 >= 0.0 && tmp0 >= 0.0) {
+        tmp1 = atan2(cb - ca, tmp0);
+        *t = sqrt(tmp2);
+        *p = mod_2pi(-alpha + tmp1);
+        *q = mod_2pi(beta - tmp1);
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool _plan_dubins_lsl(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b) {
+    float tmp0, tmp1, tmp2;
+
+    /* Compute LSL distance + initial turn required */
+    tmp0 = d - sa + sb;
+    tmp2 = 2.0 + d * d - 2.0 * ca_b + 2.0 * d * (sb - sa);
+
+    if (tmp2 > 0.0 && tmp0 > 0.0) {
+        tmp1 = atan2(ca - cb,  tmp0);
+        *t = sqrt(tmp2);
+        *p = mod_2pi(alpha - tmp1);
+        *q = mod_2pi(-beta + tmp1);
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool _plan_dubins_rsl(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b) {
+    float tmp0, tmp1, tmp2;
+
+    /* Compute RSL distance + initial turn required */
+    tmp1 = -2.0 + d * d + 2.0 * ca_b + 2.0 * d * (sa + sb);
+    if (tmp1 >= 0.0) {
+        *t = sqrt(tmp1);
+        tmp2 = atan2(-ca - cb, d + sa + sb) - atan2(-2.0, *t);
+        *p = mod_2pi(-alpha + tmp2);
+        *q = mod_2pi(-mod_2pi(beta) + tmp2);
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool _plan_dubins_lsr(float *t, float *p, float *q, float alpha, float beta,
+float d, float sa, float sb, float ca, float cb, float ca_b) {
+    float tmp0, tmp1, tmp2;
+
+    /* Compute LSR distance + initial turn required */
+    tmp1 = d * d - 2.0 + 2.0 * ca_b - 2.0 * d * (sa + sb);
+    if (tmp1 >= 0.0) {
+        *t = sqrt(tmp1);
+        tmp2 = atan2(ca + cb, d - sa - sb) - atan2(2.0, *t);
+        *p = mod_2pi(alpha - tmp2);
+        *q = mod_2pi(beta - tmp2);
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void _calculate_dubins_r(float *out, const float *reference, float t) {
+    out[0] = reference[0] + sin(reference[2] + t) - sin(reference[2]);
+    out[1] = reference[1] - cos(reference[2] + t) + cos(reference[2]);
+    out[2] = reference[2] + t;
+}
+
+void _calculate_dubins_l(float *out, const float *reference, float t) {
+    out[0] = reference[0] - sin(reference[2] - t) + sin(reference[2]);
+    out[1] = reference[1] + cos(reference[2] - t) - cos(reference[2]);
+    out[2] = reference[2] - t;
+}
+
+void _calculate_dubins_s(float *out, const float *reference, float t) {
+    out[0] = reference[0] + cos(reference[2]) * t;
+    out[1] = reference[1] + sin(reference[2]) * t;
+    out[2] = reference[2];
 }
 
 float _interpolate_dubins(struct fcs_waypoint_t *new_point,
@@ -587,165 +749,246 @@ float t) {
     In each of these curves, altitude is interpolated linearly; pitch is
     based on the climb rate, while airspeed, yaw and roll are set by the
     curve.
-    */
-    float mean_yaw, delta_n, delta_e, delta_d, distance,
-          end_ned[3], target_turn_angle;
-    int8_t action = 0; /* -1 = left, 0 = straight, 1 = right */
 
-    /*
     A Dubins vehicle has one of three control states -- turning left at the
     maximum rate, turning right at the maximum rate, or travelling straight
-    ahead. These states are identified by the `action` variable.
+    ahead. These states are identified by the combination of `path_type` and
+    `segment`, which are stored in the generated point's flags.
 
-    In order to determine what the current action should be, we determine the
-    four tangent lines between the L and R turn circles adjacent to
-    `last_point` and `end`; the turn is L or R depending on which circle
-    adjacent to `last_point` has the shortest line. If the distance travelled
-    round the circle is smaller than FCS_CONTROL_TURN_TOLERANCE, go straight
-    ahead.
-
-    As a first-order approximation to the above, we pick L/R for each point
-    to minimize the overall turn distance (delta yaw), and set the target turn
-    angle to the difference between `last_point` heading and heading to the
-    next tangent/end point.
+    These calculations are all done with turn radius normalized to 1, and in
+    a 2D coordinate system where yaw = 0 is along the +X-axis, and
+    yaw = M_PI / 2 is along the +Y-axis. "Left" is defined as a turn in the
+    direction of increasing yaw, i.e. counter-clockwise. This is the opposite
+    sense to everything else, so to resolve the incosistency the path names
+    and turn commands are inverted compared with other Dubins implementations.
     */
-    _ned_from_point_diff(end_ned, last_point, end);
+    float end_ned[3], target_airspeed, theta, a, b, sa, sb, ca, cb, ca_b, d,
+          min_d, target_roll, tangent_n,
+          tangent_e, wind_dot, straight_d, start_turn_d, end_turn_d, path_t,
+          interpolation_rate, ref[3], out[3], p1[3], p2[3];
+    uint8_t segment, last_segment; /* 0, 1 or 2 (curve, straight, curve) */
+    int8_t first_action, last_action; /* -1 = left, 0 = straight, 1 = right */
+    uint8_t path_type = 0xFFu; /* FCS_WAYPOINT_FLAG_DUBINS_LSL &c */
 
-    /* TODO */
-    float theta = mod_f(atan2(end_ned[1], end_ned[0]), 2.0f * M_PI);
-    float alpha = mod_f(last_point->yaw - theta, 2.0f * M_PI);
-    float beta = mod_f(end->yaw - theta, 2.0f * M_PI);
+    _ned_from_point_diff(end_ned, start, end);
 
-    float sa = sin(alpha), sb = sin(beta), ca = cos(alpha), cb = cos(beta),
-          ca_b = cos(alpha - beta),
-          d = sqrt(end_ned[0] * end_ned[0] + end_ned[1] * end_ned[1]) *
-              (FCS_CONTROL_TURN_RADIUS / FCS_CONTROL_DEFAULT_AIRSPEED);
+    theta = mod_2pi(atan2(end_ned[1], end_ned[0]));
+    a = mod_2pi(start->yaw - theta);
+    b = mod_2pi(end->yaw - theta);
 
-    float lsl_d, lsr_d, rsl_d, rsr_d, lsl_turn, lsr_turn, rsl_turn, rsr_turn;
-    float tmp0, tmp1, tmp2, tmp3, min_d;
+    d = sqrt(end_ned[0] * end_ned[0] + end_ned[1] * end_ned[1]) *
+        (1.0f / FCS_CONTROL_TURN_RADIUS);
+    sa = sin(a);
+    sb = sin(b);
+    ca = cos(a);
+    cb = cos(b);
+    ca_b = cos(a - b);
 
-    /* Compute LSL distance + initial turn required */
-    tmp0 = d + sa - sb;
-    tmp2 = 2.0 + d * d - 2.0 * ca_b + 2.0 * d * (sa - sb);
-    if (tmp2 >= 0.0 && tmp0 >= 0.0) {
-        tmp1 = atan((cb - ca) / tmp0);
-        lsl_turn = mod_f(-alpha + tmp1, 2.0 * M_PI);
-        lsl_d = lsl_turn + sqrt(tmp2) + mod_f(beta - tmp1, 2.0 * M_PI);
-
-        min_d = lsl_d;
-        target_turn_angle = lsl_turn;
-        action = -1;
-    }
-
-    /* Compute RSR distance + initial turn required */
-    tmp0 = d - sa + sb;
-    tmp2 = 2.0 + d * d - 2.0 * ca_b + 2.0 * d * (sb - sa);
-    if (tmp2 > 0.0 && tmp0 > 0.0) {
-        tmp1 = atan((ca - cb) / tmp0);
-        rsr_turn = mod_f(alpha - tmp1, 2.0 * M_PI);
-        rsr_d = rsr_turn + sqrt(tmp2) + mod_f(-beta + tmp1, 2.0 * M_PI);
-
-        if (rsr_d < min_d) {
-            min_d = rsr_d;
-            target_turn_angle = rsr_turn;
-            action = 1;
+    if (last_point == start) {
+        /*
+        We're evaluating the first point in the path; work out which path to
+        take and then save the result in the point flags.
+        */
+        if (_plan_dubins_rsr(&straight_d, &start_turn_d, &end_turn_d, a, b, d,
+                             sa, sb, ca, cb, ca_b)) {
+            min_d = start_turn_d + straight_d + end_turn_d;
+            path_type = FCS_WAYPOINT_FLAG_DUBINS_RSR;
+            first_action = last_action = 1;
         }
-    }
-
-    /* Compute LSR distance + initial turn required */
-    tmp1 = -2.0 + d * d + 2.0 * ca_b + 2.0 * d * (sa + sb);
-    if (tmp1 >= 0.0) {
-        tmp3 = sqrt(tmp1);
-        tmp2 = atan((-ca - cb) / (d + sa + sb)) - atan(-2.0 / tmp3);
-        lsr_turn = mod_f(-alpha + tmp2, 2.0 * M_PI);
-        lsr_d = lsr_turn + tmp3 +
-                mod_f(-mod_f(beta, 2.0 * M_PI) + tmp2, 2.0 * M_PI);
-
-        if (lsr_d < min_d) {
-            min_d = lsr_d;
-            target_turn_angle = lsr_turn;
-            action = -1;
+        if (_plan_dubins_lsl(&straight_d, &start_turn_d, &end_turn_d, a, b, d,
+                             sa, sb, ca, cb, ca_b)) {
+            if (start_turn_d + straight_d + end_turn_d < min_d) {
+                min_d = start_turn_d + straight_d + end_turn_d;
+                path_type = FCS_WAYPOINT_FLAG_DUBINS_LSL;
+                first_action = last_action = -1;
+            }
         }
-    }
-
-    /* Compute RSL distance + initial turn required */
-    tmp1 = d * d - 2.0 + 2.0 * ca_b - 2.0 * d * (sa + sb);
-    if (tmp1 >= 0.0) {
-        tmp3 = sqrt(tmp1);
-        tmp2 = atan((ca + cb) / (d - sa - sb)) - atan(2.0 / tmp3);
-        rsl_turn = mod_f(alpha - tmp2, 2.0 * M_PI);
-        rsl_d = rsl_turn + tmp3 + mod_f(beta - tmp2, 2.0 * M_PI);
-
-        if (rsl_d < min_d) {
-            min_d = rsl_d;
-            target_turn_angle = rsl_turn;
-            action = 1;
+        if (_plan_dubins_rsl(&straight_d, &start_turn_d, &end_turn_d, a, b, d,
+                             sa, sb, ca, cb, ca_b)) {
+            if (start_turn_d + straight_d + end_turn_d < min_d) {
+                min_d = start_turn_d + straight_d + end_turn_d;
+                path_type = FCS_WAYPOINT_FLAG_DUBINS_RSL;
+                first_action = 1;
+                last_action = -1;
+            }
         }
-    }
+        if (_plan_dubins_lsr(&straight_d, &start_turn_d, &end_turn_d, a, b, d,
+                             sa, sb, ca, cb, ca_b)) {
+            if (start_turn_d + straight_d + end_turn_d < min_d) {
+                min_d = start_turn_d + straight_d + end_turn_d;
+                path_type = FCS_WAYPOINT_FLAG_DUBINS_LSR;
+                first_action = -1;
+                last_action = 1;
+            }
+        }
 
-    if (absval(target_turn_angle) < FCS_CONTROL_TURN_TOLERANCE) {
-        action = 0;
-    } else if (target_turn_angle < 0.0) {
-        action = -1;
+        last_segment = 0;
+
+        assert(path_type != 0xFFu && "No valid Dubins path found.");
     } else {
-        action = 1;
+        /* Already started the path, use the existing trajectory. */
+        path_type =
+            (last_point->flags & FCS_WAYPOINT_FLAG_PARAM_MASK) >>
+            FCS_WAYPOINT_FLAG_PARAM_OFFSET;
+        last_segment =
+            (last_point->flags & FCS_WAYPOINT_FLAG_SEGMENT_MASK) >>
+            FCS_WAYPOINT_FLAG_SEGMENT_OFFSET;
+
+        /* Get the relevant path parameters. */
+        switch (path_type) {
+            case FCS_WAYPOINT_FLAG_DUBINS_RSR:
+                _plan_dubins_rsr(&straight_d, &start_turn_d, &end_turn_d,
+                                 a, b, d, sa, sb, ca, cb, ca_b);
+                first_action = last_action = 1;
+                break;
+            case FCS_WAYPOINT_FLAG_DUBINS_LSL:
+                _plan_dubins_lsl(&straight_d, &start_turn_d, &end_turn_d,
+                                 a, b, d, sa, sb, ca, cb, ca_b);
+                first_action = last_action = -1;
+                break;
+            case FCS_WAYPOINT_FLAG_DUBINS_RSL:
+                _plan_dubins_rsl(&straight_d, &start_turn_d, &end_turn_d,
+                                 a, b, d, sa, sb, ca, cb, ca_b);
+                first_action = 1;
+                last_action = -1;
+                break;
+            case FCS_WAYPOINT_FLAG_DUBINS_LSR:
+                _plan_dubins_lsr(&straight_d, &start_turn_d, &end_turn_d,
+                                 a, b, d, sa, sb, ca, cb, ca_b);
+                first_action = -1;
+                last_action = 1;
+                break;
+            default:
+                assert(false && "Invalid Dubins path type");
+                break;
+        }
+
+        /* Calculate total path length. */
+        min_d = start_turn_d + straight_d + end_turn_d;
     }
+
+    /* Get the position at the end of the first curve. */
+    ref[0] = 0.0;
+    ref[1] = 0.0;
+    ref[2] = start->yaw;
+    if (first_action == -1) {
+        _calculate_dubins_l(p1, ref, start_turn_d);
+    } else if (first_action == 1) {
+        _calculate_dubins_r(p1, ref, start_turn_d);
+    } else {
+        assert(false && "Invalid Dubins first action");
+    }
+
+    /* Find the path interpolation parameter as at the last point. */
+    if (last_segment == 0) {
+        /*
+        First curve -- move on to the next segment if the target angle is
+        below the error threshold.
+        */
+        path_t = mod_2pi((last_point->yaw - start->yaw) * first_action);
+    } else if (last_segment == 1u) {
+        /*
+        Straight section -- based on the first curve end point p1, work out
+        how far along we are
+        */
+        _ned_from_point_diff(end_ned, start, last_point);
+
+        end_ned[0] *= (1.0 / FCS_CONTROL_TURN_RADIUS);
+        end_ned[1] *= (1.0 / FCS_CONTROL_TURN_RADIUS);
+
+        end_ned[0] -= p1[0];
+        end_ned[1] -= p1[1];
+
+        path_t = start_turn_d +
+                 sqrt(end_ned[0] * end_ned[0] + end_ned[1] * end_ned[1]);
+    } else if (last_segment == 2u) {
+        path_t = min_d -
+                 mod_2pi((end->yaw - last_point->yaw) * last_action);
+    } else {
+        assert(false && "Invalid Dubins segment ID");
+    }
+
+    /*
+    Work out the wind correction for path interpolation rate -- project the
+    wind vector onto the tangent of the path at the current point (which is
+    the same direction as our velocity/heading) and then add that distance to
+    the parameter.
+    */
+    tangent_n = cos(last_point->yaw);
+    tangent_e = sin(last_point->yaw);
+    wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
+
+    target_airspeed = start->airspeed;
+    target_roll = M_PI * 0.5 - atan2(G_ACCEL * FCS_CONTROL_TURN_RADIUS,
+                                     (target_airspeed * target_airspeed));
+
+    interpolation_rate = (target_airspeed + wind_dot) /
+                         FCS_CONTROL_TURN_RADIUS;
+
+    path_t += t * interpolation_rate;
+    if (path_t >= min_d) {
+        /* Run out of path; work out how much unused */
+        t -= (path_t - min_d) / interpolation_rate;
+        /* FIXME? */
+    }
+
+    /* Got the current path parameter; work out the position of the point. */
+    if (path_t <= start_turn_d) {
+        if (first_action == -1) {
+            _calculate_dubins_l(out, ref, path_t);
+            target_roll = -target_roll;
+        } else if (first_action == 1) {
+            _calculate_dubins_r(out, ref, path_t);
+        } else {
+            assert(false && "Invalid Dubins first action");
+        }
+
+        segment = 0;
+    } else if (path_t <= start_turn_d + straight_d) {
+        _calculate_dubins_s(out, p1, path_t - start_turn_d);
+        target_roll = 0.0;
+
+        segment = 1u;
+    } else {
+        /* Get the position at the start of the last curve. */
+        _calculate_dubins_s(p2, p1, straight_d);
+
+        /* Process the last curve. */
+        if (last_action == -1) {
+            _calculate_dubins_l(
+                out, p2, path_t - start_turn_d - straight_d);
+            target_roll = -target_roll;
+        } else if (last_action == 1) {
+            _calculate_dubins_r(
+                out, p2, path_t - start_turn_d - straight_d);
+        } else {
+            assert(false && "Invalid Dubins last action");
+        }
+
+        segment = 2u;
+    }
+
+    out[0] *= FCS_CONTROL_TURN_RADIUS;
+    out[1] *= FCS_CONTROL_TURN_RADIUS;
+    out[2] = mod_2pi(out[2]);
+
+    /* Save the interpolation state in the next point's flags. */
+    new_point->flags =
+        (path_type << FCS_WAYPOINT_FLAG_PARAM_OFFSET) |
+        (segment << FCS_WAYPOINT_FLAG_SEGMENT_OFFSET);
 
     /*
     Now that the required control state has been identified, update yaw and
     position based on that.
     */
-
-    /* Set the constants */
-    new_point->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+    new_point->airspeed = target_airspeed;
+    new_point->yaw = out[2];
     new_point->pitch = 0.0;
-
-    /* Modify yaw appropriately */
-    new_point->yaw = mod_f(
-        last_point->yaw + (float)action * t *
-        (FCS_CONTROL_DEFAULT_AIRSPEED / FCS_CONTROL_TURN_RADIUS),
-        2.0 * M_PI);
-
-    mean_yaw = (new_point->yaw + last_point->yaw) * 0.5f;
-
-    /* Set the new position based on the delta yaw */
-    delta_n = cos(mean_yaw) * new_point->airspeed * t;
-    delta_e = sin(mean_yaw) * new_point->airspeed * t;
-
-    distance = sqrt(end_ned[0] * end_ned[0] + end_ned[1] * end_ned[1]);
-    if (distance <= 1e-6) {
-        /* Already at the end point; no movement and no time used. */
-        t = 0.0f;
-        delta_n = 0.0f;
-        delta_e = 0.0f;
-        delta_d = 0.0f;
-    } else {
-        distance = 1.0f / distance;
-
-        delta_n = (end_ned[0] * distance) * new_point->airspeed + wind[0];
-        delta_e = (end_ned[1] * distance) * new_point->airspeed + wind[1];
-        delta_d = (end_ned[2] * distance) * new_point->airspeed;
-
-        /*
-        If we're past the last point, work out how much t we should use. Base
-        the calculation on whichever delta is larger, to improve the accuracy
-        of the result.
-        */
-        if (absval(delta_n) > absval(delta_e) &&
-                absval(delta_n) * t > absval(end_ned[0])) {
-            t = end_ned[0] / delta_n;
-        } else if (absval(delta_e) * t > absval(end_ned[1])) {
-            t = end_ned[1] / delta_e;
-        }
-    }
-
-    new_point->lat = last_point->lat + t * (1.0/WGS84_A) * delta_n;
-    new_point->lon = last_point->lon +
-                     t * (1.0/WGS84_A) * delta_e / cos(last_point->lat);
-    new_point->alt = last_point->alt - delta_d * t;
-
-    /* Set the roll based on the turn direction, if a turn is in progress. */
-    new_point->roll = (float)action * M_PI * 0.25f;
+    new_point->roll = target_roll;
+    new_point->lat = start->lat + (1.0/WGS84_A) * out[0];
+    new_point->lon = start->lon +
+                     (1.0/WGS84_A) * out[1] / cos(last_point->lat);
+    new_point->alt = start->alt + (end->alt - start->alt) * (path_t / min_d);
 
     return t;
 }
@@ -830,9 +1073,11 @@ const struct fcs_waypoint_t *restrict reference) {
 
 void _make_reference(float *restrict reference,
 const struct fcs_waypoint_t *current_point,
-const struct fcs_waypoint_t *last_point, const float *restrict wind) {
+const struct fcs_waypoint_t *last_point, const struct fcs_waypoint_t *start,
+const float *restrict wind) {
     assert(reference);
     assert(current_point);
+    assert(start);
     _nassert((size_t)reference % 4u == 0);
     _nassert((size_t)current_point % 8u == 0);
 
@@ -852,9 +1097,11 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind) {
     float next_reference_velocity[3], next_reference_attitude[4];
 
     next_reference_velocity[0] =
-        current_point->airspeed * sin(current_point->yaw) + wind[0];
+        current_point->airspeed * cos(current_point->yaw) +
+        wind[0];
     next_reference_velocity[1] =
-        current_point->airspeed * cos(current_point->yaw) + wind[1];
+        current_point->airspeed * sin(current_point->yaw) +
+        wind[1];
     next_reference_velocity[2] =
         OCP_STEP_LENGTH * (current_point->alt - last_point->alt);
 
@@ -876,11 +1123,11 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind) {
     reference[7] = next_reference_attitude[1];
     reference[8] = next_reference_attitude[2];
     reference[9] = next_reference_attitude[3];
-    reference[10] = 0.0;
+    reference[10] = OCP_STEP_LENGTH * (current_point->roll - last_point->roll);
     reference[11] = 0.0;
     reference[12] = 0.0;
     /* FIXME: reference points should be specified in the control config. */
-    reference[NMPC_STATE_DIM + 0] = 0.6f;
+    reference[NMPC_STATE_DIM + 0] = 0.5f;
     reference[NMPC_STATE_DIM + 1u] = 0.5f;
     reference[NMPC_STATE_DIM + 2u] = 0.5f;
 }
@@ -931,15 +1178,19 @@ struct fcs_nav_state_t *nav) {
         of path N+1 must be the same as the end waypoint of path N, and the
         types can't both be FCS_PATH_LINE (since the headings would always
         mismatch).
+
+        HOLD paths are exempt from that because they always result in a
+        waypoint switch (to FCS_CONTROL_HOLD_WAYPOINT_ID).
         */
         assert(nav->paths[*new_point_path_id].start_waypoint_id ==
-               path->end_waypoint_id);
+               path->end_waypoint_id ||
+               *new_point_path_id == FCS_CONTROL_HOLD_PATH_ID);
         assert(nav->paths[*new_point_path_id].type != FCS_PATH_LINE ||
                path->type != FCS_PATH_LINE);
 
         path = &nav->paths[*new_point_path_id];
         t -= _next_point_from_path(
-            new_point, new_point, wind,
+            new_point, &nav->waypoints[path->start_waypoint_id], wind,
             &nav->waypoints[path->start_waypoint_id],
             &nav->waypoints[path->end_waypoint_id], path->type, t);
 
@@ -974,8 +1225,9 @@ void _shift_horizon(struct fcs_nav_state_t *nav, const float *restrict wind) {
     new_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH];
     last_point_path_id = &ref_path_id[OCP_HORIZON_LENGTH - 1u];
 
-    memmove(ref, &ref[1], new_point - ref);
-    memmove(ref_path_id, &ref_path_id[1], new_point_path_id - ref_path_id);
+    memmove(ref, &ref[1], sizeof(struct fcs_waypoint_t) * OCP_HORIZON_LENGTH);
+    memmove(ref_path_id, &ref_path_id[1],
+            sizeof(uint16_t) * OCP_HORIZON_LENGTH);
 
     _next_point(new_point, new_point_path_id, last_point, last_point_path_id,
                 wind, nav);
@@ -989,13 +1241,16 @@ void _shift_horizon(struct fcs_nav_state_t *nav, const float *restrict wind) {
            new_point, sizeof(struct fcs_waypoint_t));
     }
 
-    _make_reference(reference, new_point, last_point, wind);
+    _make_reference(reference, new_point, last_point,
+                    nav->reference_trajectory, wind);
     nmpc_update_horizon(reference);
 }
 
 /*
 Re-calculates the entire reference trajectory based on the current nav path
-state.
+state. This is called when the nav path changes (e.g. loss of data link mode
+entered), and also when the vehicle state diverges too far from the reference
+trajectory.
 */
 void _recalculate_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind) {
@@ -1020,7 +1275,7 @@ const float *restrict wind) {
         ref, &nav->waypoints[path->start_waypoint_id], wind,
         &nav->waypoints[path->start_waypoint_id],
         &nav->waypoints[path->end_waypoint_id], path->type, 0.0);
-    _make_reference(reference, ref, NULL, wind);
+    _make_reference(reference, ref, NULL, ref, wind);
     nmpc_set_reference_point(reference, 0);
 
     for (i = 1u; i <= OCP_HORIZON_LENGTH; i++) {
@@ -1032,7 +1287,7 @@ const float *restrict wind) {
 
         _next_point(new_point, new_point_path_id, last_point,
                     last_point_path_id, wind, nav);
-        _make_reference(reference, new_point, last_point, wind);
+        _make_reference(reference, new_point, last_point, ref, wind);
         nmpc_set_reference_point(reference, i);
     }
 

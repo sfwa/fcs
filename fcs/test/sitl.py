@@ -677,7 +677,7 @@ if __name__ == "__main__":
     nav_state.paths[1].start_waypoint_id = 1
     nav_state.paths[1].end_waypoint_id = 2
     nav_state.paths[1].type = 1
-    nav_state.paths[1].next_path_id = 0xFFFF
+    nav_state.paths[1].next_path_id = 2
 
     # And straight again
     nav_state.waypoints[3].lat = math.radians(START_LAT)
@@ -691,7 +691,13 @@ if __name__ == "__main__":
     nav_state.paths[2].start_waypoint_id = 2
     nav_state.paths[2].end_waypoint_id = 3
     nav_state.paths[2].type = 0
-    nav_state.paths[2].next_path_id = 0xFFFF
+    nav_state.paths[2].next_path_id = 3
+
+    # And diagonally back to waypoint 1
+    nav_state.paths[3].start_waypoint_id = 3
+    nav_state.paths[3].end_waypoint_id = 1
+    nav_state.paths[3].type = 1
+    nav_state.paths[3].next_path_id = 0xFFFF
 
     # Register the path with the FCS
     nav_state.reference_path_id[0] = 0
