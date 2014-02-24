@@ -24,6 +24,7 @@ import copy
 import math
 import time
 import socket
+import vectors
 import datetime
 from ctypes import *
 
@@ -81,6 +82,11 @@ nav_state = None
 ahrs_tick = 0
 
 
+START_LAT = -37.81358378
+START_LON = 144.9
+START_ALT = 100
+
+
 sim_state = {
     "lat": None,
     "lon": None,
@@ -92,7 +98,7 @@ sim_state = {
 }
 
 sim_ref = {
-    "wind_n": 0.0,
+    "wind_n": None,
     "wind_e": 0.0,
     "wind_d": 0.0,
     "attitude_yaw": 0.0,
@@ -114,21 +120,9 @@ def socket_readlines(socket):
 
 
 def euler_to_q(yaw, pitch, roll):
-    q = [0, 0, 0, 0]
-
-    sz = math.sin(yaw * 0.5)
-    sy = math.sin(pitch * 0.5)
-    sx = math.sin(roll * 0.5)
-    cz = math.cos(yaw * 0.5)
-    cy = math.cos(pitch * 0.5)
-    dx = math.cos(roll * 0.5)
-
-    q[3] = cx * cy * cz + sx * sy * sz
-    q[0] = sx * cy * cz - cx * sy * sz
-    q[1] = cx * sy * cz + sx * cy * sz
-    q[2] = cx * cy * sz - sx * sy * cz
-
-    return q
+    return (vectors.Q.rotate("X", -roll) *
+            vectors.Q.rotate("Y", -pitch) *
+            vectors.Q.rotate("Z", -yaw))
 
 
 class TRICALInstance(Structure):
@@ -329,10 +323,10 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     ahrs_state.lat = lat
     ahrs_state.lon = lon
     ahrs_state.alt = alt
-    ahrs_state.velocity = velocity
-    ahrs_state.attitude = attitude
-    ahrs_state.angular_velocity = angular_velocity
-    ahrs_state.wind_velocity = wind_velocity
+    ahrs_state.velocity = (c_double * 3)(*velocity)
+    ahrs_state.attitude = (c_double * 4)(*attitude)
+    ahrs_state.angular_velocity = (c_double * 3)(*angular_velocity)
+    ahrs_state.wind_velocity = (c_double * 3)(*wind_velocity)
 
     _fcs.fcs_control_tick()
 
@@ -490,9 +484,9 @@ def connect_to_xplane():
 
 
 def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
-    disable_xplane_sim()
+    disable_xplane_sim(s)
 
-    s.sendall("world-set -37.8136 144.9 100\n")
+    s.sendall("world-set %f %f %f\n" % (-37.8136, START_LON, START_ALT))
     time.sleep(1.0)
 
     # Clear the engine fire -- this happens whenever the X8 is on the ground
@@ -514,6 +508,7 @@ def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
     xplane_q[1] = math.cos(psi) * math.cos(theta) * math.sin(phi) - math.sin(psi) * math.sin(theta) * math.cos(phi)
     xplane_q[2] = math.cos(psi) * math.sin(theta) * math.cos(phi) + math.sin(psi) * math.cos(theta) * math.sin(phi)
     xplane_q[3] = -math.cos(psi) * math.sin(theta) * math.sin(phi) + math.sin(psi) * math.cos(theta) * math.cos(phi)
+
     update += "set sim/flightmodel/position/q [%.6f,%.6f,%.6f,%.6f]\n" % (xplane_q[0], xplane_q[1], xplane_q[2], xplane_q[3])
     update += "set sim/flightmodel/position/psi %.6f\n" % math.degrees(yaw)
     update += "set sim/flightmodel/position/theta %.6f\n" % math.degrees(pitch)
@@ -538,6 +533,36 @@ def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
 def enable_xplane_sim(s):
     s.sendall("set sim/operation/override/override_planepath [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n")
     s.setblocking(0)
+
+    update = ""
+
+    yaw = 0.0
+    pitch = 0.0
+    roll = 0.0
+    velocity = [20.0, 0.0, 0.0]
+
+    xplane_q = [0, 0, 0, 1]
+    psi = yaw / 2.0
+    theta = pitch / 2.0
+    phi = roll / 2.0
+    xplane_q[0] = math.cos(psi) * math.cos(theta) * math.cos(phi) + math.sin(psi) * math.sin(theta) * math.sin(phi)
+    xplane_q[1] = math.cos(psi) * math.cos(theta) * math.sin(phi) - math.sin(psi) * math.sin(theta) * math.cos(phi)
+    xplane_q[2] = math.cos(psi) * math.sin(theta) * math.cos(phi) + math.sin(psi) * math.cos(theta) * math.sin(phi)
+    xplane_q[3] = -math.cos(psi) * math.sin(theta) * math.sin(phi) + math.sin(psi) * math.cos(theta) * math.cos(phi)
+
+    update += "set sim/flightmodel/position/q [%.6f,%.6f,%.6f,%.6f]\n" % (xplane_q[0], xplane_q[1], xplane_q[2], xplane_q[3])
+    update += "set sim/flightmodel/position/psi %.6f\n" % math.degrees(yaw)
+    update += "set sim/flightmodel/position/theta %.6f\n" % math.degrees(pitch)
+    update += "set sim/flightmodel/position/phi %.6f\n" % math.degrees(roll)
+
+    update += "set sim/flightmodel/position/local_vx %.6f\n" % velocity[1]
+    update += "set sim/flightmodel/position/local_vy %.6f\n" % -velocity[2]
+    update += "set sim/flightmodel/position/local_vz %.6f\n" % -velocity[0]
+
+    update += "set sim/flightmodel/position/P 0\n"
+    update += "set sim/flightmodel/position/Q 0\n"
+    update += "set sim/flightmodel/position/R 0\n"
+    s.sendall(update)
 
 
 def disable_xplane_sim(s):
@@ -590,9 +615,9 @@ def recv_state_from_xplane(s):
         pass
 
     # Average out changes in wind over a period of time
-    sim_state["wind"][0] += (sim_ref["wind_n"] - sim_state["wind"][0]) * 0.01
-    sim_state["wind"][1] += (sim_ref["wind_e"] - sim_state["wind"][1]) * 0.01
-    sim_state["wind"][2] += (sim_ref["wind_d"] - sim_state["wind"][2]) * 0.01
+    sim_state["wind_velocity"][0] += (sim_ref["wind_n"] - sim_state["wind_velocity"][0]) * 0.01
+    sim_state["wind_velocity"][1] += (sim_ref["wind_e"] - sim_state["wind_velocity"][1]) * 0.01
+    sim_state["wind_velocity"][2] += (sim_ref["wind_d"] - sim_state["wind_velocity"][2]) * 0.01
 
     # Recalculate quaternion in case euler angles have been updated.
     sim_state["attitude"] = euler_to_q(
@@ -601,7 +626,7 @@ def recv_state_from_xplane(s):
     )
 
     if sim_state["attitude"][3] < 0:
-        sim_state["attitude"] = map(sim_state["attitude"], lambda x: -x)
+        sim_state["attitude"] = map(lambda x: -x, sim_state["attitude"])
 
 
 def send_control_to_xplane(s, controls):
@@ -618,6 +643,59 @@ if __name__ == "__main__":
     else:
         max_t = -1
 
+    # Straight path to begin with
+    nav_state.waypoints[0].lat = math.radians(START_LAT)
+    nav_state.waypoints[0].lon = math.radians(START_LON)
+    nav_state.waypoints[0].alt = START_ALT
+    nav_state.waypoints[0].airspeed = 20.0
+    nav_state.waypoints[0].yaw = 0.0
+    nav_state.waypoints[0].pitch = 0.0
+    nav_state.waypoints[0].roll = 0.0
+
+    nav_state.waypoints[1].lat = math.radians(START_LAT + 0.003)
+    nav_state.waypoints[1].lon = math.radians(START_LON)
+    nav_state.waypoints[1].alt = START_ALT
+    nav_state.waypoints[1].airspeed = 20.0
+    nav_state.waypoints[1].yaw = 0.0
+    nav_state.waypoints[1].pitch = 0.0
+    nav_state.waypoints[1].roll = 0.0
+
+    nav_state.paths[0].start_waypoint_id = 0
+    nav_state.paths[0].end_waypoint_id = 1
+    nav_state.paths[0].type = 0
+    nav_state.paths[0].next_path_id = 1
+
+    # Now a curve
+    nav_state.waypoints[2].lat = math.radians(START_LAT + 0.003)
+    nav_state.waypoints[2].lon = math.radians(START_LON + 0.003)
+    nav_state.waypoints[2].alt = START_ALT
+    nav_state.waypoints[2].airspeed = 20.0
+    nav_state.waypoints[2].yaw = math.pi
+    nav_state.waypoints[2].pitch = 0.0
+    nav_state.waypoints[2].roll = 0.0
+
+    nav_state.paths[1].start_waypoint_id = 1
+    nav_state.paths[1].end_waypoint_id = 2
+    nav_state.paths[1].type = 1
+    nav_state.paths[1].next_path_id = 0xFFFF
+
+    # And straight again
+    nav_state.waypoints[3].lat = math.radians(START_LAT)
+    nav_state.waypoints[3].lon = math.radians(START_LON + 0.003)
+    nav_state.waypoints[3].alt = START_ALT
+    nav_state.waypoints[3].airspeed = 20.0
+    nav_state.waypoints[3].yaw = math.pi
+    nav_state.waypoints[3].pitch = 0.0
+    nav_state.waypoints[3].roll = 0.0
+
+    nav_state.paths[2].start_waypoint_id = 2
+    nav_state.paths[2].end_waypoint_id = 3
+    nav_state.paths[2].type = 0
+    nav_state.paths[2].next_path_id = 0xFFFF
+
+    # Register the path with the FCS
+    nav_state.reference_path_id[0] = 0
+
     sock = connect_to_xplane()
     reset_xplane_state(sock)
 
@@ -625,7 +703,7 @@ if __name__ == "__main__":
 
     enable_xplane_sim(sock)
 
-    time.sleep(0.02)
+    time.sleep(0.1)
 
     print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
 
@@ -637,14 +715,15 @@ if __name__ == "__main__":
             recv_state_from_xplane(sock)
 
             # Skip the rest until we have a full set of data
-            if sim_state["lat"] is None or sim_state["lon"] is None:
+            if sim_state["lat"] is None or sim_state["lon"] is None or \
+                    sim_ref["wind_n"] is None:
                 time.sleep(0.02)
                 continue
 
-            controls = tick()
+            controls = tick(**sim_state)
             send_control_to_xplane(sock, controls)
 
-            print "%d,%.9f,%.9f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
+            print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
                 t * 0.02,
                 math.degrees(nav_state.reference_trajectory[0].lat),
                 math.degrees(nav_state.reference_trajectory[0].lon),
