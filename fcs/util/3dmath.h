@@ -73,11 +73,6 @@ double pdynamic, double temp) {
                 (pow(pdynamic / pstatic + 1.0, 2.0 / 7.0) - 1.0));
 }
 
-/* Take modulus of a floating-point number */
-static inline float mod_f(float x, float y) {
-    return x - y * floor(x / y);
-}
-
 #ifndef absval
 #define absval(x) ((x) < 0 ? -x : x)
 #endif
@@ -92,9 +87,20 @@ static inline float mod_f(float x, float y) {
 
 #ifndef M_PI
 #define M_PI (3.14159265358979323846)
+#endif
+
+#ifndef M_PI_2
 #define M_PI_2 (M_PI * 0.5)
+#endif
+
+#ifndef M_PI_4
 #define M_PI_4 (M_PI * 0.25)
 #endif
+
+/* Return x mod 2 * PI */
+static inline float mod_2pi(float x) {
+    return x - (M_PI * 2.0) * floor(x * (0.5 / M_PI));
+}
 
 /* Non-TI compatibility */
 #ifndef __TI_COMPILER_VERSION__
@@ -437,14 +443,46 @@ float yaw, float pitch, float roll) {
     Refer to:
     http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
     */
-    double sz = sin(yaw * 0.5f), sy = sin(pitch * 0.5f),
-           sx = sin(roll * 0.5f), cz = cos(yaw * 0.5f),
-           cy = cos(pitch * 0.5f), cx = cos(roll * 0.5f);
 
-    result[3] = (float)(cx * cy * cz + sx * sy * sz);
-    result[0] = (float)(sx * cy * cz - cx * sy * sz);
-    result[1] = (float)(cx * sy * cz + sx * cy * sz);
-    result[2] = (float)(cx * cy * sz - sx * sy * cz);
+    float qx[4] = {0.0, 0.0, 0.0, 0.0}, qy[4] = {0.0, 0.0, 0.0, 0.0},
+          qz[4] = {0.0, 0.0, 0.0, 0.0}, tmp[4];
+
+    /* Yaw/Z rotation */
+    qz[2] = sin(yaw * 0.5f);
+    qz[3] = cos(yaw * 0.5f);
+
+    /* Pitch/Y rotation */
+    qy[1] = sin(pitch * 0.5);
+    qy[3] = cos(pitch * 0.5);
+
+    /* Roll/X rotation */
+    qx[0] = sin(roll * 0.5);
+    qx[3] = cos(roll * 0.5);
+
+    quaternion_multiply_f(tmp, qy, qx);
+    quaternion_multiply_f(result, qz, tmp);
+
+    result[0] = -result[0];
+    result[1] = -result[1];
+    result[2] = -result[2];
+}
+
+static inline void yaw_pitch_roll_from_quaternion_f(float *yaw, float *pitch,
+float *roll, const float *restrict quaternion) {
+    assert(quaternion && yaw && pitch && roll);
+    _nassert((size_t)quaternion % 4 == 0);
+
+    float qx, qy, qz, qw;
+    qx = -quaternion[X];
+    qy = -quaternion[Y];
+    qz = -quaternion[Z];
+    qw = quaternion[W];
+
+    *yaw = atan2(2.0f * (qx * qy + qw * qz),
+                qw * qw - qz * qz - qy * qy + qx * qx);
+    *pitch = asin(-2.0f * (qx * qz - qy * qw));
+    *roll = atan2(2.0f * (qy * qz + qx * qw),
+                 qw * qw + qz * qz - qy * qy - qx * qx);
 }
 
 static void matrix_multiply_d(double *restrict C, const double B[],
