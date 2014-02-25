@@ -697,7 +697,21 @@ if __name__ == "__main__":
     nav_state.paths[3].start_waypoint_id = 3
     nav_state.paths[3].end_waypoint_id = 1
     nav_state.paths[3].type = 1
-    nav_state.paths[3].next_path_id = 0xFFFF
+    nav_state.paths[3].next_path_id = 4
+
+    # Left turn
+    nav_state.waypoints[4].lat = math.radians(START_LAT + 0.003)
+    nav_state.waypoints[4].lon = math.radians(START_LON - 0.003)
+    nav_state.waypoints[4].alt = START_ALT
+    nav_state.waypoints[4].airspeed = 20.0
+    nav_state.waypoints[4].yaw = math.pi / 2
+    nav_state.waypoints[4].pitch = 0.0
+    nav_state.waypoints[4].roll = 0.0
+
+    nav_state.paths[4].start_waypoint_id = 1
+    nav_state.paths[4].end_waypoint_id = 4
+    nav_state.paths[4].type = 1
+    nav_state.paths[4].next_path_id = 0xFFFF
 
     # Register the path with the FCS
     nav_state.reference_path_id[0] = 0

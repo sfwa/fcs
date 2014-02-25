@@ -36,6 +36,8 @@ SOFTWARE.
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
 #include "../drivers/peripheral.h"
+#include "../nmpc/cnmpc.h"
+#include "../control/control.h"
 #include "comms.h"
 
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
@@ -53,8 +55,12 @@ const struct fcs_ahrs_state_t *restrict state) {
         &buf[index], (int32_t)(state->solution_time & 0x3FFFFFFFu), 9u);
     buf[index++] = ',';
 
-    memset(&buf[index], '-', 4u);
-    index += 4u;
+    /* Current path ID -- convert to 4-character hex */
+    uint16_t path_id = fcs_global_nav_state.reference_path_id[0];
+    index += fcs_ascii_hex_from_uint8(
+        &buf[index], (uint8_t)(path_id & 0xFF00u) >> 8u);
+    index += fcs_ascii_hex_from_uint8(
+        &buf[index], (uint8_t)(path_id & 0x00FFu));
     buf[index++] = ',';
 
     /* Serialize position -- convert lat and lon to degrees first */
@@ -82,23 +88,13 @@ const struct fcs_ahrs_state_t *restrict state) {
         buf[index++] = ',';
     }
 
-    /*
-    Convert attitude to yaw/pitch/roll in degrees. Order of rotations is
-    conventional aeronautic ZYX (yaw, pitch, roll).
+    float yaw, pitch, roll, q[4];
+    q[X] = (float)state->attitude[X];
+    q[Y] = (float)state->attitude[Y];
+    q[Z] = (float)state->attitude[Z];
+    q[W] = (float)state->attitude[W];
 
-    See http://www.vectornav.com/Downloads/Support/AN002.pdf for more details.
-    */
-    double yaw, pitch, roll, qx, qy, qz, qw;
-    qx = -state->attitude[X];
-    qy = -state->attitude[Y];
-    qz = -state->attitude[Z];
-    qw = state->attitude[W];
-
-    yaw = atan2(2.0f * (qx * qy + qw * qz),
-                qw * qw - qz * qz - qy * qy + qx * qx) * (180.0/M_PI);
-    pitch = asin(-2.0f * (qx * qz - qy * qw)) * (180.0/M_PI);
-    roll = atan2(2.0f * (qy * qz + qx * qw),
-                 qw * qw + qz * qz - qy * qy - qx * qx) * (180.0/M_PI);
+    yaw_pitch_roll_from_quaternion_f(&yaw, &pitch, &roll, q);
 
     if (yaw < 0.0) {
         yaw += 360.0;

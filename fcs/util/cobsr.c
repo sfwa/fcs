@@ -35,7 +35,7 @@ SOFTWARE.
 #include "util.h"
 
 struct fcs_cobsr_encode_result fcs_cobsr_encode(uint8_t *dst_buf_ptr,
-uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len) {
+size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     /* Asserts ensure that the main loop terminates, and that buffers do not
     overlap */
     assert(dst_buf_ptr);
@@ -122,7 +122,7 @@ uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len) {
 
 
 struct fcs_cobsr_decode_result fcs_cobsr_decode(uint8_t *dst_buf_ptr,
-uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len) {
+size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     /* Asserts ensure that the main loop terminates, and that buffers do not
     overlap */
     assert(dst_buf_ptr);
@@ -140,7 +140,7 @@ uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len) {
     size_t              remaining_output_bytes;
     size_t              num_output_bytes;
     uint8_t             src_byte;
-    uint8_t             i;
+    size_t              i;
     uint8_t             len_code;
 
     for (;;) {
@@ -151,13 +151,16 @@ uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len) {
         }
 
         /* Calculate remaining input bytes */
-        remaining_input_bytes = src_end_ptr - src_ptr;
+        assert(src_end_ptr - src_ptr >= 0);
+        remaining_input_bytes = (size_t)(src_end_ptr - src_ptr);
 
         if ((len_code - 1u) < remaining_input_bytes) {
             num_output_bytes = len_code - 1u;
 
             /* Check length code against remaining output buffer space */
-            remaining_output_bytes = dst_buf_end_ptr - dst_write_ptr;
+            assert(dst_buf_end_ptr - dst_write_ptr >= 0);
+            remaining_output_bytes =
+                (size_t)(dst_buf_end_ptr - dst_write_ptr);
             if (num_output_bytes > remaining_output_bytes) {
                 result.status |= FCS_COBSR_DECODE_OUT_BUFFER_OVERFLOW;
                 num_output_bytes = remaining_output_bytes;
@@ -187,7 +190,9 @@ uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len) {
             num_output_bytes = remaining_input_bytes;
 
             /* Check length code against remaining output buffer space */
-            remaining_output_bytes = dst_buf_end_ptr - dst_write_ptr;
+            assert(dst_buf_end_ptr - dst_write_ptr >= 0);
+            remaining_output_bytes =
+                (size_t)(dst_buf_end_ptr - dst_write_ptr);
             if (num_output_bytes > remaining_output_bytes) {
                 result.status |= FCS_COBSR_DECODE_OUT_BUFFER_OVERFLOW;
                 num_output_bytes = remaining_output_bytes;

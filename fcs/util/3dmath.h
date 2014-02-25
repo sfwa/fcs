@@ -68,6 +68,8 @@ temperature in deg C.
 */
 static inline double airspeed_from_pressure_temp(double pstatic,
 double pdynamic, double temp) {
+#pragma unused(temp)
+
     return STANDARD_C *
            sqrt((5.0 / STANDARD_TEMP) *
                 (pow(pdynamic / pstatic + 1.0, 2.0 / 7.0) - 1.0));
@@ -98,19 +100,8 @@ double pdynamic, double temp) {
 #endif
 
 /* Return x mod 2 * PI */
-static inline float mod_2pi(float x) {
-    return x - (M_PI * 2.0) * floor(x * (0.5 / M_PI));
-}
-
-/* Convert an angle to the range [-M_PI, M_PI) */
-static inline float delta_angle(float x) {
-    if (x >= M_PI) {
-        return x - (M_PI * 2.0);
-    } else if (x < -M_PI) {
-        return x + (M_PI * 2.0);
-    } else {
-        return x;
-    }
+static inline float mod_2pi_f(float x) {
+    return (float)(x - (M_PI * 2.0) * floor(x * (0.5 / M_PI)));
 }
 
 /* Non-TI compatibility */
@@ -126,7 +117,7 @@ const double *restrict v, size_t n) {
 
     size_t i;
     for (i = 0; i < n; i++) {
-        result[i] = v[i];
+        result[i] = (float)v[i];
     }
 }
 
@@ -385,7 +376,8 @@ bool force_positive) {
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)q % 4 == 0);
 
-    float norm = 1.0 / sqrt(q[X]*q[X] + q[Y]*q[Y] + q[Z]*q[Z] + q[W]*q[W]);
+    float norm;
+    norm = 1.0f / (float)sqrt(q[X]*q[X] + q[Y]*q[Y] + q[Z]*q[Z] + q[W]*q[W]);
     if (force_positive && q[W] < 0.0) {
         norm = -norm;
     }
@@ -442,33 +434,32 @@ const float q2[4]) {
     return (float)acos(2.0f * qdot - 1.0f);
 }
 
+/*
+Convert yaw, pitch and roll to a quaternion, following the Tait-Bryan/
+Euler 321 sequence. This corresponds to ZYX order.
+
+Refer to:
+http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+*/
 static inline void quaternion_f_from_yaw_pitch_roll(float *restrict result,
 float yaw, float pitch, float roll) {
     assert(result);
     _nassert((size_t)result % 4 == 0);
 
-    /*
-    Convert yaw, pitch and roll to a quaternion, following the Tait-Bryan/
-    Euler 321 sequence. This corresponds to ZYX order.
-
-    Refer to:
-    http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-    */
-
     float qx[4] = {0.0, 0.0, 0.0, 0.0}, qy[4] = {0.0, 0.0, 0.0, 0.0},
           qz[4] = {0.0, 0.0, 0.0, 0.0}, tmp[4];
 
     /* Yaw/Z rotation */
-    qz[2] = sin(yaw * 0.5f);
-    qz[3] = cos(yaw * 0.5f);
+    qz[2] = (float)sin(yaw * 0.5f);
+    qz[3] = (float)cos(yaw * 0.5f);
 
     /* Pitch/Y rotation */
-    qy[1] = sin(pitch * 0.5);
-    qy[3] = cos(pitch * 0.5);
+    qy[1] = (float)sin(pitch * 0.5);
+    qy[3] = (float)cos(pitch * 0.5);
 
     /* Roll/X rotation */
-    qx[0] = sin(roll * 0.5);
-    qx[3] = cos(roll * 0.5);
+    qx[0] = (float)sin(roll * 0.5);
+    qx[3] = (float)cos(roll * 0.5);
 
     quaternion_multiply_f(tmp, qy, qx);
     quaternion_multiply_f(result, qz, tmp);
@@ -478,6 +469,12 @@ float yaw, float pitch, float roll) {
     result[2] = -result[2];
 }
 
+/*
+Convert attitude to yaw/pitch/roll in degrees. Order of rotations is
+conventional aeronautic ZYX (yaw, pitch, roll).
+
+See http://www.vectornav.com/Downloads/Support/AN002.pdf for more details.
+*/
 static inline void yaw_pitch_roll_from_quaternion_f(float *yaw, float *pitch,
 float *roll, const float *restrict quaternion) {
     assert(quaternion && yaw && pitch && roll);
@@ -489,67 +486,11 @@ float *roll, const float *restrict quaternion) {
     qz = -quaternion[Z];
     qw = quaternion[W];
 
-    *yaw = atan2(2.0f * (qx * qy + qw * qz),
-                qw * qw - qz * qz - qy * qy + qx * qx);
-    *pitch = asin(-2.0f * (qx * qz - qy * qw));
-    *roll = atan2(2.0f * (qy * qz + qx * qw),
-                 qw * qw + qz * qz - qy * qy - qx * qx);
-}
-
-static void matrix_multiply_d(double *restrict C, const double B[],
-const double A[], const size_t AR, const size_t AC, const size_t BR,
-const size_t BC, const double mul) {
-    /*
-    Calculate C = AB, where A has AN rows and AM columns, and B has BN rows
-    and BM columns. C must be AN x BM.
-    */
-    assert(A && B && C && AR == BC);
-    _nassert((size_t)C % 8 == 0);
-    _nassert((size_t)B % 8 == 0);
-    _nassert((size_t)A % 8 == 0);
-
-    size_t i, j, k;
-    #pragma MUST_ITERATE(1,24)
-    for (i = 0; i < AC; i++) {
-        #pragma MUST_ITERATE(1,24)
-        for (j = 0; j < BR; j++) {
-            double t = 0.0;
-            #pragma MUST_ITERATE(1,24)
-            for (k = 0; k < AR; k++) {
-                t += A[i * AR + k] * B[k * BR + j];
-            }
-
-            C[i * BR + j] = t * mul;
-        }
-    }
-}
-
-static void matrix_multiply_f(float *restrict C, const float B[],
-const float A[], const size_t AR, const size_t AC, const size_t BR,
-const size_t BC, const float mul) {
-    /*
-    Calculate C = AB, where A has AN rows and AM columns, and B has BN rows
-    and BM columns. C must be AN x BM.
-    */
-    assert(A && B && C && AR == BC);
-    _nassert((size_t)C % 4 == 0);
-    _nassert((size_t)B % 4 == 0);
-    _nassert((size_t)A % 4 == 0);
-
-    size_t i, j, k;
-    #pragma MUST_ITERATE(1,24)
-    for (i = 0; i < AC; i++) {
-        #pragma MUST_ITERATE(1,24)
-        for (j = 0; j < BR; j++) {
-            float t = 0.0;
-            #pragma MUST_ITERATE(1,24)
-            for (k = 0; k < AR; k++) {
-                t += A[i * AR + k] * B[k * BR + j];
-            }
-
-            C[i * BR + j] = t * mul;
-        }
-    }
+    *yaw = (float)atan2(2.0f * (qx * qy + qw * qz),
+                        qw * qw - qz * qz - qy * qy + qx * qx);
+    *pitch = (float)asin(-2.0f * (qx * qz - qy * qw));
+    *roll = (float)atan2(2.0f * (qy * qz + qx * qw),
+                         qw * qw + qz * qz - qy * qy - qx * qx);
 }
 
 #endif

@@ -52,18 +52,18 @@ However, in relation to this code following disclaimer applies:
 #include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
-
+#include "wmm.h"
 #include "wmm2010_coeff.h"
 
-static void E0000(int IENTRY, int *maxdeg, double alt, double glat,
-double glon, double time, double *dec, double *dip, double *ti, double *gv);
+static void E0000(int IENTRY, double alt, double glat, double glon,
+double time, double *dec, double *dip, double *ti, double *gv);
 
 static bool wmm_inited;
 
 void fcs_wmm_init(void) {
     if (!wmm_inited) {
         /* Don't ask. */
-        E0000(0, NULL, 0.0, 0.0, 0.0, 0.0, NULL, NULL, NULL, NULL);
+        E0000(0, 0.0, 0.0, 0.0, 0.0, NULL, NULL, NULL, NULL);
         wmm_inited = true;
     }
 }
@@ -75,8 +75,8 @@ double out_field[3]) {
     _nassert((size_t)out_field % 8 == 0);
 
     double dec, dip, ti, gv;
-    E0000(1, NULL, alt * 0.001, lat * (180.0/M_PI), lon * (180.0/M_PI), year,
-          &dec, &dip, &ti, &gv);
+    E0000(1, alt * 0.001, lat * (180.0/M_PI), lon * (180.0/M_PI), year, &dec,
+          &dip, &ti, &gv);
 
     /* COMPUTE X, Y, Z, AND H COMPONENTS OF THE MAGNETIC FIELD */
     double rdec, rdip, c_rdip, x, y, z;
@@ -104,8 +104,8 @@ access bits removed since we've got everything in memory.
 */
 #define MAXDEG 12
 
-static void E0000(int IENTRY, int *maxdeg, double alt, double glat,
-double glon, double time, double *dec, double *dip, double *ti, double *gv) {
+static void E0000(int IENTRY, double alt, double glat, double glon,
+double time, double *dec, double *dip, double *ti, double *gv) {
     static int maxord,i,n,m,j,D1,D2,D3,D4;
     static double c[13][13],cd[13][13],tc[13][13],dp[13][13],snorm[169],
         sp[13],cp[13],fn[13],fm[13],pp[13],k[13][13],pi,dtr,a,b,re,
@@ -141,8 +141,8 @@ GEOMAG:
     cd[0][0] = 0.0;
 
     for (i = 0; i < 90; i++) {
-        n = wmm_coeffs[i].n;
-        m = wmm_coeffs[i].m;
+        n = (int)wmm_coeffs[i].n;
+        m = (int)wmm_coeffs[i].m;
         if (m <= n)
         {
             c[m][n] = wmm_coeffs[i].gnm;

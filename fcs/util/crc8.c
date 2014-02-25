@@ -30,8 +30,8 @@ static bool crc_inited;
  * polynomial:  polynomial for which table is to be filled.
  */
 void fcs_crc8_init(uint8_t polynomial) {
-    uint32_t i, j;
-    uint8_t t = 0;
+    size_t i, j;
+    size_t t = 0;
 
     #pragma MUST_ITERATE(256,256)
     for (i = 0; i < 256u; i++) {
@@ -40,7 +40,7 @@ void fcs_crc8_init(uint8_t polynomial) {
         for (j = 0; j < 8u; j++) {
             t = (t << 1u) ^ ((t & 0x80u) ? polynomial : 0);
         }
-        crc_lookup[i] = t;
+        crc_lookup[i] = (uint8_t)(t & 0xFFu);
     }
 
     crc_inited = true;
@@ -53,9 +53,9 @@ void fcs_crc8_init(uint8_t polynomial) {
  * nbytes: number of bytes in data buffer.
  * crc: previous returned crc8 value.
  */
-uint8_t fcs_crc8(const uint8_t *restrict pdata, uint32_t nbytes,
+uint8_t fcs_crc8(const uint8_t *restrict pdata, size_t nbytes,
 uint8_t crc) {
-    uint32_t i;
+    size_t i;
 
     assert(nbytes && nbytes <= 256u);
     assert(pdata);

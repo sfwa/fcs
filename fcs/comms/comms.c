@@ -65,10 +65,6 @@ struct fcs_rfd900_status_packet_t {
 void _fcs_comms_parse_packets(enum fcs_stream_device_t dev);
 size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf);
 
-static inline uint16_t swap_uint16(uint16_t val) {
-    return (val << 8) | ((val >> 8) & 0xFF);
-}
-
 void fcs_comms_init(void) {
     /* Open the CPU comms stream */
     assert(fcs_stream_set_rate(FCS_STREAM_UART_EXT0, UART0_RATE) ==
@@ -208,16 +204,26 @@ void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
         switch (comms_buf[6]) {
             case 'S':
                 /* TODO */
+                result = FCS_DESERIALIZATION_ERROR;
                 break;
             case 'G':
                 result = fcs_comms_deserialize_gcs(comms_buf, comms_buf_len);
                 break;
             case 'T':
                 /* TODO */
+                result = FCS_DESERIALIZATION_ERROR;
                 break;
             case 'C':
                 result = fcs_comms_deserialize_command(comms_buf,
                                                        comms_buf_len);
+                break;
+            case 'W':
+                /* TODO */
+                result = FCS_DESERIALIZATION_ERROR;
+                break;
+            case 'P':
+                /* TODO */
+                result = FCS_DESERIALIZATION_ERROR;
                 break;
             default:
                 result = FCS_DESERIALIZATION_ERROR;
@@ -300,7 +306,8 @@ size_t _fcs_comms_read_packet(enum fcs_stream_device_t dev, uint8_t *buf) {
                     packet_end = i;
                 }
                 break;
-            default:
+            case ENDED_RFD900_PACKET:
+            case ENDED_CPU_PACKET:
                 assert(false);
                 break;
         }

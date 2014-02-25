@@ -188,12 +188,11 @@ void fcs_ahrs_tick(void) {
     While copying measurement data to the UKF, get sensor error and geometry
     information so the sensor model parameters can be updated.
     */
-    struct ukf_ioboard_params_t params = {
-        {0, 0, 0, 1}, /* accel_orientation */
-        {0, 0, 0}, /* accel_offset */
-        {0, 0, 0, 1}, /* gyro_orientation */
-        {0, 0, 0, 1} /* mag_orientation */
-    };
+    struct ukf_ioboard_params_t params;
+    memset(&params, 0, sizeof(params));
+    params.accel_orientation[W] = 1.0;
+    params.gyro_orientation[W] = 1.0;
+    params.mag_orientation[W] = 1.0;
 
     /* Read sensor data from the measurement log, and pass it to the UKF */
     ukf_sensor_clear();
@@ -226,7 +225,7 @@ void fcs_ahrs_tick(void) {
 
     /* Don't update the filter during initialization */
     if (fcs_global_ahrs_state.mode != FCS_MODE_INITIALIZING) {
-        ukf_iterate(AHRS_DELTA, fcs_global_ahrs_state.control_pos);
+        ukf_iterate((float)AHRS_DELTA, fcs_global_ahrs_state.control_pos);
     }
 
     /* Copy the global state out of the UKF */
@@ -528,7 +527,7 @@ static void _update_gps_info(struct fcs_ahrs_state_t *state) {
     */
     struct fcs_measurement_t gps_info_measurement;
     bool result;
-    size_t i;
+    uint8_t i;
     for (i = 0; i < 2u; i++) {
         result = fcs_measurement_log_find(&state->measurements,
                                           FCS_MEASUREMENT_TYPE_GPS_INFO, i,
@@ -548,7 +547,7 @@ struct fcs_control_state_t* control) {
     control response time configured in control_rates.
     */
     const struct fcs_control_channel_t *restrict chan;
-    size_t i;
+    uint8_t i;
 
     #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
     for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
@@ -564,7 +563,7 @@ static void _pitot_calibration(struct fcs_ahrs_state_t *state) {
     struct fcs_measurement_t measurement;
 
     double pitot_value[4];
-    size_t i;
+    uint8_t i;
 
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(mlog, FCS_MEASUREMENT_TYPE_PITOT, i,
@@ -594,7 +593,7 @@ static void _barometer_calibration(struct fcs_ahrs_state_t *state) {
     struct fcs_measurement_t measurement;
 
     double barometer_value[4];
-    size_t i;
+    uint8_t i;
 
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(mlog, FCS_MEASUREMENT_TYPE_PRESSURE_TEMP,
@@ -636,7 +635,7 @@ static void _magnetometer_calibration(struct fcs_ahrs_state_t *state) {
     double mag_value[4], expected_field[3], scale_factor, delta_angle,
            field_norm_inv = 1.0f / state->wmm_field_norm;
     float mag_value_f[3], expected_field_f[3];
-    size_t i;
+    uint8_t i;
 
     /*
     Rotate the WMM field by the current attitude to get the expected field
@@ -716,7 +715,7 @@ static void _accelerometer_calibration(struct fcs_ahrs_state_t *state) {
 
     double accel_value[4];
     float accel_value_f[3], g_field[] = { 0.0, 0.0, -1.0 };
-    size_t i;
+    uint8_t i;
 
     for (i = 0; i < 2u; i++) {
         if (fcs_measurement_log_find(mlog, FCS_MEASUREMENT_TYPE_ACCELEROMETER,
@@ -858,7 +857,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             break;
         case FCS_MODE_ABORT:
             break;
-        default:
+        case FCS_MODE_STARTUP_VALUE:
             assert(false);
     }
 

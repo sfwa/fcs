@@ -28,7 +28,7 @@ SOFTWARE.
 /*
 State (FCS->CPU): $PSFWAS
 - packet time (ms) -- 9 chars
-- next waypoint ID -- 4 chars
+- current path ID -- 4 chars
 - lat (deg to 7dp) -- 11 chars
 - lon (deg to 7dp) -- 12 chars
 - alt (above ellipsoid, m to 2dp) -- 7 chars
@@ -103,6 +103,34 @@ Command packet (CPU->FCS, FCS->CPU): $PSFWAC
 
 => 209 bytes + 3 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
    224 bytes
+
+
+Waypoint information (FCS<->CPU): $PSFWAW
+- packet time (ms) -- 9 chars
+- waypoint ID -- 4 chars
+- flags -- 4 chars
+- lat (up to 7dp) -- 12 chars
+- lon (up to 7dp) -- 12 chars
+- alt (m, up to 2dp) -- 7 chars
+- attitude (yaw/pitch/roll, degrees to 1dp) -- 16 chars
+- CRC32 -- 8 chars
+
+=> 72 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   92 bytes total
+
+
+Path information (FCS<->CPU): $PSFWAP
+- packet time (ms) -- 9 chars
+- path ID -- 4 chars
+- flags -- 4 chars
+- start waypoint ID -- 4 chars
+- end waypoint ID -- 4 chars
+- type -- 1 char
+- next path ID -- 4 chars
+- CRC32 -- 8 chars
+
+=> 38 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   58 bytes
 */
 
 /* Init functions for comms module */

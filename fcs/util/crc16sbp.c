@@ -87,17 +87,18 @@ static const uint16_t crc_lookup[] = {
 0x6e17u, 0x7e36u, 0x4e55u, 0x5e74u, 0x2e93u, 0x3eb2u, 0x0ed1u, 0x1ef0u
 };
 
-uint16_t fcs_crc16_sbp(const uint8_t *restrict pdata, uint32_t nbytes,
+uint16_t fcs_crc16_sbp(const uint8_t *restrict pdata, size_t nbytes,
 uint16_t crc) {
     /* For SBP CRC16 results, set crc = 0 */
-    uint32_t i;
+    size_t i;
 
     assert(pdata);
     assert(nbytes);
 
     #pragma MUST_ITERATE(1)
     for (i = 0; i < nbytes; i++) {
-        crc = crc_lookup[((crc >> 8u) ^ pdata[i]) & 0xFFu] ^ (crc << 8u);
+        crc = (uint16_t)crc_lookup[((crc >> 8u) ^ pdata[i]) & 0xFFu] ^
+              (uint16_t)(crc << 8u);
     }
 
     return crc;

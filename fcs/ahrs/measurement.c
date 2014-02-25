@@ -138,9 +138,9 @@ enum fcs_measurement_type_t type) {
     assert(type < FCS_MEASUREMENT_TYPE_LAST);
 
     return
-        ((sensor_id << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
+        ((uint8_t)(sensor_id << FCS_MEASUREMENT_SENSOR_ID_OFFSET) &
          FCS_MEASUREMENT_SENSOR_ID_MASK) |
-        ((type << FCS_MEASUREMENT_SENSOR_TYPE_OFFSET)
+        ((uint8_t)(type << FCS_MEASUREMENT_SENSOR_TYPE_OFFSET)
          & FCS_MEASUREMENT_SENSOR_TYPE_MASK);
 }
 
@@ -251,7 +251,8 @@ size_t out_buf_length, struct fcs_measurement_log_t *restrict mlog) {
     out_buf[result.out_len + 1u] = 0;
 
     /* Return the COBS-R encoded length, plus the length of the NUL bytes */
-    return result.out_len + 2u;
+    assert(result.out_len > 0 && (size_t)result.out_len < SIZE_MAX - 2u);
+    return (size_t)(result.out_len + 2u);
 }
 
 /*
@@ -419,7 +420,7 @@ const struct fcs_measurement_t *restrict measurement, double out_value[4]) {
 
     enum fcs_measurement_type_t type =
         fcs_measurement_get_sensor_type(measurement);
-    uint8_t precision = fcs_measurement_get_precision_bits(measurement);
+    size_t precision = fcs_measurement_get_precision_bits(measurement);
     double scale = 1.0 / (double)(1u << (precision - 1u));
     size_t n = fcs_measurement_get_num_values(measurement), i;
 
@@ -536,7 +537,7 @@ double *out_error, double out_offset[3], double prescale) {
             temp_value[1] = c[0] * p[6] + c[1] * (p[7] + 1.0) + c[2] * p[8];
             temp_value[2] = c[0] * p[9] + c[1] * p[10] + c[2] * (p[11] + 1.0);
             break;
-        default:
+        case FCS_CALIBRATION_LAST:
             /* Invalid calibration type */
             assert(false);
             break;

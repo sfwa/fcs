@@ -308,7 +308,7 @@ const uint8_t *restrict buf, size_t nbytes) {
     }
 
     memcpy(&tx_buffers[dev][0], buf, nbytes);
-    tx_write_idx[dev] = nbytes;
+    tx_write_idx[dev] = (uint16_t)nbytes;
     tx_read_idx[dev] = 0;
 
     fcs_global_counters.stream_tx_byte[dev] += nbytes;

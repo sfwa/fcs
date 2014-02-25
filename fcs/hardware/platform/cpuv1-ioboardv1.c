@@ -94,8 +94,6 @@ struct sensor_packet_t {
     } __attribute__ ((packed)) gps_info;
 } __attribute__ ((packed));
 
-#define SENSOR_PACKET_LEN 60u
-
 #define UPDATED_ACCEL 0x01u
 #define UPDATED_GYRO 0x02u
 #define UPDATED_BAROMETER 0x04u
@@ -104,19 +102,9 @@ struct sensor_packet_t {
 #define UPDATED_GPS_INFO 0x20u
 #define UPDATED_ADC_GPIO 0x40u
 
-#define ACCEL_SENSITIVITY 4096.0 /* LSB/g @ ±8g FS */
-#define GYRO_SENSITIVITY 65.5 /* LSB/(deg/s) @ 500deg/s FS */
-#define MAG_SENSITIVITY 1090.0 /* LSB/G @ ±2G FS */
-
-#define CMD_KEY_LEN 8u
-#define TICK_MAX 65535u
-/*
-From:
-http://www.ece.cmu.edu/~koopman/roses/dsn04/koopman04_crc_poly_embedded.pdf
-
-0x97 in Koopman notation = 0x12F in MSB-first notation, so excluing implicit
-x^n term we get 2F. */
-#define COMM_CRC8_POLY 0x2Fu
+#define ACCEL_SENSITIVITY 4096.0f /* LSB/g @ ±8g FS */
+#define GYRO_SENSITIVITY 65.5f /* LSB/(deg/s) @ 500deg/s FS */
+#define MAG_SENSITIVITY 1090.0f /* LSB/G @ ±2G FS */
 
 struct control_packet_t {
     uint8_t crc;
@@ -138,27 +126,13 @@ enum msg_type_t {
 
 static uint16_t pwm_state[2][FCS_CONTROL_CHANNELS];
 
-/* Endian swap functions -- AVR32s are big-endian */
-static inline uint16_t swap_uint16(uint16_t val) {
-    return (val << 8) | ((val >> 8) & 0xFF);
-}
-
-static inline int16_t swap_int16(int16_t val) {
-    return (val << 8) | ((val >> 8) & 0xFF);
-}
-
-static inline int32_t swap_int32(int32_t val) {
-    val = ((val << 8) & 0xFF00FF00) | ((val >> 8) & 0xFF00FF );
-    return (val << 16) | ((val >> 16) & 0xFFFF);
-}
-
 /* Prototypes of internal functions */
 bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements);
 bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes,
 enum fcs_stream_device_t dev, uint8_t board_id,
 struct fcs_measurement_log_t *out_measurements);
-uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
+size_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const uint16_t *restrict control_values, uint8_t gpout);
 
 void fcs_board_init_platform(void) {
@@ -202,14 +176,14 @@ void fcs_board_init_platform(void) {
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = 1.0 / ACCEL_SENSITIVITY * 32767.0f
+        .scale_factor = 1.0f / ACCEL_SENSITIVITY * 32767.0f
     };
     struct fcs_calibration_t gyro_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_GYROSCOPE,
         .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 0.0349, /* approx 2 degrees */
+        .error = 0.0349f, /* approx 2 degrees */
         .params = {
             0.0f, 0.0f, 0.0f,
             0.0f, 0.0f, 0.0f,
@@ -218,7 +192,7 @@ void fcs_board_init_platform(void) {
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = (M_PI/180.0f) / GYRO_SENSITIVITY * 32767.0f
+        .scale_factor = (float)(M_PI/180.0) / GYRO_SENSITIVITY * 32767.0f
     };
     struct fcs_calibration_t mag_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
@@ -278,7 +252,7 @@ void fcs_board_init_platform(void) {
         100 for Pa.
         */
         .params = { 0.0, 1.0f },
-        .scale_factor = 0.02f * 65535.0f * 100.0
+        .scale_factor = 0.02f * 65535.0f * 100.0f
     };
 
     /*
@@ -287,7 +261,7 @@ void fcs_board_init_platform(void) {
     */
     uint8_t sensor_id_bits, i;
     for (i = 0; i < 2u; i++) {
-        sensor_id_bits = (i << FCS_MEASUREMENT_SENSOR_ID_OFFSET);
+        sensor_id_bits = (uint8_t)(i << FCS_MEASUREMENT_SENSOR_ID_OFFSET);
 
         memcpy(&map[accel_calibration.sensor | sensor_id_bits],
                &accel_calibration, sizeof(accel_calibration));
@@ -437,7 +411,7 @@ struct fcs_measurement_log_t *out_measurements) {
                         packet_end = i;
                     }
                     break;
-                default:
+                case ENDED_PACKET:
                     assert(false);
                     break;
             }
@@ -499,7 +473,8 @@ struct fcs_measurement_log_t *out_measurements) {
     }
 
     /* Validate the packet checksum */
-    checksum = fcs_crc8((uint8_t*)&packet.tick, result.out_len - 1u, 0x0);
+    checksum = fcs_crc8(
+        (uint8_t*)&packet.tick, (size_t)result.out_len - 1u, 0x0);
 
     if (checksum != packet.crc) {
         goto invalid;
@@ -536,7 +511,7 @@ struct fcs_measurement_log_t *out_measurements) {
                                    FCS_MEASUREMENT_TYPE_PRESSURE_TEMP);
 
         measurement.data.u16[0] = swap_uint16(packet.pressure);
-        measurement.data.i16[1] = swap_int16(packet.barometer_temp);
+        measurement.data.u16[1] = swap_uint16(packet.barometer_temp);
         fcs_measurement_log_add(out_measurements, &measurement);
     }
 
@@ -667,7 +642,7 @@ invalid:
 /*
 Serialize a control packet containing `control_values` into `buf`.
 */
-uint32_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
+size_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
 const uint16_t *restrict control_values, uint8_t gpout) {
     assert(buf);
     assert(control_values);
@@ -699,5 +674,6 @@ const uint16_t *restrict control_values, uint8_t gpout) {
     buf[result.out_len + 1u] = 0;
 
     /* Return the total length */
-    return result.out_len + 2u;
+    assert(result.out_len > 0 && (size_t)result.out_len < SIZE_MAX - 2u);
+    return (size_t)(result.out_len + 2u);
 }

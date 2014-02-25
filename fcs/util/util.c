@@ -59,12 +59,13 @@ void fcs_util_init(void) {
 fcs_text_checksum - calculate an NMEA0183-compatible checksum over the given
 input data.
 */
-uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes) {
+uint8_t fcs_text_checksum(const uint8_t *restrict pdata, size_t nbytes) {
     assert(pdata);
     assert(nbytes);
     assert(nbytes <= 256);
 
-    uint8_t result = 0x00, i;
+    size_t i;
+    uint8_t result = 0x00;
     #pragma MUST_ITERATE(1, 256)
     for (i = 0; i < nbytes; i++) {
         result ^= pdata[i];
@@ -82,7 +83,7 @@ The buffer length must be at least (1 + max_digits).
 */
 size_t fcs_ascii_from_int32(uint8_t *restrict result, int32_t value,
 uint8_t max_digits) {
-    assert(max_digits && max_digits <= 10u);
+    assert(max_digits > 0 && max_digits <= 10u);
     assert(result);
 
     size_t out_len = 0;
@@ -105,7 +106,7 @@ uint8_t max_digits) {
     } else if (value == 0) {
         result[out_len++] = '0';
     } else {
-        int8_t place = max_digits - 1u;
+        int8_t place = (int8_t)max_digits - 1;
         /* Skip ahead to the first non-zero place */
         while (place > 0 && _fcs_exp10i[place] < value) {
             place--;
@@ -190,7 +191,8 @@ uint8_t max_integer_digits, uint8_t max_fractional_digits) {
         result[out_len++] = 'F';
     } else {
         /* Find the highest place used by the number */
-        int8_t place = max_integer_digits + max_fractional_digits - 1u;
+        int8_t place;
+        place = (int8_t)(max_integer_digits + max_fractional_digits) - 1;
         while (place >= max_fractional_digits && _fcs_exp10[place] > value) {
             place--;
         }
@@ -254,8 +256,10 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
         }
     }
 
-    /* Don't allow a decimal place in last position */
-    if (integral_length == len - 1) {
+    /* Limit maximum length; don't allow a decimal place in last position */
+    if (len > 15u) {
+        goto invalid;
+    } else if (integral_length == len - 1) {
         goto invalid;
     } else if (value[0] == '-' && integral_length > 7u) {
         goto invalid;
@@ -274,7 +278,8 @@ double *restrict result, const uint8_t *restrict value, size_t len) {
     }
 
     /* If there's a fractional part, convert that too */
-    fractional_length = len - integral_length;
+    assert(len - integral_length <= 255u);
+    fractional_length = (uint8_t)(len - integral_length);
     if (fractional_length > 8u) { /* allow an extra 1 for the DP */
         goto invalid;
     } else if (fractional_length > 1u) {
@@ -334,8 +339,8 @@ const uint8_t *restrict value, size_t len) {
         goto invalid;
     }
 
-    uint8_t i;
-    for (i = len; i >= 1; i--) {
+    size_t i;
+    for (i = len; i >= 1u; i--) {
         if (value[i - 1] < '0' || value[i - 1] > '9') {
             /* Invalid digit */
             goto invalid;

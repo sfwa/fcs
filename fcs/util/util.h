@@ -52,7 +52,7 @@ nbytes: number of bytes in data buffer.
 crc: previous returned crc8 value.
 */
 #pragma FUNC_IS_PURE(fcs_crc8);
-uint8_t fcs_crc8(const uint8_t *restrict pdata, uint32_t nbytes,
+uint8_t fcs_crc8(const uint8_t *restrict pdata, size_t nbytes,
 uint8_t crc);
 
 /*
@@ -66,7 +66,7 @@ nbytes: number of bytes in data buffer.
 crc: starting value; must be 0xFFFFu for standards compliance.
 */
 #pragma FUNC_IS_PURE(fcs_crc16_sbp);
-uint16_t fcs_crc16_sbp(const uint8_t *restrict pdata, uint32_t nbytes,
+uint16_t fcs_crc16_sbp(const uint8_t *restrict pdata, size_t nbytes,
 uint16_t crc);
 
 /*
@@ -78,7 +78,7 @@ nbytes: number of bytes in data buffer.
 crc: starting value; must be 0xFFFFFFFFu for standards compliance.
 */
 #pragma FUNC_IS_PURE(fcs_crc32);
-uint32_t fcs_crc32(const uint8_t *restrict pdata, uint32_t nbytes,
+uint32_t fcs_crc32(const uint8_t *restrict pdata, size_t nbytes,
 uint32_t crc);
 
 /*
@@ -86,7 +86,7 @@ fcs_text_checksum - calculate an NMEA0183-compatible checksum over the given
 input data.
 */
 #pragma FUNC_IS_PURE(fcs_text_checksum);
-uint8_t fcs_text_checksum(const uint8_t *restrict pdata, uint32_t nbytes);
+uint8_t fcs_text_checksum(const uint8_t *restrict pdata, size_t nbytes);
 
 /* COBS-R prototypes */
 enum fcs_cobsr_encode_status{
@@ -96,7 +96,7 @@ enum fcs_cobsr_encode_status{
 };
 
 struct fcs_cobsr_encode_result {
-    uint32_t out_len;
+    ptrdiff_t out_len;
     enum fcs_cobsr_encode_status status;
 };
 
@@ -108,7 +108,7 @@ enum fcs_cobsr_decode_status {
 };
 
 struct fcs_cobsr_decode_result {
-    uint32_t out_len;
+    ptrdiff_t out_len;
     enum fcs_cobsr_decode_status status;
 };
 
@@ -121,9 +121,9 @@ appear within packets, allowing them to be used as packet delimiters. Encoding
 packets < 256 bytes with COBS-R results in an overhead of at most one byte.
 */
 struct fcs_cobsr_encode_result fcs_cobsr_encode(uint8_t *dst_buf_ptr,
-uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len);
+size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len);
 struct fcs_cobsr_decode_result fcs_cobsr_decode(uint8_t *dst_buf_ptr,
-uint32_t dst_buf_len, const uint8_t * src_ptr, uint32_t src_len);
+size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len);
 
 /*
 fcs_ascii_fixed_from_double -- convert a double to ASCII, with output written
@@ -200,5 +200,21 @@ to a uint32. The len parameter must be 8.
 */
 enum fcs_conversion_result_t fcs_uint32_from_ascii_hex(uint32_t *result,
 const uint8_t *restrict value, size_t len);
+
+/* Endian conversion functions */
+static inline uint16_t swap_uint16(uint16_t val) {
+    return (uint16_t)(((val << 8u) & 0xFF00) | ((val >> 8u) & 0x00FF));
+}
+
+static inline int16_t swap_int16(int16_t val) {
+    return (int16_t)(((val << 8u) & 0xFF00) | ((val >> 8u) & 0x00FF));
+}
+
+static inline int32_t swap_int32(int32_t val) {
+    uint32_t v = (uint32_t)val;
+    v = ((v << 8) & 0xFF00FF00) | ((v >> 8) & 0xFF00FF );
+    v = (v << 16) | ((v >> 16) & 0xFFFF);
+    return (int32_t)v;
+}
 
 #endif

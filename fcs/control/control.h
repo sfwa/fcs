@@ -51,12 +51,10 @@ left/straight/right control actions within a single timestep.
 #define FCS_CONTROL_TURN_TOLERANCE (M_PI * 0.001)
 
 enum fcs_path_type_t {
-    FCS_PATH_LINE,
-    FCS_PATH_DUBINS_CURVE,
-    FCS_PATH_FIGURE_EIGHT,
-
-    /* Sentinel */
-    FCS_PATH_INVALID
+    FCS_PATH_LINE = 'L',
+    FCS_PATH_DUBINS_CURVE = 'D',
+    FCS_PATH_FIGURE_EIGHT = '8',
+    FCS_PATH_INVALID = 0
 };
 
 struct fcs_control_channel_t {
