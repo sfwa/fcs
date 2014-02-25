@@ -61,10 +61,10 @@ FCS_MODE_HOLDING = ord("H")
 FCS_MODE_ABORT = ord("F")
 
 
-FCS_PATH_LINE = 0
-FCS_PATH_DUBINS_CURVE = 1
-FCS_PATH_FIGURE_EIGHT = 2
-FCS_PATH_INVALID = 3
+FCS_PATH_LINE = ord("L")
+FCS_PATH_DUBINS_CURVE = ord("D")
+FCS_PATH_FIGURE_EIGHT = ord("8")
+FCS_PATH_INVALID = 0
 
 
 FCS_CONTROL_INVALID_PATH_ID = 0xFFFF
@@ -662,7 +662,7 @@ if __name__ == "__main__":
 
     nav_state.paths[0].start_waypoint_id = 0
     nav_state.paths[0].end_waypoint_id = 1
-    nav_state.paths[0].type = 0
+    nav_state.paths[0].type = FCS_PATH_LINE
     nav_state.paths[0].next_path_id = 1
 
     # Now a curve
@@ -676,7 +676,7 @@ if __name__ == "__main__":
 
     nav_state.paths[1].start_waypoint_id = 1
     nav_state.paths[1].end_waypoint_id = 2
-    nav_state.paths[1].type = 1
+    nav_state.paths[1].type = FCS_PATH_DUBINS_CURVE
     nav_state.paths[1].next_path_id = 2
 
     # And straight again
@@ -690,13 +690,13 @@ if __name__ == "__main__":
 
     nav_state.paths[2].start_waypoint_id = 2
     nav_state.paths[2].end_waypoint_id = 3
-    nav_state.paths[2].type = 0
+    nav_state.paths[2].type = FCS_PATH_LINE
     nav_state.paths[2].next_path_id = 3
 
     # And diagonally back to waypoint 1
     nav_state.paths[3].start_waypoint_id = 3
     nav_state.paths[3].end_waypoint_id = 1
-    nav_state.paths[3].type = 1
+    nav_state.paths[3].type = FCS_PATH_DUBINS_CURVE
     nav_state.paths[3].next_path_id = 4
 
     # Left turn
@@ -710,7 +710,7 @@ if __name__ == "__main__":
 
     nav_state.paths[4].start_waypoint_id = 1
     nav_state.paths[4].end_waypoint_id = 4
-    nav_state.paths[4].type = 1
+    nav_state.paths[4].type = FCS_PATH_DUBINS_CURVE
     nav_state.paths[4].next_path_id = 0xFFFF
 
     # Register the path with the FCS

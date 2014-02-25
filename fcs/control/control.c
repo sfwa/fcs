@@ -123,7 +123,7 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 1e1, 5e2, 5e2 };
+    float control_weights[NMPC_CONTROL_DIM] = { 5e2, 5e2, 5e2 };
     float lower_control_bound[NMPC_CONTROL_DIM];
     float upper_control_bound[NMPC_CONTROL_DIM];
     size_t i;
@@ -606,8 +606,8 @@ float t) {
     new_point->roll = target_roll;
 
     /* Scale roll angle to resolve discontinuity during direction change */
-    if (absval(target_yaw) < 1.0) {
-        new_point->roll *= max(0.01, absval(target_yaw));
+    if (absval(target_yaw) < 1.5f) {
+        new_point->roll *= max(0.01f, absval(target_yaw) * (1.0f/1.5f));
     }
 
     /* Work out next yaw value, constraining to 0..2*pi. */
@@ -763,8 +763,8 @@ float t) {
     and turn commands are inverted compared with other Dubins implementations.
     */
     float end_ned[3], target_airspeed, theta, a, b, sa, sb, ca, cb, ca_b, d,
-          min_d, target_roll, tangent_n,
-          tangent_e, wind_dot, straight_d, start_turn_d, end_turn_d, path_t,
+          min_d, target_roll, target_yaw, tangent_n, tangent_e, wind_dot,
+          straight_d, start_turn_d, end_turn_d, path_t,
           interpolation_rate, ref[3], out[3], p1[3], p2[3];
     uint8_t segment, last_segment; /* 0, 1 or 2 (curve, straight, curve) */
     int8_t first_action, last_action; /* -1 = left, 0 = straight, 1 = right */
@@ -892,6 +892,7 @@ float t) {
         below the error threshold.
         */
         path_t = mod_2pi_f((last_point->yaw - start->yaw) * first_action);
+        target_yaw = absval(last_point->yaw - start->yaw);
     } else if (last_segment == 1u) {
         /*
         Straight section -- based on the first curve end point p1, work out
@@ -907,9 +908,11 @@ float t) {
 
         path_t = start_turn_d +
             (float)sqrt(end_ned[0] * end_ned[0] + end_ned[1] * end_ned[1]);
+        target_yaw = 0.0;
     } else if (last_segment == 2u) {
         path_t = min_d -
                  mod_2pi_f((end->yaw - last_point->yaw) * last_action);
+        target_yaw = absval(end->yaw - last_point->yaw);
     } else {
         assert(false && "Invalid Dubins segment ID");
     }
@@ -928,6 +931,17 @@ float t) {
     target_roll =
         (float)(M_PI * 0.5 - atan2(G_ACCEL * FCS_CONTROL_TURN_RADIUS,
                                    (target_airspeed * target_airspeed)));
+
+    /*
+    Smooth roll changes by interpolating from 0 to maximum over the course of
+    1.5 radians in yaw.
+    */
+    if (target_yaw > M_PI) {
+        target_yaw -= M_PI * 2.0;
+    }
+    if (absval(target_yaw) < 1.5f) {
+        target_roll *= max(0.01f, absval(target_yaw) * (1.0f/1.5f));
+    }
 
     interpolation_rate =
         (target_airspeed + wind_dot) * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
