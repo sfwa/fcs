@@ -45,6 +45,7 @@ SOFTWARE.
 
 
 #ifdef __TI_COMPILER_VERSION__
+#include <c6x.h>
 inline uint32_t cycle_count(void) {
     return TSCL;
 }
@@ -437,7 +438,7 @@ void fcs_control_tick(void) {
     }
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
-    fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
+    //fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
 }
 
 float _interpolate_linear(struct fcs_waypoint_t *new_point,

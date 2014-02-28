@@ -822,7 +822,7 @@ uint32_t _fcs_init_core0(void) {
     to it.
     */
     *(volatile uint32_t*)(GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x0087FFFCu)) =
-        _c_int00;
+        (uint32_t)_c_int00;
 
     /*
     IPCGRn: IPC Generation Registers (section 3.3.12 in SPRS814A)
@@ -833,6 +833,8 @@ uint32_t _fcs_init_core0(void) {
     0     IPCG           0             Generate an IPC interrupt
                                        0 = no interrupt
                                        1 = generate an interrupt
+
+    Sending this interrupt wakes CorePac 1 up.
     */
     cfg->IPCGR[1] |= 0x1u;
 

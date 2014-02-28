@@ -166,13 +166,14 @@ bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes) {
     struct fcs_cobsr_decode_result result;
 
     /* Decode the message into the packet buffer */
-    result = fcs_cobsr_decode((uint8_t*)&mlog, sizeof(mlog), buf,
-                              nbytes - 1u);
+    result = fcs_cobsr_decode((uint8_t*)&mlog, 256u, buf, nbytes - 1u);
 
     /* Confirm decode was successful */
-    if (result.status != FCS_COBSR_DECODE_OK) {
+    if (result.status != FCS_COBSR_DECODE_OK || result.out_len < 2u) {
         goto invalid;
     }
+
+    mlog.length = (size_t)result.out_len - 2u;
 
     /* Validate CRC */
     crc = fcs_crc16_sbp(mlog.data, mlog.length, 0xFFFFu);
