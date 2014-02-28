@@ -82,6 +82,7 @@ Status information (FCS->CPU): $PSFWAT
 - I/O board resets -- 2x 3 chars
 - TRICAL resets -- 2x 3 chars
 - UKF resets -- 3 chars
+- NMPC resets -- 3 chars
 - Main loop cycle max -- 2x 8 chars
 - CPU packet RX -- 9 chars
 - CPU packet RX errors -- 9 chars
@@ -92,8 +93,8 @@ Status information (FCS->CPU): $PSFWAT
 - Telemetry packet RX errors -- 6 chars
 - CRC32 -- 8 chars
 
-=> 109 bytes + 7 bytes prefix + * +
-   2 bytes checksum + CRLF = 121 bytes total
+=> 113 bytes + 7 bytes prefix + * +
+   2 bytes checksum + CRLF = 125 bytes total
 
 
 Command packet (CPU->FCS, FCS->CPU): $PSFWAC

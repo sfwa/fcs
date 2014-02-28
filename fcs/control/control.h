@@ -30,8 +30,8 @@ SOFTWARE.
 
 enum fcs_control_mode_t {
     FCS_CONTROL_MODE_STARTUP_VALUE = 0,
-    FCS_CONTROL_MODE_MANUAL = 'M',
-    FCS_CONTROL_MODE_AUTO = 'A'
+    FCS_CONTROL_MODE_MANUAL = 'R',
+    FCS_CONTROL_MODE_AUTO = 'F'
 };
 
 /*

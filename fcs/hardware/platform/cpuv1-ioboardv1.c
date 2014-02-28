@@ -46,6 +46,8 @@ SOFTWARE.
 #include "../../ahrs/ahrs.h"
 #include "../../control/control.h"
 
+#if !defined(FCS_COMPILE_BOARD_HITL) && !defined(FCS_COMPILE_BOARD_LOG)
+
 struct sensor_packet_t {
     /* Base fields */
     uint8_t crc;
@@ -366,6 +368,14 @@ void fcs_board_tick(void) {
     /* Increment transmit counters */
     fcs_global_counters.ioboard_packet_tx[0]++;
     fcs_global_counters.ioboard_packet_tx[1]++;
+
+    /*
+    TODO: check DSP GPIO for the FCS_CONTROL signal from the failsafe device;
+    if that's enabled then we're under autonomous control, so
+    fcs_global_control_state.mode should be set to FCS_CONTROL_MODE_AUTO.
+
+    Otherwise, it should be set to FCS_CONTROL_MODE_MANUAL.
+    */
 }
 
 /*
@@ -677,3 +687,5 @@ const uint16_t *restrict control_values, uint8_t gpout) {
     assert(result.out_len > 0 && (size_t)result.out_len < SIZE_MAX - 2u);
     return (size_t)(result.out_len + 2u);
 }
+
+#endif

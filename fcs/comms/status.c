@@ -44,7 +44,7 @@ const struct fcs_stats_counter_t *restrict counters,
 const struct fcs_peripheral_state_t *restrict peripheral_state,
 bool counter_reset) {
     static uint64_t last_ioboard_resets[2], last_trical_resets[2],
-                    last_ukf_resets;
+                    last_ukf_resets, last_nmpc_resets;
 
     assert(buf);
     assert(state);
@@ -101,6 +101,16 @@ bool counter_reset) {
 
     if (counter_reset) {
         last_ukf_resets = counters->ukf_resets;
+    }
+
+    /* And for NMPC resets */
+    count = counters->nmpc_resets - last_nmpc_resets;
+    index += fcs_ascii_from_int32(
+        &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
+    buf[index++] = ',';
+
+    if (counter_reset) {
+        last_nmpc_resets = counters->nmpc_resets;
     }
 
     /* Output the peak core cycle counts */

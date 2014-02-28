@@ -168,9 +168,16 @@ const struct fcs_ahrs_state_t *restrict state) {
     buf[index++] = (uint8_t)state->mode;
     buf[index++] = ',';
 
-    buf[index++] = (state->payload_present ? 'P' : 'M');
-    memset(&buf[index], '-', 6u);
-    index += 6u;
+    if (state->payload_present) {
+        buf[index++] = 'P';
+    } else {
+        buf[index++] = 'M';
+    }
+
+    buf[index++] = fcs_global_control_state.mode;
+
+    memset(&buf[index], '-', 5u);
+    index += 5u;
     buf[index++] = ',';
 
     /*

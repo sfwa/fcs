@@ -46,6 +46,8 @@ SOFTWARE.
 #include "../../ahrs/ahrs.h"
 #include "../../control/control.h"
 
+#ifdef FCS_COMPILE_BOARD_HITL
+
 struct control_hitl_state_packet_t {
     /* Base fields */
     uint8_t crc;
@@ -274,6 +276,7 @@ bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes) {
     fcs_global_ahrs_state.wind_velocity[1] = packet.wind_velocity[1];
     fcs_global_ahrs_state.wind_velocity[2] = packet.wind_velocity[2];
     fcs_global_ahrs_state.mode = FCS_MODE_ACTIVE;
+    fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
 
     return true;
 
@@ -330,3 +333,5 @@ const uint16_t *restrict control_values) {
     assert(result.out_len > 0 && (size_t)result.out_len < SIZE_MAX - 2u);
     return (size_t)(result.out_len + 2u);
 }
+
+#endif

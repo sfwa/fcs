@@ -76,6 +76,8 @@ ADD_EXECUTABLE(unittest
     ../control/control.c
     test_control.cpp
     ../hardware/platform/cpuv1-ioboardv1.c
+    ../hardware/platform/log-replay.c
+    ../hardware/platform/control-hitl.c
     test_hardware.cpp)
 
 # Create dependency of test on googletest, ukf, TRICAL, and nmpc
@@ -128,8 +130,9 @@ ADD_LIBRARY(fcs SHARED
     ../comms/gcs.c
     ../comms/state.c
     ../comms/status.c
+    ../hardware/platform/cpuv1-ioboardv1.c
+    ../hardware/platform/log-replay.c
     ../hardware/platform/control-hitl.c
-    #../hardware/platform/cpuv1-ioboardv1.c
     ../ahrs/measurement.c
     ../ahrs/wmm.c
     ../ahrs/ahrs.c

@@ -23,6 +23,9 @@ SOFTWARE.
 #ifndef _FCS_BOARD_H
 #define _FCS_BOARD_H
 
+#define FCS_COMPILE_BOARD_HITL
+/* #define FCS_COMPILE_BOARD_LOG */
+
 /* Convert an address in an individual core's L2 SRAM to global */
 #define GLOBAL_FROM_L2_ADDRESS(n) ((1u << 28) | \
     (DNUM << 24) | ((uint32_t)(n) & 0x00FFFFFFu))
