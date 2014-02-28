@@ -28,6 +28,12 @@ SOFTWARE.
 #define FCS_CONTROL_MAX_PATHS 500u
 #define FCS_CONTROL_BOUNDARY_MAX_WAYPOINTS 64u
 
+enum fcs_control_mode_t {
+    FCS_CONTROL_MODE_STARTUP_VALUE = 0,
+    FCS_CONTROL_MODE_MANUAL = 'M',
+    FCS_CONTROL_MODE_AUTO = 'A'
+};
+
 /*
 If the vehicle is more than 10m from where it should be, switch to a recovery
 trajectory to get back on track.
@@ -133,6 +139,7 @@ struct fcs_boundary_t {
 
 struct fcs_control_state_t {
     struct fcs_control_channel_t controls[FCS_CONTROL_CHANNELS];
+    enum fcs_control_mode_t mode;
     uint8_t gpio_state;
 };
 

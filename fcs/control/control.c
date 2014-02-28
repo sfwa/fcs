@@ -219,19 +219,11 @@ void fcs_control_init(void) {
 
     control_infeasibility_timer = 0;
     control_tick = 0;
+
+    fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
 }
 
 void fcs_control_tick(void) {
-    /*
-    Early return -- if we're not in armed/active/holding there's nothing much
-    to do.
-    */
-    if (fcs_global_ahrs_state.mode != FCS_MODE_ARMED &&
-        fcs_global_ahrs_state.mode != FCS_MODE_ACTIVE &&
-        fcs_global_ahrs_state.mode != FCS_MODE_HOLDING) {
-        return;
-    }
-
     enum nmpc_result_t result;
     struct fcs_nav_state_t *nav = &fcs_global_nav_state;
     float controls[NMPC_CONTROL_DIM], state[NMPC_STATE_DIM], wind[3];
@@ -240,6 +232,8 @@ void fcs_control_tick(void) {
     size_t i;
     uint32_t start_t = cycle_count();
     bool control_timeout = false;
+
+    assert(fcs_global_control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
 
     control_tick++;
     /*
@@ -288,6 +282,7 @@ void fcs_control_tick(void) {
     */
     if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
             !control_timeout &&
+            fcs_global_control_state.mode == FCS_CONTROL_MODE_AUTO &&
             vector3_norm_f(state) < FCS_CONTROL_POSITION_TOLERANCE) {
         /*
         Feedback with the latest state data. This solves the QP and generates
@@ -380,7 +375,7 @@ void fcs_control_tick(void) {
         waypoint->pitch = 0.0;
         waypoint->roll = 0.0;
 
-        /* Change the first reference path ID to the recovery path ID */
+        /* FIXME Change the first reference path ID to the recovery path ID */
         //nav->reference_path_id[0] = FCS_CONTROL_INTERPOLATE_PATH_ID;
 
         /*

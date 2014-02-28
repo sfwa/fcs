@@ -63,6 +63,13 @@ struct control_hitl_out_packet_t {
     uint16_t pwm[4];
     float objective_val;
     uint32_t cycles;
+    double reference_lat;
+    double reference_lon;
+    float reference_alt;
+    float reference_airspeed;
+    float reference_yaw;
+    float reference_pitch;
+    float reference_roll;
 } __attribute__ ((packed));
 
 enum msg_type_t {
@@ -89,7 +96,7 @@ void fcs_board_init_platform(void) {
     ensure we get a clean start.
     */
     enum fcs_stream_result_t result;
-    result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 2604168u);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 921600u);
     assert(result == FCS_STREAM_OK);
 }
 
@@ -101,7 +108,7 @@ void fcs_board_tick(void) {
     Write one output packet per input packet to make sure things don't get
     out of hand.
     */
-    if (_fcs_read_control_hitl_state_packet(FCS_STREAM_UART_INT0)) {
+    if (_fcs_read_control_hitl_state_packet(FCS_STREAM_UART_EXT0)) {
         comms_timeout = FCS_HITL_PACKET_TIMEOUT;
 
         /* Work out the current control position */
@@ -128,7 +135,7 @@ void fcs_board_tick(void) {
             controls
         );
         assert(control_len < 16u);
-        fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
+        fcs_stream_write(FCS_STREAM_UART_EXT0, control_buf, control_len);
     }
 
     /*
@@ -139,7 +146,7 @@ void fcs_board_tick(void) {
         comms_timeout = FCS_HITL_RESET_TIMEOUT;
 
         enum fcs_stream_result_t result;
-        result = fcs_stream_open(FCS_STREAM_UART_INT0);
+        result = fcs_stream_open(FCS_STREAM_UART_EXT0);
         assert(result == FCS_STREAM_OK);
     } else if (comms_timeout > INT16_MIN) {
         comms_timeout--;
@@ -294,6 +301,17 @@ const uint16_t *restrict control_values) {
 
     packet.objective_val = fcs_global_counters.nmpc_objective_value;
     packet.cycles = fcs_global_counters.nmpc_last_cycle_count;
+
+    /* Copy the current reference point into the packet as well */
+    packet.reference_lat = fcs_global_nav_state.reference_trajectory[0].lat;
+    packet.reference_lon = fcs_global_nav_state.reference_trajectory[0].lon;
+    packet.reference_alt = fcs_global_nav_state.reference_trajectory[0].alt;
+    packet.reference_airspeed =
+        fcs_global_nav_state.reference_trajectory[0].airspeed;
+    packet.reference_yaw = fcs_global_nav_state.reference_trajectory[0].yaw;
+    packet.reference_pitch =
+        fcs_global_nav_state.reference_trajectory[0].pitch;
+    packet.reference_roll = fcs_global_nav_state.reference_trajectory[0].roll;
 
     /* Calculate the packet's CRC8 */
     packet.crc = fcs_crc8((uint8_t*)&packet.tick, sizeof(packet) - 1u, 0);
