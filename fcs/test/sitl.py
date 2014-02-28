@@ -61,6 +61,10 @@ FCS_MODE_HOLDING = ord("H")
 FCS_MODE_ABORT = ord("F")
 
 
+FCS_CONTROL_MODE_AUTO = ord("F")
+FCS_CONTROL_MODE_MANUAL = ord("R")
+
+
 FCS_PATH_LINE = ord("L")
 FCS_PATH_DUBINS_CURVE = ord("D")
 FCS_PATH_FIGURE_EIGHT = ord("8")
@@ -239,6 +243,7 @@ class ControlChannel(Structure):
 class ControlState(Structure):
     _fields_ = [
         ("controls", ControlChannel * 4),
+        ("mode", c_uint),
         ("gpio_state", c_ubyte)
     ]
 
@@ -305,6 +310,7 @@ def reset():
     _fcs.fcs_control_init()
 
     ahrs_state.mode = FCS_MODE_ACTIVE
+    control_state.mode = FCS_CONTROL_MODE_AUTO
 
 
 def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,

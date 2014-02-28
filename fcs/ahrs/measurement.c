@@ -37,6 +37,7 @@ SOFTWARE.
 #include "measurement.h"
 #include "ahrs.h"
 
+
 /* Internal API for making and reading fields of various types */
 static inline enum fcs_measurement_type_t _extract_sensor_type(
 const uint8_t *buf) {

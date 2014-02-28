@@ -57,7 +57,7 @@ void fcs_board_init_platform(void) {
     ensure we get a clean start.
     */
     enum fcs_stream_result_t result;
-    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 2604166u);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 2604166u);
     assert(result == FCS_STREAM_OK);
 }
 
@@ -68,7 +68,7 @@ void fcs_board_tick(void) {
     Write one output packet per input packet to make sure things don't get
     out of hand.
     */
-    if (_fcs_read_measurement_packet(FCS_STREAM_UART_EXT0)) {
+    if (_fcs_read_measurement_packet(FCS_STREAM_UART_EXT1)) {
         comms_timeout = FCS_HITL_PACKET_TIMEOUT;
     }
 
@@ -80,7 +80,7 @@ void fcs_board_tick(void) {
         comms_timeout = FCS_HITL_RESET_TIMEOUT;
 
         enum fcs_stream_result_t result;
-        result = fcs_stream_open(FCS_STREAM_UART_EXT0);
+        result = fcs_stream_open(FCS_STREAM_UART_EXT1);
         assert(result == FCS_STREAM_OK);
     } else if (comms_timeout > INT16_MIN) {
         comms_timeout--;

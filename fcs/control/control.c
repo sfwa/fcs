@@ -282,7 +282,7 @@ void fcs_control_tick(void) {
     to the first point in the reference trajectory.
     */
     if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
-            !control_timeout &&
+            /*!control_timeout &&*/
             fcs_global_control_state.mode == FCS_CONTROL_MODE_AUTO &&
             vector3_norm_f(state) < FCS_CONTROL_POSITION_TOLERANCE) {
         /*
@@ -429,16 +429,17 @@ void fcs_control_tick(void) {
     /* Get the control values and update the global state. */
     result = nmpc_get_controls(controls);
     if (result == NMPC_OK) {
-    	for (i = 0; i < NMPC_CONTROL_DIM; i++) {
-    	    fcs_global_control_state.controls[i].setpoint = controls[i];
-    	}
         control_infeasibility_timer = control_tick;
     } else {
     	fcs_global_counters.nmpc_errors++;
     }
 
+    for (i = 0; i < NMPC_CONTROL_DIM; i++) {
+        fcs_global_control_state.controls[i].setpoint = controls[i];
+    }
+
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
-    //fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
+    fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
 }
 
 float _interpolate_linear(struct fcs_waypoint_t *new_point,
