@@ -41,6 +41,11 @@ trajectory to get back on track.
 #define FCS_CONTROL_TURN_RADIUS 60.0
 
 /*
+The number of control ticks (@ 50Hz) after which the path should be recomputed
+*/
+#define FCS_CONTROL_INFEASIBILITY_TIMEOUT 10u
+
+/*
 Dubins curve heading error tolerance for "straight" sections -- works out to
 about 0.15 degree error, but since curve segments aren't meant to be used for
 long distances that'll be OK.

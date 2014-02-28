@@ -44,6 +44,18 @@ SOFTWARE.
 #include "../nmpc/cnmpc.h"
 
 
+#ifdef __TI_COMPILER_VERSION__
+inline uint32_t cycle_count(void) {
+    return TSCL;
+}
+#else
+inline uint32_t cycle_count(void) {
+    uint64_t result;
+    __asm__ __volatile__ ("rdtsc" : "=A" (result));
+    return (uint32_t)(result & UINT32_MAX);
+}
+#endif
+
 #define WGS84_A 6378137.0
 
 #pragma DATA_SECTION(fcs_global_control_state, ".shared")
@@ -51,6 +63,9 @@ struct fcs_control_state_t fcs_global_control_state;
 
 #pragma DATA_SECTION(fcs_global_nav_state, ".shared")
 struct fcs_nav_state_t fcs_global_nav_state;
+
+static uint32_t control_infeasibility_timer;
+static uint32_t control_tick;
 
 
 float _interpolate_linear(struct fcs_waypoint_t *new_point,
@@ -118,10 +133,10 @@ const float *restrict wind);
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
-        1e1, 1e1, 1e2, 1, 1, 1, 1, 1, 1, 1, 1, 1
+        1e1, 1e1, 1e2, 1e1, 1e1, 1e1, 1, 1, 1, 1, 1, 1
     };
     float terminal_weights[NMPC_DELTA_DIM] = {
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+        1e1, 1e1, 1, 1, 1, 1, 1, 1, 1, 1e1, 1e1, 1e1
     };
     float control_weights[NMPC_CONTROL_DIM] = { 5e2, 5e2, 5e2 };
     float lower_control_bound[NMPC_CONTROL_DIM];
@@ -201,6 +216,9 @@ void fcs_control_init(void) {
     fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].flags = 0;
     fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].next_path_id =
         FCS_CONTROL_HOLD_PATH_ID;
+
+    control_infeasibility_timer = 0;
+    control_tick = 0;
 }
 
 void fcs_control_tick(void) {
@@ -220,6 +238,19 @@ void fcs_control_tick(void) {
     uint16_t original_path_id;
     struct fcs_waypoint_t *waypoint;
     size_t i;
+    uint32_t start_t = cycle_count();
+    bool control_timeout = false;
+
+    control_tick++;
+    /*
+    Check for multiple infeasible results in a row, and reset the trajectory
+    if necessary
+    */
+    if (control_tick - control_infeasibility_timer
+            < FCS_CONTROL_INFEASIBILITY_TIMEOUT) {
+        control_timeout = true;
+        fcs_global_counters.nmpc_resets++;
+    }
 
     /*
     Run preparation -- this does nothing in the current implementation but
@@ -255,7 +286,9 @@ void fcs_control_tick(void) {
     three elements of `state`, since all positions are given in NED relative
     to the first point in the reference trajectory.
     */
-    if (vector3_norm_f(state) < FCS_CONTROL_POSITION_TOLERANCE) {
+    if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
+            !control_timeout &&
+            vector3_norm_f(state) < FCS_CONTROL_POSITION_TOLERANCE) {
         /*
         Feedback with the latest state data. This solves the QP and generates
         the control values.
@@ -265,14 +298,16 @@ void fcs_control_tick(void) {
 
         /* Move on to the next reference point in the horizon */
         _shift_horizon(nav, wind);
-    } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID) {
+    } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
+               nav->reference_path_id[0] != FCS_CONTROL_HOLD_PATH_ID) {
         /*
-        Construct a path sequence that gets the vehicle back to the next point
-        in the reference trajectory. This is done in two parts: a resume path,
-        which represents the un-flown portion of the current path (from the
-        first point in the reference trajectory to the end of that path), and
-        an interpolation path, which represents the path to get from the
-        current vehicle state to the first point in the reference trajectory.
+        For any path other than invalid or holding, construct a path sequence
+        that gets the vehicle back to the next point in the reference
+        trajectory. This is done in two parts: a resume path, which represents
+        the un-flown portion of the current path (from the first point in the
+        reference trajectory to the end of that path), and an interpolation
+        path, which represents the path to get from the current vehicle state
+        to the first point in the reference trajectory.
 
         If we're currently attempting to interpolate back to the resume path
         (from a previous recovery event), we can skip the resume path updates
@@ -397,9 +432,17 @@ void fcs_control_tick(void) {
 
     /* Get the control values and update the global state. */
     result = nmpc_get_controls(controls);
-    for (i = 0; i < NMPC_CONTROL_DIM; i++) {
-        fcs_global_control_state.controls[i].setpoint = controls[i];
+    if (result == NMPC_OK) {
+    	for (i = 0; i < NMPC_CONTROL_DIM; i++) {
+    	    fcs_global_control_state.controls[i].setpoint = controls[i];
+    	}
+        control_infeasibility_timer = control_tick;
+    } else {
+    	fcs_global_counters.nmpc_errors++;
     }
+
+    fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
+    fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
 }
 
 float _interpolate_linear(struct fcs_waypoint_t *new_point,
@@ -892,7 +935,12 @@ float t) {
         below the error threshold.
         */
         path_t = mod_2pi_f((last_point->yaw - start->yaw) * first_action);
-        target_yaw = absval(last_point->yaw - start->yaw);
+        /*
+        Start at 0 roll, reach a maximum half-way through the turn and end at
+        0 again.
+        */
+        target_yaw = start_turn_d * 0.5f -
+                     absval(start_turn_d * 0.5f - path_t);
     } else if (last_segment == 1u) {
         /*
         Straight section -- based on the first curve end point p1, work out
@@ -910,9 +958,10 @@ float t) {
             (float)sqrt(end_ned[0] * end_ned[0] + end_ned[1] * end_ned[1]);
         target_yaw = 0.0;
     } else if (last_segment == 2u) {
-        path_t = min_d -
-                 mod_2pi_f((end->yaw - last_point->yaw) * last_action);
-        target_yaw = absval(end->yaw - last_point->yaw);
+        path_t = mod_2pi_f((end->yaw - last_point->yaw) * last_action);
+        target_yaw = end_turn_d * 0.5f -
+                     absval(end_turn_d * 0.5f - path_t);
+        path_t = min_d - path_t;
     } else {
         assert(false && "Invalid Dubins segment ID");
     }
@@ -936,9 +985,6 @@ float t) {
     Smooth roll changes by interpolating from 0 to maximum over the course of
     1.5 radians in yaw.
     */
-    if (target_yaw > M_PI) {
-        target_yaw -= M_PI * 2.0;
-    }
     if (absval(target_yaw) < 1.5f) {
         target_roll *= max(0.01f, absval(target_yaw) * (1.0f/1.5f));
     }

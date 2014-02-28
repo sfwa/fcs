@@ -43,6 +43,10 @@ struct fcs_stats_counter_t {
     /* WMM errors */
     uint64_t wmm_errors;
 
+    /* NMPC statis */
+    uint64_t nmpc_errors;
+    uint64_t nmpc_resets;
+
     /* Stream byte, reset and error counters */
     uint64_t stream_rx_byte[5];
     uint64_t stream_rx_err[5];
@@ -54,6 +58,10 @@ struct fcs_stats_counter_t {
     /* Maximum per-iteration cycle counter (per core) */
     uint32_t main_loop_count[2];
     uint32_t main_loop_cycle_max[2];
+
+    /* NMPC objective function value */
+    float nmpc_objective_value;
+    uint32_t nmpc_last_cycle_count;
 };
 
 extern struct fcs_stats_counter_t fcs_global_counters;

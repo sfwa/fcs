@@ -711,7 +711,13 @@ if __name__ == "__main__":
     nav_state.paths[4].start_waypoint_id = 1
     nav_state.paths[4].end_waypoint_id = 4
     nav_state.paths[4].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[4].next_path_id = 0xFFFF
+    nav_state.paths[4].next_path_id = 5
+
+    # And back to the origin for a repeat of the whole course
+    nav_state.paths[5].start_waypoint_id = 4
+    nav_state.paths[5].end_waypoint_id = 0
+    nav_state.paths[5].type = FCS_PATH_DUBINS_CURVE
+    nav_state.paths[5].next_path_id = 0
 
     # Register the path with the FCS
     nav_state.reference_path_id[0] = 0

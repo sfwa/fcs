@@ -28,7 +28,7 @@ After creating the build directory, `make check` will automatically download
 and build googletest, build the unit tests and then run them.
 
 To build the unit tests without running them, use `make unittest`. The unit
-tests can then manually be run (with more detailed reporting) by running
+tests can be run manually (with more detailed reporting) by executing
 `./unittest` in the build directory.
 
 

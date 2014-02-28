@@ -139,10 +139,14 @@ int main(void) {
         }
 
         if (TSCL - start_t > cycles_per_tick) {
-            /* Lost an entire frame! */
-            assert(0);
+            /*
+            Lost an entire frame; abort if it's the AHRS core because that
+            should be impossible.
+            */
+            if (core == FCS_CORE_AHRS) {
+                assert(0);
+            }
         } else {
-            /* FIXME: use idle/sleep instead of busy loop */
             while (TSCL - start_t < cycles_per_tick);
         }
     }

@@ -76,7 +76,7 @@ double pdynamic, double temp) {
 }
 
 #ifndef absval
-#define absval(x) ((x) < 0 ? -x : x)
+#define absval(x) ((x) < 0 ? -(x) : (x))
 #endif
 
 #ifndef min

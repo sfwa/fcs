@@ -48,6 +48,9 @@ static void _fcs_enable_edc(void);
 static uint32_t _fcs_init_core0(void);
 static uint32_t _fcs_init_core1(void);
 
+/* Get the address of the C init function to start Core 1 */
+extern void _c_int00(void);
+
 /*
 Delay by a certain number of cycles. Note that if this is called before the
 main PLL is configured, we'll only be running at 100MHz rather than 1GHz, so
@@ -809,7 +812,7 @@ uint32_t _fcs_init_core0(void) {
     memcpy(
         (uint8_t*)GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x00800000u),
         (uint8_t*)0x00800000u,
-        0x00100000u
+        0x000F0000u
     );
 
     /*
@@ -819,7 +822,7 @@ uint32_t _fcs_init_core0(void) {
     to it.
     */
     *(volatile uint32_t*)(GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x0087FFFCu)) =
-        *(volatile uint32_t*)0x0087FFFCu;
+        _c_int00;
 
     /*
     IPCGRn: IPC Generation Registers (section 3.3.12 in SPRS814A)

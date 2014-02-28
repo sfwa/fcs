@@ -128,7 +128,8 @@ ADD_LIBRARY(fcs SHARED
     ../comms/gcs.c
     ../comms/state.c
     ../comms/status.c
-    ../hardware/platform/cpuv1-ioboardv1.c
+    ../hardware/platform/control-hitl.c
+    #../hardware/platform/cpuv1-ioboardv1.c
     ../ahrs/measurement.c
     ../ahrs/wmm.c
     ../ahrs/ahrs.c
