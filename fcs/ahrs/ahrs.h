@@ -170,6 +170,6 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode);
 Updated every AHRS tick -- contains the current state and uncertainty
 estimates
 */
-extern struct fcs_ahrs_state_t fcs_global_ahrs_state;
+extern volatile struct fcs_ahrs_state_t fcs_global_ahrs_state;
 
 #endif

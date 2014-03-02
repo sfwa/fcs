@@ -434,12 +434,14 @@ struct fcs_measurement_log_t *out_measurements) {
 
             /* Consume all bytes until the end of the packet */
             fcs_stream_consume(dev, packet_end + 1u);
-        } else if (state == IN_PACKET && packet_start > 0) {
+        } else if (state == IN_PACKET) {
             /*
             Consume bytes until the start of the packet, so we can parse the
             full packet next time
             */
-            fcs_stream_consume(dev, packet_start);
+            if (packet_start > 0) {
+                fcs_stream_consume(dev, packet_start);
+            }
         } else if (state == GOT_ZERO) {
             /* Consume bytes up to the current 0 */
             fcs_stream_consume(dev, nbytes - 1u);
@@ -667,7 +669,7 @@ const uint16_t *restrict control_values, uint8_t gpout) {
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
         /* Swap bytes for big-endian AVR32 */
-        packet.pwm[i] = swap_uint16((uint16_t)control_values[i]);
+        packet.pwm[i] = swap_uint16((uint16_t)val);
     }
 
     /* Calculate the packet's CRC8 */

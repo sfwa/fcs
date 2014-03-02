@@ -72,6 +72,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "stats/stats.h"
 #include "comms/comms.h"
 
+#define L1DWIBAR (*((volatile uint32_t*)0x01844030))
+#define L1DWIWC (*((volatile uint32_t*)0x01844034))
+
 int main(void);
 
 #pragma FUNC_NEVER_RETURNS(main);
@@ -89,7 +92,7 @@ int main(void) {
         fcs_util_init();
     }
     if (core == FCS_CORE_COMMS) {
-        fcs_comms_init();
+        //fcs_comms_init();
     }
     if (core == FCS_CORE_AHRS) {
         fcs_ahrs_init();
@@ -120,13 +123,13 @@ int main(void) {
             fcs_board_tick();
         }
         if (core == FCS_CORE_AHRS) {
-            fcs_ahrs_tick();
+            //fcs_ahrs_tick();
         }
         if (core == FCS_CORE_CONTROL) {
             fcs_control_tick();
         }
         if (core == FCS_CORE_COMMS) {
-            fcs_comms_tick();
+            //fcs_comms_tick();
         }
 
         /* Wait until next frame start time */
@@ -137,6 +140,13 @@ int main(void) {
         if (TSCL - start_t > fcs_global_counters.main_loop_cycle_max[core]) {
             fcs_global_counters.main_loop_cycle_max[core] = TSCL - start_t;
         }
+
+        /*
+        Invalidate L1 to ensure global state is approximately synchronised
+        */
+        L1DWIBAR = 0x0C000000;
+        L1DWIWC = 0xFFFF;
+        while (L1DWIWC & 0xFFFFu);
 
         if (TSCL - start_t > cycles_per_tick) {
             /*

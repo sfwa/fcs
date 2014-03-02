@@ -60,10 +60,10 @@ inline uint32_t cycle_count(void) {
 #define WGS84_A 6378137.0
 
 #pragma DATA_SECTION(fcs_global_control_state, ".shared")
-struct fcs_control_state_t fcs_global_control_state;
+volatile struct fcs_control_state_t fcs_global_control_state;
 
 #pragma DATA_SECTION(fcs_global_nav_state, ".shared")
-struct fcs_nav_state_t fcs_global_nav_state;
+volatile struct fcs_nav_state_t fcs_global_nav_state;
 
 static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
@@ -134,12 +134,12 @@ const float *restrict wind);
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
-        1e1, 1e1, 1e2, 1e1, 1e1, 1e1, 1, 1, 1, 1, 1, 1
+        1e1, 1e1, 1e2, 1e1, 1e1, 1, 1, 1, 1, 1e1, 1e1, 1e2
     };
     float terminal_weights[NMPC_DELTA_DIM] = {
-        1e1, 1e1, 1, 1, 1, 1, 1, 1, 1, 1e1, 1e1, 1e1
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 5e2, 5e2, 5e2 };
+    float control_weights[NMPC_CONTROL_DIM] = { 3e2, 3e2, 3e2 };
     float lower_control_bound[NMPC_CONTROL_DIM];
     float upper_control_bound[NMPC_CONTROL_DIM];
     size_t i;
@@ -224,6 +224,7 @@ void fcs_control_init(void) {
     fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
 }
 
+#include <stdio.h>
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_nav_state_t *nav = &fcs_global_nav_state;
@@ -242,8 +243,9 @@ void fcs_control_tick(void) {
     if necessary
     */
     if (control_tick - control_infeasibility_timer
-            < FCS_CONTROL_INFEASIBILITY_TIMEOUT) {
+            > FCS_CONTROL_INFEASIBILITY_TIMEOUT) {
         control_timeout = true;
+        //control_infeasibility_timer = control_tick;
         fcs_global_counters.nmpc_resets++;
     }
 
@@ -259,6 +261,21 @@ void fcs_control_tick(void) {
     */
     _get_ahrs_state(state, wind, &fcs_global_ahrs_state,
                     nav->reference_trajectory);
+
+    /* FIXME */
+    if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
+            nav->reference_path_id[1] == FCS_CONTROL_INVALID_PATH_ID) {
+        nmpc_init(true);
+        printf("init path\n");
+        _recalculate_horizon(nav, wind);
+        /* Now that's done, grab the latest state data and run the feedback */
+        _get_ahrs_state(state, wind, &fcs_global_ahrs_state,
+                        nav->reference_trajectory);
+        nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
+        nmpc_feedback_step(state);
+
+        printf("Init state diff %f\n", vector3_norm_f(state));
+    }
 
     /*
     Three options here:
@@ -280,11 +297,14 @@ void fcs_control_tick(void) {
     The offset between current and expected position is given by the first
     three elements of `state`, since all positions are given in NED relative
     to the first point in the reference trajectory.
+
+    FIXME
     */
-    if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
-            /*!control_timeout &&*/
+    else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
+            !control_timeout &&
             fcs_global_control_state.mode == FCS_CONTROL_MODE_AUTO &&
-            vector3_norm_f(state) < FCS_CONTROL_POSITION_TOLERANCE) {
+            (nav->reference_path_id[0] == FCS_CONTROL_STABILISE_PATH_ID ||
+                vector3_norm_f(state) < FCS_CONTROL_POSITION_TOLERANCE)) {
         /*
         Feedback with the latest state data. This solves the QP and generates
         the control values.
@@ -292,10 +312,13 @@ void fcs_control_tick(void) {
         nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
         nmpc_feedback_step(state);
 
+        printf("Normal OK state diff %f\n", vector3_norm_f(state));
+
         /* Move on to the next reference point in the horizon */
         _shift_horizon(nav, wind);
-    } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
+    } else if (false && nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
                nav->reference_path_id[0] != FCS_CONTROL_HOLD_PATH_ID) {
+        //printf("interpolate\n");
         /*
         For any path other than invalid or holding, construct a path sequence
         that gets the vehicle back to the next point in the reference
@@ -364,25 +387,19 @@ void fcs_control_tick(void) {
         waypoint->alt = (float)fcs_global_ahrs_state.alt;
         waypoint->airspeed =
             nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID].airspeed;
-
-        double qx, qy, qz, qw;
-        qx = -fcs_global_ahrs_state.attitude[X];
-        qy = -fcs_global_ahrs_state.attitude[Y];
-        qz = -fcs_global_ahrs_state.attitude[Z];
-        qw = fcs_global_ahrs_state.attitude[W];
-
-        waypoint->yaw = (float)atan2(2.0f * (qx * qy + qw * qz),
-                                     qw * qw - qz * qz - qy * qy + qx * qx);
+        waypoint->yaw = (float)atan2(fcs_global_ahrs_state.velocity[1],
+                                     fcs_global_ahrs_state.velocity[0]);
         waypoint->pitch = 0.0;
         waypoint->roll = 0.0;
 
-        /* FIXME Change the first reference path ID to the recovery path ID */
-        //nav->reference_path_id[0] = FCS_CONTROL_INTERPOLATE_PATH_ID;
+        nav->reference_path_id[0] = FCS_CONTROL_INTERPOLATE_PATH_ID;
 
         /*
         We need to recalculate the horizon from scratch before the control
         input will mean anything.
         */
+        nmpc_init(true);
+        printf("init recover\n");
         _recalculate_horizon(nav, wind);
 
         /* Now that's done, grab the latest state data and run the feedback */
@@ -393,36 +410,80 @@ void fcs_control_tick(void) {
     } else {
         /*
         Path uninitialized; enter a holding pattern.
-
-        Set up the initial waypoint (current position and yaw, standard
-        airspeed, and arbitrary pitch/roll).
         */
-        waypoint = &nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID];
+        float vx = (float)fcs_global_ahrs_state.velocity[0] - wind[0],
+              vy = (float)fcs_global_ahrs_state.velocity[1] - wind[1],
+              vz = (float)fcs_global_ahrs_state.velocity[2],
+              stabilise_delta, stabilise_heading;
+
+        /* Set up the stabilisation path waypoint */
+        waypoint = &nav->waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID];
         waypoint->lat = fcs_global_ahrs_state.lat;
         waypoint->lon = fcs_global_ahrs_state.lon;
         waypoint->alt = (float)fcs_global_ahrs_state.alt;
+        waypoint->airspeed = (float)sqrt(vx * vx + vy * vy + vz * vz);
+        if (waypoint->airspeed < FCS_CONTROL_DEFAULT_AIRSPEED) {
+            waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+        }
+
+        //waypoint->pitch = -M_PI * 0.2; //nav->reference_trajectory[0].pitch;
+        //waypoint->roll = nav->reference_trajectory[0].roll;
+        //waypoint->yaw = (float)atan2(fcs_global_ahrs_state.velocity[1],
+        //                             fcs_global_ahrs_state.velocity[0]);
+        float q[4];
+        q[0] = fcs_global_ahrs_state.attitude[0];
+        q[1] = fcs_global_ahrs_state.attitude[1];
+        q[2] = fcs_global_ahrs_state.attitude[2];
+        q[3] = fcs_global_ahrs_state.attitude[3];
+        yaw_pitch_roll_from_quaternion_f(&waypoint->yaw, &waypoint->pitch, &waypoint->roll,
+            q);
+        printf("yaw %f, pitch %f, roll %f\n", waypoint->yaw, waypoint->pitch, waypoint->roll);
+        waypoint->pitch = -M_PI * 0.1;
+
+        /*
+        Set up the holding pattern waypoint (current position and yaw,
+        standard airspeed, and arbitrary pitch/roll).
+        */
+        stabilise_delta = waypoint->airspeed * 5.0;
+        stabilise_heading = waypoint->yaw;
+
+        waypoint = &nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID];
+        waypoint->lat = fcs_global_ahrs_state.lat +
+            (1.0/WGS84_A) * cos(stabilise_heading) * stabilise_delta;
+        waypoint->lon = fcs_global_ahrs_state.lon +
+            (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta / cos(waypoint->lat);
+        waypoint->alt = (float)fcs_global_ahrs_state.alt - vz * 2.5;
         waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
-
-        double qx, qy, qz, qw;
-        qx = -fcs_global_ahrs_state.attitude[X];
-        qy = -fcs_global_ahrs_state.attitude[Y];
-        qz = -fcs_global_ahrs_state.attitude[Z];
-        qw = fcs_global_ahrs_state.attitude[W];
-
-        waypoint->yaw = (float)atan2(2.0f * (qx * qy + qw * qz),
-                                     qw * qw - qz * qz - qy * qy + qx * qx);
-
+        waypoint->yaw = (float)atan2(fcs_global_ahrs_state.velocity[1],
+                                     fcs_global_ahrs_state.velocity[0]);
         waypoint->pitch = 0.0;
         waypoint->roll = 0.0;
 
+        nav->paths[FCS_CONTROL_STABILISE_PATH_ID].start_waypoint_id =
+            FCS_CONTROL_STABILISE_WAYPOINT_ID;
+        nav->paths[FCS_CONTROL_STABILISE_PATH_ID].end_waypoint_id =
+            FCS_CONTROL_HOLD_WAYPOINT_ID;
+        nav->paths[FCS_CONTROL_STABILISE_PATH_ID].next_path_id =
+            FCS_CONTROL_HOLD_PATH_ID;
+        nav->paths[FCS_CONTROL_STABILISE_PATH_ID].type = FCS_PATH_LINE;
+
         /* Initialize the first path ID in the reference trajectory. */
-        nav->reference_path_id[0] = FCS_CONTROL_HOLD_PATH_ID;
+        nav->reference_path_id[0] = FCS_CONTROL_STABILISE_PATH_ID;
 
         /* Re-calculate the trajectory, then run the feedback step. */
+        float state_weights[NMPC_DELTA_DIM] = {
+            1e-2, 1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-3, 1e-3, 1e-3, 1e2, 1e1, 1e1
+        };
+        nmpc_set_state_weights(state_weights);
+        nmpc_init(true);
+        printf("init hold\n");
         _recalculate_horizon(nav, wind);
+        printf("Hold state diff %f\n", vector3_norm_f(state));
+        nmpc_feedback_step(state);
         _get_ahrs_state(state, wind, &fcs_global_ahrs_state,
                         nav->reference_trajectory);
         nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
+        _shift_horizon(nav, wind);
         nmpc_feedback_step(state);
     }
 
@@ -440,6 +501,7 @@ void fcs_control_tick(void) {
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
+    //printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
 }
 
 float _interpolate_linear(struct fcs_waypoint_t *new_point,
@@ -539,7 +601,7 @@ float t) {
     new_point->yaw =
         mod_2pi_f((float)atan2((end->lon - start->lon) * cos(last_point->lat),
                                end->lat - start->lat));
-    new_point->pitch = 0.0f;
+    new_point->pitch = start->pitch + x * (end->pitch - start->pitch);
 
     /* Interpolate roll in whichever direction is the shortest. */
     target_roll = end->roll - start->roll;
@@ -1167,7 +1229,7 @@ const float *restrict wind) {
         current_point->airspeed * (float)sin(current_point->yaw) +
         wind[1];
     next_reference_velocity[2] =
-        OCP_STEP_LENGTH * (current_point->alt - last_point->alt);
+        -(1.0f / OCP_STEP_LENGTH) * (current_point->alt - last_point->alt);
 
     quaternion_f_from_yaw_pitch_roll(
         next_reference_attitude, current_point->yaw, current_point->pitch,
@@ -1187,13 +1249,19 @@ const float *restrict wind) {
     reference[7] = next_reference_attitude[1];
     reference[8] = next_reference_attitude[2];
     reference[9] = next_reference_attitude[3];
-    reference[10] = OCP_STEP_LENGTH * (current_point->roll - last_point->roll);
+    reference[10] = (1.0f / OCP_STEP_LENGTH) *
+                    (current_point->roll - last_point->roll);
     reference[11] = 0.0;
     reference[12] = 0.0;
     /* FIXME: reference points should be specified in the control config. */
-    reference[NMPC_STATE_DIM + 0] = 0.5f;
+    reference[NMPC_STATE_DIM + 0] = 0.3f;
     reference[NMPC_STATE_DIM + 1u] = 0.5f;
     reference[NMPC_STATE_DIM + 2u] = 0.5f;
+
+    printf("reference: %f %f %f %f %f %f %f %f %f %f %f %f %f\n",
+        reference[0], reference[1], reference[2], reference[3], reference[4],
+        reference[5], reference[6], reference[7], reference[8], reference[9],
+        reference[10], reference[11], reference[12]);
 }
 
 /*

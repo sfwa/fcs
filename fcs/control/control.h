@@ -35,7 +35,7 @@ enum fcs_control_mode_t {
 };
 
 /*
-If the vehicle is more than 10m from where it should be, switch to a recovery
+If the vehicle is more than 20m from where it should be, switch to a recovery
 trajectory to get back on track.
 */
 #define FCS_CONTROL_POSITION_TOLERANCE 40.0
@@ -120,6 +120,9 @@ struct fcs_path_t {
 /* Marker for 'resume following a partially-flown path' path */
 #define FCS_CONTROL_RESUME_PATH_ID (FCS_CONTROL_MAX_PATHS - 3u)
 
+/* Marker for 'stabilise after loss of control' path */
+#define FCS_CONTROL_STABILISE_PATH_ID (FCS_CONTROL_MAX_PATHS - 4u)
+
 /* Marker for 'last plan position' waypoint ID */
 #define FCS_CONTROL_HOLD_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 1u)
 
@@ -130,6 +133,9 @@ Marker for 'interpolate from an arbitrary state to the next path' waypoint ID
 
 /* Marker for 'partially-flown path resume position' waypoint ID */
 #define FCS_CONTROL_RESUME_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 3u)
+
+/* Marker for 'stabilise path commence' waypoint ID */
+#define FCS_CONTROL_STABILISE_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 4u)
 
 struct fcs_boundary_t {
     uint16_t num_waypoint_ids;
@@ -152,8 +158,8 @@ struct fcs_nav_state_t {
     uint16_t reference_path_id[OCP_HORIZON_LENGTH + 1u];
 };
 
-extern struct fcs_control_state_t fcs_global_control_state;
-extern struct fcs_nav_state_t fcs_global_nav_state;
+extern volatile struct fcs_control_state_t fcs_global_control_state;
+extern volatile struct fcs_nav_state_t fcs_global_nav_state;
 
 void fcs_control_init(void);
 void fcs_control_tick(void);

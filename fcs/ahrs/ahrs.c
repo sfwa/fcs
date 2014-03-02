@@ -44,7 +44,7 @@ SOFTWARE.
 
 /* Global FCS state structure */
 #pragma DATA_SECTION(fcs_global_ahrs_state, ".shared")
-struct fcs_ahrs_state_t fcs_global_ahrs_state;
+volatile struct fcs_ahrs_state_t fcs_global_ahrs_state;
 
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
