@@ -408,7 +408,9 @@ double *out_offset, double prescale) {
 }
 
 /*
-Convert the values associated with a measurement into an array of doubles.
+Convert the values associated with a measurement into an array of doubles
+normalized to the range [0.0, 1.0).
+
 Returns the number of values in the measurement.
 */
 size_t fcs_measurement_get_values(
@@ -515,6 +517,12 @@ double *out_error, double out_offset[3], double prescale) {
         case FCS_CALIBRATION_BIAS_SCALE_1D:
             temp_value[0] -= p[0];
             temp_value[0] *= p[1];
+            break;
+        case FCS_CALIBRATION_BIAS_SCALE_2D:
+            temp_value[0] -= p[0];
+            temp_value[0] *= p[1];
+            temp_value[1] -= p[2];
+            temp_value[1] *= p[3];
             break;
         case FCS_CALIBRATION_BIAS_SCALE_3X3:
             /*

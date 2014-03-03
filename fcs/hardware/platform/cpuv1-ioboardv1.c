@@ -256,6 +256,28 @@ void fcs_board_init_platform(void) {
         .params = { 0.0, 1.0f },
         .scale_factor = 0.02f * 65535.0f * 100.0f
     };
+    struct fcs_calibration_t iv_calibration = {
+        .header = sizeof(struct fcs_calibration_t) - 1u,
+        .sensor = FCS_MEASUREMENT_TYPE_IV,
+        .type = FCS_CALIBRATION_BIAS_SCALE_2D,
+        .error = 1.0f,
+        /*
+        To convert from 16-bit unsigned ints to input voltage (ie. voltage
+        into the op-amp), divide by 65536 then multiply by (VCC*2). So, for
+        5V VCC, divide by 65536 and multiply by 10.
+
+        Then, for the Attopilot 180A I/V sensor, the scaling factors are as
+        follows:
+        Voltage: 63.69mV/V (multiply by a factor of 15.70)
+        Current: 18.3mV/A (multiply by a factor of 54.64)
+
+        So for a raw reading of 4114 for the voltage input with a 5V VCC,
+        divide by (65536 / 10) to get 0.628V in, and then multiply by the I/V
+        sensor voltage scale factor of 15.7 to get an input voltage of 9.86V.
+        */
+        .params = { 0.0, 15.70, 0.0, 54.64 },
+        .scale_factor = 10.0f
+    };
 
     /*
     FIXME: Should update the calibration sensor ID for each of these so they
