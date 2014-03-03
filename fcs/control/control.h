@@ -49,7 +49,7 @@ trajectory to get back on track.
 /*
 The number of control ticks (@ 50Hz) after which the path should be recomputed
 */
-#define FCS_CONTROL_INFEASIBILITY_TIMEOUT 10u
+#define FCS_CONTROL_INFEASIBILITY_TIMEOUT 2u
 
 /*
 Dubins curve heading error tolerance for "straight" sections -- works out to

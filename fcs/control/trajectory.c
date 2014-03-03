@@ -37,6 +37,8 @@ SOFTWARE.
 #include "trajectory.h"
 
 
+#include <stdio.h>
+
 static void _shift_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind);
 
@@ -61,13 +63,13 @@ uint16_t out_waypoint_id, uint16_t out_path_id);
 
 
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
-    1e-4f, 1e-4f, 1e-4f, /* position */
+    2e-4f, 2e-4f, 2e-4f, /* position */
     1.0f, 1.0f, 1.0f, /* velocity */
-    1e-1f, 1e-1f, 1e-1f, /* attitude */
-    1.0f, 1.0f, 1.0f /* angular velocity */
+    1e-1f, 1e0f, 1e0f, /* attitude */
+    1e0f, 1e2f, 1e2f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
-    1e1f, 1e1f, 1e2f,  /* position */
+    1e1f, 1e1f, 5e1f,  /* position */
     1e1f, 1e1f, 1.0f,  /* velocity */
     1.0f, 1.0f, 1.0f,  /* attitude */
     1e1f, 1e1f, 1e2f /* angular velocity */
@@ -82,11 +84,11 @@ trajectory.
 */
 void fcs_trajectory_recalculate(struct fcs_nav_state_t *nav,
 const float *restrict wind) {
-    float reference[NMPC_REFERENCE_DIM];
+    float reference[NMPC_REFERENCE_DIM], weights[NMPC_DELTA_DIM];
     struct fcs_waypoint_t *ref, *new_point, *last_point;
     uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
     struct fcs_path_t *path;
-    size_t i;
+    size_t i, j;
 
     nmpc_init(true); /* FIXME */
 
@@ -100,8 +102,6 @@ const float *restrict wind) {
     new_point = NULL;
     last_point = NULL;
     last_point_path_id = NULL;
-
-
 
     /* Calculate the first point and save it to the reference trajectory */
     path = &nav->paths[ref_path_id[0]];
@@ -132,7 +132,12 @@ const float *restrict wind) {
 
         assert(i < UINT32_MAX);
         if (ref_path_id[i] == FCS_CONTROL_STABILISE_PATH_ID) {
-            nmpc_set_state_weights(stabilise_state_weights);
+            for (j = 0; j < NMPC_DELTA_DIM; j++) {
+                weights[j] = stabilise_state_weights[j] +
+                    (normal_state_weights[j] - stabilise_state_weights[j]) *
+                    ((float)i / (float)OCP_HORIZON_LENGTH);
+            }
+            nmpc_set_state_weights(weights);
         } else {
             nmpc_set_state_weights(normal_state_weights);
         }
@@ -148,6 +153,7 @@ const float *restrict wind) {
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
     }
+    printf("recalculate trajectory\n");
 }
 
 void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
@@ -227,6 +233,7 @@ const float *restrict state, const float *restrict wind) {
     */
     _stabilise_path_to_waypoint(nav, FCS_CONTROL_INTERPOLATE_WAYPOINT_ID,
                                 FCS_CONTROL_INTERPOLATE_PATH_ID);
+    printf("start recover\n");
 }
 
 void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
@@ -235,6 +242,7 @@ const float *restrict state, const float *restrict wind) {
     Start a 5-second stabilisation path and enter a holding pattern at the
     end of it.
     */
+    printf("start hold\n");
     _stabilise_path_to_waypoint(nav, FCS_CONTROL_HOLD_WAYPOINT_ID,
                                 FCS_CONTROL_HOLD_PATH_ID);
 }
@@ -286,7 +294,7 @@ const float *restrict wind) {
     _make_reference(reference, new_point, last_point,
                     nav->reference_trajectory, wind);
 
-    if (*new_point_path_id == FCS_CONTROL_STABILISE_PATH_ID) {
+    if (false && *new_point_path_id == FCS_CONTROL_STABILISE_PATH_ID) {
         nmpc_set_state_weights(stabilise_state_weights);
     } else {
         nmpc_set_state_weights(normal_state_weights);
@@ -442,6 +450,12 @@ struct fcs_nav_state_t *nav) {
     }
 }
 
+#include "../ukf/cukf.h"
+#include "../stats/stats.h"
+#include "../TRICAL/TRICAL.h"
+#include "../ahrs/measurement.h"
+#include "../ahrs/ahrs.h"
+
 static void _stabilise_path_to_waypoint(struct fcs_nav_state_t *nav,
 uint16_t out_waypoint_id, uint16_t out_path_id) {
     assert(nav);
@@ -451,9 +465,9 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
 
     /* Set up the stabilisation path waypoint */
     waypoint = &nav->waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID];
-    waypoint->lat = nav->reference_trajectory[0].lat;
-    waypoint->lon = nav->reference_trajectory[0].lon;
-    waypoint->alt = nav->reference_trajectory[0].alt;
+    waypoint->lat = fcs_global_ahrs_state.lat; //nav->reference_trajectory[0].lat;
+    waypoint->lon = fcs_global_ahrs_state.lon; //nav->reference_trajectory[0].lon;
+    waypoint->alt = fcs_global_ahrs_state.alt;
     waypoint->airspeed = nav->reference_trajectory[0].airspeed;
     waypoint->yaw = nav->reference_trajectory[0].yaw;
     waypoint->pitch = 0.0f;
@@ -463,13 +477,13 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     Set up the holding pattern waypoint (current position and yaw,
     standard airspeed, and arbitrary pitch/roll).
     */
-    stabilise_delta = waypoint->airspeed * 5.0f;
+    stabilise_delta = waypoint->airspeed * 2.0f;
     stabilise_heading = waypoint->yaw;
 
     out_waypoint = &nav->waypoints[out_waypoint_id];
-    out_waypoint->lat = nav->reference_trajectory[0].lat +
+    out_waypoint->lat = waypoint->lat +
         (1.0/WGS84_A) * cos(stabilise_heading) * stabilise_delta;
-    out_waypoint->lon = nav->reference_trajectory[0].lon +
+    out_waypoint->lon = waypoint->lon +
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
     out_waypoint->alt = nav->reference_trajectory[0].alt;

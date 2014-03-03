@@ -77,6 +77,7 @@ ADD_EXECUTABLE(unittest
     ../control/dubins.c
     ../control/figure-eight.c
     ../control/linear.c
+    ../control/trajectory.c
     test_control.cpp
     ../hardware/platform/cpuv1-ioboardv1.c
     ../hardware/platform/log-replay.c

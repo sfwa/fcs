@@ -203,7 +203,7 @@ void fcs_control_tick(void) {
     if necessary.
     */
     if (control_tick - control_infeasibility_timer
-            > FCS_CONTROL_INFEASIBILITY_TIMEOUT) {
+            > FCS_CONTROL_INFEASIBILITY_TIMEOUT && control_tick - control_infeasibility_timer < 1000u) {
         control_timeout = true;
         control_infeasibility_timer = control_tick;
         fcs_global_counters.nmpc_resets++;
@@ -215,6 +215,8 @@ void fcs_control_tick(void) {
     */
     _get_ahrs_state(state, wind, &fcs_global_ahrs_state,
                     nav->reference_trajectory);
+
+    printf("Path type %d\n", nav->reference_path_id[0]);
 
     /*
     Three options here:
@@ -250,11 +252,12 @@ void fcs_control_tick(void) {
     } else if (!control_timeout && is_navigating() &&
                is_position_error_ok(vector3_norm_f(state))) {
         fcs_trajectory_timestep(nav, state, wind);
-    } else if (false && is_path_valid()) {
+    } else if (is_path_valid()) {
         /*
         If we're not already stabilising, construct a path sequence that gets
         the vehicle back to the next point in the reference trajectory.
         */
+        printf("Position offset %f", vector3_norm_f(state));
         fcs_trajectory_start_recover(nav, state, wind);
         fcs_trajectory_recalculate(nav, wind);
         fcs_trajectory_timestep(nav, state, wind);
@@ -270,9 +273,10 @@ void fcs_control_tick(void) {
     /* Get the control values and update the global state. */
     result = nmpc_get_controls(controls);
     if (result == NMPC_OK) {
-        control_infeasibility_timer = control_tick;
+        control_infeasibility_timer = max(control_infeasibility_timer, control_tick);
     } else {
     	fcs_global_counters.nmpc_errors++;
+        printf("Infeasible\n");
     }
 
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {
@@ -281,7 +285,7 @@ void fcs_control_tick(void) {
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
-    printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
+    //printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
 }
 
 
