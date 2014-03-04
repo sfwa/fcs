@@ -35,7 +35,7 @@ enum fcs_control_mode_t {
 };
 
 /*
-If the vehicle is more than 20m from where it should be, switch to a recovery
+If the vehicle is more than 30m from where it should be, switch to a recovery
 trajectory to get back on track.
 */
 #define FCS_CONTROL_POSITION_TOLERANCE 30.0
@@ -51,16 +51,6 @@ The number of control ticks (@ 50Hz) after which the path should be recomputed
 */
 #define FCS_CONTROL_INFEASIBILITY_TIMEOUT 2u
 
-/*
-Dubins curve heading error tolerance for "straight" sections -- works out to
-about 0.15 degree error, but since curve segments aren't meant to be used for
-long distances that'll be OK.
-
-Improving accuracy here would require _interpolate_dubins to support mixing
-left/straight/right control actions within a single timestep.
-*/
-#define FCS_CONTROL_TURN_TOLERANCE (M_PI * 0.001)
-
 enum fcs_path_type_t {
     FCS_PATH_LINE = 'L',
     FCS_PATH_DUBINS_CURVE = 'D',
@@ -70,8 +60,6 @@ enum fcs_path_type_t {
 
 struct fcs_control_channel_t {
     float setpoint;
-    float min;
-    float max;
     float rate;
 };
 
@@ -136,6 +124,18 @@ Marker for 'interpolate from an arbitrary state to the next path' waypoint ID
 
 /* Marker for 'stabilise path commence' waypoint ID */
 #define FCS_CONTROL_STABILISE_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 4u)
+
+struct fcs_state_estimate_t {
+    double lat;
+    double lon;
+    float alt;
+    float velocity[3];
+    float attitude[4];
+    float angular_velocity[3];
+    float wind_velocity[3];
+    /* Pad so the structure fills two whole L1 cache lines (128 bytes) */
+    uint8_t reserved[56];
+};
 
 struct fcs_boundary_t {
     uint16_t num_waypoint_ids;

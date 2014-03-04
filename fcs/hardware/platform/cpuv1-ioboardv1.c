@@ -338,9 +338,7 @@ void fcs_board_tick(void) {
     #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
     for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
         control = &fcs_global_control_state.controls[i];
-        proportional_pos = (control->setpoint - control->min) /
-                           (control->max - control->min);
-        control_log.data.u16[i] = (uint16_t)(proportional_pos * UINT16_MAX);
+        control_log.data.u16[i] = (uint16_t)(control->setpoint * UINT16_MAX);
     }
 
     /* Log to sensor ID 1, because sensor ID 0 is the RC PWM input. */

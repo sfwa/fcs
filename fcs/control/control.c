@@ -89,11 +89,6 @@ static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
 
 
-static void _get_ahrs_state(float *restrict state, float *restrict wind,
-volatile struct fcs_ahrs_state_t *ahrs_state,
-const struct fcs_waypoint_t *restrict reference);
-
-
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
@@ -114,30 +109,22 @@ void fcs_control_init(void) {
     9000 RPM/sec
     */
     fcs_global_control_state.controls[0].setpoint = 0.6f;
-    fcs_global_control_state.controls[0].min = 0.0f;
-    fcs_global_control_state.controls[0].max = 1.0f;
     fcs_global_control_state.controls[0].rate = 0.5f;
 
     /*
     Configure left elevon: neutral setpoint, +/- 36 deg travel, 60 deg/s rate
     */
     fcs_global_control_state.controls[1].setpoint = 0.5f;
-    fcs_global_control_state.controls[1].min = 0.0f;
-    fcs_global_control_state.controls[1].max = 1.0f;
-    fcs_global_control_state.controls[1].rate = 3.0f;
+    fcs_global_control_state.controls[1].rate = 2.0f;
 
     /*
     Configure right elevon: neutral setpoint, +/- 36 deg travel, 60 deg/s rate
     */
     fcs_global_control_state.controls[2].setpoint = 0.5f;
-    fcs_global_control_state.controls[2].min = 0.0f;
-    fcs_global_control_state.controls[2].max = 1.0f;
-    fcs_global_control_state.controls[2].rate = 3.0f;
+    fcs_global_control_state.controls[2].rate = 2.0f;
 
     /* Set final (unused) control channel */
     fcs_global_control_state.controls[3].setpoint = 0.0f;
-    fcs_global_control_state.controls[3].min = 0.0f;
-    fcs_global_control_state.controls[3].max = 1.0f;
     fcs_global_control_state.controls[3].rate = 1.0f;
 
     /*
@@ -145,8 +132,8 @@ void fcs_control_init(void) {
     bounds
     */
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {
-        lower_control_bound[i] = fcs_global_control_state.controls[i].min;
-        upper_control_bound[i] = fcs_global_control_state.controls[i].max;
+        lower_control_bound[i] = 0.0;
+        upper_control_bound[i] = 1.0;
     }
 
     nmpc_set_state_weights(state_weights);
@@ -189,6 +176,7 @@ void fcs_control_init(void) {
 #include <stdio.h>
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
+    struct fcs_state_estimate_t state_estimate;
     struct fcs_nav_state_t *nav = &fcs_global_nav_state;
     float controls[NMPC_CONTROL_DIM], state[NMPC_STATE_DIM], wind[3];
     size_t i;
@@ -203,20 +191,36 @@ void fcs_control_tick(void) {
     if necessary.
     */
     if (control_tick - control_infeasibility_timer
-            > FCS_CONTROL_INFEASIBILITY_TIMEOUT && control_tick - control_infeasibility_timer < 1000u) {
+            > FCS_CONTROL_INFEASIBILITY_TIMEOUT) {
         control_timeout = true;
         control_infeasibility_timer = control_tick;
         fcs_global_counters.nmpc_resets++;
     }
 
     /*
+    TODO:
     Read the relevant parts of the AHRS output and convert them to a format
     usable by the control system.
-    */
-    _get_ahrs_state(state, wind, &fcs_global_ahrs_state,
-                    nav->reference_trajectory);
 
-    printf("Path type %d\n", nav->reference_path_id[0]);
+    We shouldn't access fcs_global_ahrs_state directly, since the cache
+    coherence of that structure is not guaranteed.
+    */
+    state_estimate.lat = fcs_global_ahrs_state.lat;
+    state_estimate.lon = fcs_global_ahrs_state.lon;
+    state_estimate.alt = fcs_global_ahrs_state.alt;
+    state_estimate.velocity[0] = fcs_global_ahrs_state.velocity[0];
+    state_estimate.velocity[1] = fcs_global_ahrs_state.velocity[1];
+    state_estimate.velocity[2] = fcs_global_ahrs_state.velocity[2];
+    state_estimate.attitude[0] = fcs_global_ahrs_state.attitude[0];
+    state_estimate.attitude[1] = fcs_global_ahrs_state.attitude[1];
+    state_estimate.attitude[2] = fcs_global_ahrs_state.attitude[2];
+    state_estimate.attitude[3] = fcs_global_ahrs_state.attitude[3];
+    state_estimate.angular_velocity[0] = fcs_global_ahrs_state.angular_velocity[0];
+    state_estimate.angular_velocity[1] = fcs_global_ahrs_state.angular_velocity[1];
+    state_estimate.angular_velocity[2] = fcs_global_ahrs_state.angular_velocity[2];
+    state_estimate.wind_velocity[0] = fcs_global_ahrs_state.wind_velocity[0];
+    state_estimate.wind_velocity[1] = fcs_global_ahrs_state.wind_velocity[1];
+    state_estimate.wind_velocity[2] = fcs_global_ahrs_state.wind_velocity[2];
 
     /*
     Three options here:
@@ -245,38 +249,34 @@ void fcs_control_tick(void) {
         FIXME -- hack to get the path to initialise when only the first ID
         has been set.
         */
-        fcs_trajectory_recalculate(nav, wind);
-        _get_ahrs_state(state, wind, &fcs_global_ahrs_state,
-                        nav->reference_trajectory);
-        fcs_trajectory_timestep(nav, state, wind);
+        fcs_trajectory_recalculate(nav, &state_estimate);
+        fcs_trajectory_timestep(nav, &state_estimate);
     } else if (!control_timeout && is_navigating() &&
                is_position_error_ok(vector3_norm_f(state))) {
-        fcs_trajectory_timestep(nav, state, wind);
+        fcs_trajectory_timestep(nav, &state_estimate);
     } else if (is_path_valid()) {
         /*
         If we're not already stabilising, construct a path sequence that gets
         the vehicle back to the next point in the reference trajectory.
         */
-        printf("Position offset %f", vector3_norm_f(state));
-        fcs_trajectory_start_recover(nav, state, wind);
-        fcs_trajectory_recalculate(nav, wind);
-        fcs_trajectory_timestep(nav, state, wind);
+        fcs_trajectory_start_recover(nav, &state_estimate);
+        fcs_trajectory_recalculate(nav, &state_estimate);
+        fcs_trajectory_timestep(nav, &state_estimate);
     } else {
         /*
         Path uninitialized; enter a holding pattern.
         */
-        fcs_trajectory_start_hold(nav, state, wind);
-        fcs_trajectory_recalculate(nav, wind);
-        fcs_trajectory_timestep(nav, state, wind);
+        fcs_trajectory_start_hold(nav, &state_estimate);
+        fcs_trajectory_recalculate(nav, &state_estimate);
+        fcs_trajectory_timestep(nav, &state_estimate);
     }
 
     /* Get the control values and update the global state. */
     result = nmpc_get_controls(controls);
     if (result == NMPC_OK) {
-        control_infeasibility_timer = max(control_infeasibility_timer, control_tick);
+        control_infeasibility_timer = control_tick;
     } else {
     	fcs_global_counters.nmpc_errors++;
-        printf("Infeasible\n");
     }
 
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {
@@ -285,64 +285,5 @@ void fcs_control_tick(void) {
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
-    //printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
-}
-
-
-void _ned_from_point_diff(float *restrict ned,
-const struct fcs_waypoint_t *restrict ref,
-const struct fcs_waypoint_t *restrict point) {
-    assert(ned && ref && point);
-    _nassert((size_t)ned % 4u == 0);
-    _nassert((size_t)ref % 8u == 0);
-    _nassert((size_t)point % 8u == 0);
-
-    /*
-    Convert lat/lon to N, E by linearizing around current position -- this
-    will break around the poles, and isn't accurate over medium distances
-    (a few kilometres), but is adequate for reference trajectory calculation.
-    */
-    ned[0] = (float)((point->lat - ref->lat) * WGS84_A);
-    ned[1] = (float)((point->lon - ref->lon) * WGS84_A * cos(ref->lat));
-
-    /* D offset is just the difference in altitudes */
-    ned[2] = ref->alt - point->alt;
-}
-
-static void _get_ahrs_state(float *restrict state, float *restrict wind,
-volatile struct fcs_ahrs_state_t *ahrs_state,
-const struct fcs_waypoint_t *restrict reference) {
-    /*
-    Get the latest data from the AHRS. Since we don't lock anything here, it's
-    possible for the UKF to start updating the data under us, but the
-    worst-case scenario is that we get some data from 1ms later, which
-    shouldn't be an issue.
-
-    Since the NMPC code only looks at deltas between states, we can set the
-    current position to the NED offset between the lat/lon/alt of the vehicle
-    and the lat/lon/alt of the first point in the reference trajectory.
-    */
-    struct fcs_waypoint_t current_point;
-
-    current_point.lat = ahrs_state->lat;
-    current_point.lon = ahrs_state->lon;
-    current_point.alt = (float)ahrs_state->alt;
-    _ned_from_point_diff(state, reference, &current_point);
-
-    /* state[2:0] has been set by the call above */
-    state[3] = (float)ahrs_state->velocity[0];
-    state[4] = (float)ahrs_state->velocity[1];
-    state[5] = (float)ahrs_state->velocity[2];
-    state[6] = (float)ahrs_state->attitude[0];
-    state[7] = (float)ahrs_state->attitude[1];
-    state[8] = (float)ahrs_state->attitude[2];
-    state[9] = (float)ahrs_state->attitude[3];
-    state[10] = (float)ahrs_state->angular_velocity[0];
-    state[11] = (float)ahrs_state->angular_velocity[1];
-    state[12] = (float)ahrs_state->angular_velocity[2];
-
-    /* Set the wind based on the latest UKF estimate as well. */
-    wind[0] = (float)ahrs_state->wind_velocity[0];
-    wind[1] = (float)ahrs_state->wind_velocity[1];
-    wind[2] = (float)ahrs_state->wind_velocity[2];
+    printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
 }

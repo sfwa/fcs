@@ -39,20 +39,21 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t);
 
+void fcs_trajectory_recalculate(struct fcs_nav_state_t *nav,
+const struct fcs_state_estimate_t *restrict state_estimate);
+
+void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
+const struct fcs_state_estimate_t *restrict state_estimate);
+
+void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
+const struct fcs_state_estimate_t *restrict state_estimate);
+
+void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
+const struct fcs_state_estimate_t *restrict state_estimate);
+
+/* FIXME: rename/relocate */
 void _ned_from_point_diff(float *restrict ned,
 const struct fcs_waypoint_t *restrict ref,
 const struct fcs_waypoint_t *restrict point);
-
-void fcs_trajectory_recalculate(struct fcs_nav_state_t *nav,
-const float *restrict wind);
-
-void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
-const float *restrict state, const float *restrict wind);
-
-void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
-const float *restrict state, const float *restrict wind);
-
-void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
-const float *restrict state, const float *restrict wind);
 
 #endif

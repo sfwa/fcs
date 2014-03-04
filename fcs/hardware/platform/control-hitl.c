@@ -121,9 +121,7 @@ void fcs_board_tick(void) {
         #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
         for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
             control = &fcs_global_control_state.controls[i];
-            proportional_pos = (control->setpoint - control->min) /
-                               (control->max - control->min);
-            controls[i] = (uint16_t)(proportional_pos * UINT16_MAX);
+            controls[i] = (uint16_t)(control->setpoint * UINT16_MAX);
         }
 
         /*

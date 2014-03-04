@@ -59,14 +59,19 @@ const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 enum fcs_path_type_t type, float t);
 
 static void _stabilise_path_to_waypoint(struct fcs_nav_state_t *nav,
+const struct fcs_state_estimate_t *restrict state_estimate,
 uint16_t out_waypoint_id, uint16_t out_path_id);
+
+static void _get_ahrs_state(float *restrict state,
+const struct fcs_state_estimate_t *restrict state_estimate,
+const struct fcs_waypoint_t *restrict reference);
 
 
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     2e-4f, 2e-4f, 2e-4f, /* position */
-    1.0f, 1.0f, 1.0f, /* velocity */
-    1e-1f, 1e0f, 1e0f, /* attitude */
-    1e0f, 1e2f, 1e2f /* angular velocity */
+    1e0f, 1e0f, 1e-1f, /* velocity */
+    1e-1f, 1e1f, 1e2f, /* attitude */
+    1e0f, 1e1f, 1e3f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
     1e1f, 1e1f, 5e1f,  /* position */
@@ -83,7 +88,7 @@ entered), and also when the vehicle state diverges too far from the reference
 trajectory.
 */
 void fcs_trajectory_recalculate(struct fcs_nav_state_t *nav,
-const float *restrict wind) {
+const struct fcs_state_estimate_t *restrict state_estimate) {
     float reference[NMPC_REFERENCE_DIM], weights[NMPC_DELTA_DIM];
     struct fcs_waypoint_t *ref, *new_point, *last_point;
     uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
@@ -106,10 +111,11 @@ const float *restrict wind) {
     /* Calculate the first point and save it to the reference trajectory */
     path = &nav->paths[ref_path_id[0]];
     _next_point_from_path(
-        ref, &nav->waypoints[path->start_waypoint_id], wind,
+        ref, &nav->waypoints[path->start_waypoint_id],
+        state_estimate->wind_velocity,
         &nav->waypoints[path->start_waypoint_id],
         &nav->waypoints[path->end_waypoint_id], path->type, 0.0);
-    _make_reference(reference, ref, NULL, ref, wind);
+    _make_reference(reference, ref, NULL, ref, state_estimate->wind_velocity);
 
     if (ref_path_id[0] == FCS_CONTROL_STABILISE_PATH_ID) {
         nmpc_set_state_weights(stabilise_state_weights);
@@ -127,14 +133,16 @@ const float *restrict wind) {
         last_point_path_id = &ref_path_id[i - 1u];
 
         _next_point(new_point, new_point_path_id, last_point,
-                    last_point_path_id, wind, nav);
-        _make_reference(reference, new_point, last_point, ref, wind);
+                    last_point_path_id, state_estimate->wind_velocity, nav);
+        _make_reference(reference, new_point, last_point, ref,
+                        state_estimate->wind_velocity);
 
         assert(i < UINT32_MAX);
         if (ref_path_id[i] == FCS_CONTROL_STABILISE_PATH_ID) {
             for (j = 0; j < NMPC_DELTA_DIM; j++) {
                 weights[j] = stabilise_state_weights[j] +
                     (normal_state_weights[j] - stabilise_state_weights[j]) *
+                    ((float)i / (float)OCP_HORIZON_LENGTH) *
                     ((float)i / (float)OCP_HORIZON_LENGTH);
             }
             nmpc_set_state_weights(weights);
@@ -157,14 +165,19 @@ const float *restrict wind) {
 }
 
 void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
-const float *restrict state, const float *restrict wind) {
-    nmpc_set_wind_velocity(wind[0], wind[1], wind[2]);
-    nmpc_feedback_step(state);
-    _shift_horizon(nav, wind);
+const struct fcs_state_estimate_t *restrict state_estimate) {
+    float state_vec[NMPC_STATE_DIM];
+    _get_ahrs_state(state_vec, state_estimate, nav->reference_trajectory);
+
+    nmpc_set_wind_velocity(
+        state_estimate->wind_velocity[0], state_estimate->wind_velocity[1],
+        state_estimate->wind_velocity[2]);
+    nmpc_feedback_step(state_vec);
+    _shift_horizon(nav, state_estimate->wind_velocity);
 }
 
 void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
-const float *restrict state, const float *restrict wind) {
+const struct fcs_state_estimate_t *restrict state_estimate) {
     uint16_t original_path_id;
     /*
     Construct a path sequence that gets the vehicle back to the next point in
@@ -196,11 +209,8 @@ const float *restrict state, const float *restrict wind) {
         The resume waypoint is set to the next point in the reference
         trajectory.
         */
-        memcpy(
-            &nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID],
-            &nav->waypoints[
-                nav->paths[original_path_id].start_waypoint_id],
-            sizeof(struct fcs_waypoint_t));
+        memcpy(&nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID],
+               &nav->reference_trajectory[0], sizeof(struct fcs_waypoint_t));
 
         /*
         Set the starting point of the resume path to the resume waypoint.
@@ -231,19 +241,21 @@ const float *restrict state, const float *restrict wind) {
     path back to the original departure point. This sets the staring point of
     the interpolation path to the end of the stabilisation path.
     */
-    _stabilise_path_to_waypoint(nav, FCS_CONTROL_INTERPOLATE_WAYPOINT_ID,
+    _stabilise_path_to_waypoint(nav, state_estimate,
+                                FCS_CONTROL_INTERPOLATE_WAYPOINT_ID,
                                 FCS_CONTROL_INTERPOLATE_PATH_ID);
     printf("start recover\n");
 }
 
 void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
-const float *restrict state, const float *restrict wind) {
+const struct fcs_state_estimate_t *state_estimate) {
     /*
     Start a 5-second stabilisation path and enter a holding pattern at the
     end of it.
     */
     printf("start hold\n");
-    _stabilise_path_to_waypoint(nav, FCS_CONTROL_HOLD_WAYPOINT_ID,
+    _stabilise_path_to_waypoint(nav, state_estimate,
+                                FCS_CONTROL_HOLD_WAYPOINT_ID,
                                 FCS_CONTROL_HOLD_PATH_ID);
 }
 
@@ -294,11 +306,7 @@ const float *restrict wind) {
     _make_reference(reference, new_point, last_point,
                     nav->reference_trajectory, wind);
 
-    if (false && *new_point_path_id == FCS_CONTROL_STABILISE_PATH_ID) {
-        nmpc_set_state_weights(stabilise_state_weights);
-    } else {
-        nmpc_set_state_weights(normal_state_weights);
-    }
+    nmpc_set_state_weights(normal_state_weights);
     nmpc_update_horizon(reference);
 }
 
@@ -450,26 +458,23 @@ struct fcs_nav_state_t *nav) {
     }
 }
 
-#include "../ukf/cukf.h"
-#include "../stats/stats.h"
-#include "../TRICAL/TRICAL.h"
-#include "../ahrs/measurement.h"
-#include "../ahrs/ahrs.h"
-
 static void _stabilise_path_to_waypoint(struct fcs_nav_state_t *nav,
+const struct fcs_state_estimate_t *restrict state_estimate,
 uint16_t out_waypoint_id, uint16_t out_path_id) {
     assert(nav);
+    assert(state_estimate);
 
     struct fcs_waypoint_t *waypoint, *out_waypoint;
     float stabilise_delta, stabilise_heading;
 
     /* Set up the stabilisation path waypoint */
     waypoint = &nav->waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID];
-    waypoint->lat = fcs_global_ahrs_state.lat; //nav->reference_trajectory[0].lat;
-    waypoint->lon = fcs_global_ahrs_state.lon; //nav->reference_trajectory[0].lon;
-    waypoint->alt = fcs_global_ahrs_state.alt;
-    waypoint->airspeed = nav->reference_trajectory[0].airspeed;
-    waypoint->yaw = nav->reference_trajectory[0].yaw;
+    waypoint->lat = state_estimate->lat;
+    waypoint->lon = state_estimate->lon;
+    waypoint->alt = state_estimate->alt;
+    waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+    waypoint->yaw = (float)atan2(state_estimate->velocity[1],
+                                 state_estimate->velocity[0]);
     waypoint->pitch = 0.0f;
     waypoint->roll = 0.0f;
 
@@ -477,7 +482,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     Set up the holding pattern waypoint (current position and yaw,
     standard airspeed, and arbitrary pitch/roll).
     */
-    stabilise_delta = waypoint->airspeed * 2.0f;
+    stabilise_delta = waypoint->airspeed * 5.0f;
     stabilise_heading = waypoint->yaw;
 
     out_waypoint = &nav->waypoints[out_waypoint_id];
@@ -486,7 +491,8 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     out_waypoint->lon = waypoint->lon +
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
-    out_waypoint->alt = nav->reference_trajectory[0].alt;
+    out_waypoint->alt = waypoint->alt > 100.0 ?
+        waypoint->alt : 100.0;
     out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     out_waypoint->yaw = stabilise_heading;
     out_waypoint->pitch = 0.0f;
@@ -502,4 +508,57 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
 
     /* Initialize the first path ID in the reference trajectory. */
     nav->reference_path_id[0] = FCS_CONTROL_STABILISE_PATH_ID;
+}
+
+void _ned_from_point_diff(float *restrict ned,
+const struct fcs_waypoint_t *restrict ref,
+const struct fcs_waypoint_t *restrict point) {
+    assert(ned && ref && point);
+    _nassert((size_t)ned % 4u == 0);
+    _nassert((size_t)ref % 8u == 0);
+    _nassert((size_t)point % 8u == 0);
+
+    /*
+    Convert lat/lon to N, E by linearizing around current position -- this
+    will break around the poles, and isn't accurate over medium distances
+    (a few kilometres), but is adequate for reference trajectory calculation.
+    */
+    ned[0] = (float)((point->lat - ref->lat) * WGS84_A);
+    ned[1] = (float)((point->lon - ref->lon) * WGS84_A * cos(ref->lat));
+
+    /* D offset is just the difference in altitudes */
+    ned[2] = ref->alt - point->alt;
+}
+
+static void _get_ahrs_state(float *restrict state,
+const struct fcs_state_estimate_t *restrict state_estimate,
+const struct fcs_waypoint_t *restrict reference) {
+    /*
+    Get the latest data from the AHRS. Since we don't lock anything here, it's
+    possible for the UKF to start updating the data under us, but the
+    worst-case scenario is that we get some data from 1ms later, which
+    shouldn't be an issue.
+
+    Since the NMPC code only looks at deltas between states, we can set the
+    current position to the NED offset between the lat/lon/alt of the vehicle
+    and the lat/lon/alt of the first point in the reference trajectory.
+    */
+    struct fcs_waypoint_t current_point;
+
+    current_point.lat = state_estimate->lat;
+    current_point.lon = state_estimate->lon;
+    current_point.alt = state_estimate->alt;
+    _ned_from_point_diff(state, reference, &current_point);
+
+    /* state[2:0] has been set by the call above */
+    state[3] = state_estimate->velocity[0];
+    state[4] = state_estimate->velocity[1];
+    state[5] = state_estimate->velocity[2];
+    state[6] = state_estimate->attitude[0];
+    state[7] = state_estimate->attitude[1];
+    state[8] = state_estimate->attitude[2];
+    state[9] = state_estimate->attitude[3];
+    state[10] = state_estimate->angular_velocity[0];
+    state[11] = state_estimate->angular_velocity[1];
+    state[12] = state_estimate->angular_velocity[2];
 }
