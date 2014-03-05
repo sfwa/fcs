@@ -115,7 +115,6 @@ void fcs_board_tick(void) {
 
         /* Work out the current control position */
         const struct fcs_control_channel_t *restrict control;
-        float proportional_pos;
         uint16_t controls[FCS_CONTROL_CHANNELS];
 
         #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)

@@ -35,10 +35,10 @@ enum fcs_control_mode_t {
 };
 
 /*
-If the vehicle is more than 30m from where it should be, switch to a recovery
+If the vehicle is more than 5m from where it should be, switch to a recovery
 trajectory to get back on track.
 */
-#define FCS_CONTROL_POSITION_TOLERANCE 30.0
+#define FCS_CONTROL_POSITION_TOLERANCE 5.0
 
 /* Airspeed used for holding patterns etc, in m/s */
 #define FCS_CONTROL_DEFAULT_AIRSPEED 20.0
@@ -49,7 +49,7 @@ trajectory to get back on track.
 /*
 The number of control ticks (@ 50Hz) after which the path should be recomputed
 */
-#define FCS_CONTROL_INFEASIBILITY_TIMEOUT 2u
+#define FCS_CONTROL_INFEASIBILITY_TIMEOUT 1u
 
 enum fcs_path_type_t {
     FCS_PATH_LINE = 'L',

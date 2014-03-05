@@ -316,14 +316,14 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 enum fcs_path_type_t type, float t) {
     if (type == FCS_PATH_LINE) {
-        return fcs_trajectory_interpolate_linear(
-            new_point, last_point, wind, start, end, t);
+        return fcs_trajectory_interpolate_linear(new_point, last_point, wind,
+                                                 start, end, t);
     } else if (type == FCS_PATH_DUBINS_CURVE) {
-        return fcs_trajectory_interpolate_dubins(
-            new_point, last_point, wind, start, end, t);
+        return fcs_trajectory_interpolate_dubins(new_point, last_point, wind,
+                                                 start, end, t);
     } else if (type == FCS_PATH_FIGURE_EIGHT) {
-        return fcs_trajectory_interpolate_figure_eight(
-            new_point, last_point, wind, start, end, t);
+        return fcs_trajectory_interpolate_figure_eight(new_point, last_point,
+                                                       wind, start, end, t);
     } else {
         assert(false && "Invalid path type.");
     }
@@ -354,20 +354,39 @@ const float *restrict wind) {
     Determine reference velocity based on airspeed, yaw and current wind;
     determine reference attitude based on waypoint yaw, pitch and roll.
     */
-    float next_reference_velocity[3], next_reference_attitude[4];
+    float next_reference_velocity[3], next_reference_attitude[4],
+          last_reference_attitude[4], tmp[4], tmp2[4];
 
     next_reference_velocity[0] =
-        current_point->airspeed * (float)cos(current_point->yaw) +
-        wind[0];
+        current_point->airspeed * (float)cos(current_point->yaw) + wind[0];
     next_reference_velocity[1] =
-        current_point->airspeed * (float)sin(current_point->yaw) +
-        wind[1];
-    next_reference_velocity[2] =
-        -(1.0f / OCP_STEP_LENGTH) * (current_point->alt - last_point->alt);
+        current_point->airspeed * (float)sin(current_point->yaw) + wind[1];
+    next_reference_velocity[2] = (1.0f / OCP_STEP_LENGTH) *
+                                 (last_point->alt - current_point->alt);
 
-    quaternion_f_from_yaw_pitch_roll(
-        next_reference_attitude, current_point->yaw, current_point->pitch,
-        current_point->roll);
+    /* Calculate angular velocity based on the reference attitudes */
+    quaternion_f_from_yaw_pitch_roll(next_reference_attitude,
+                                     current_point->yaw, current_point->pitch,
+                                     current_point->roll);
+
+    quaternion_f_from_yaw_pitch_roll(last_reference_attitude, last_point->yaw,
+                                     last_point->pitch, last_point->roll);
+
+    tmp[0] = (next_reference_attitude[0] - last_reference_attitude[0]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+    tmp[1] = (next_reference_attitude[1] - last_reference_attitude[1]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+    tmp[2] = (next_reference_attitude[2] - last_reference_attitude[2]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+    tmp[3] = (next_reference_attitude[3] - last_reference_attitude[3]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+
+    /* Take the conjugate of last_reference_attitude */
+    last_reference_attitude[0] = -1.0;
+    last_reference_attitude[1] = -1.0;
+    last_reference_attitude[2] = -1.0;
+
+    quaternion_multiply_f(tmp2, tmp, last_reference_attitude);
 
     /*
     Update the horizon with the next reference trajectory step. The first
@@ -383,10 +402,9 @@ const float *restrict wind) {
     reference[7] = next_reference_attitude[1];
     reference[8] = next_reference_attitude[2];
     reference[9] = next_reference_attitude[3];
-    reference[10] = (1.0f / OCP_STEP_LENGTH) *
-                    (current_point->roll - last_point->roll);
-    reference[11] = 0.0;
-    reference[12] = 0.0;
+    reference[10] = tmp2[0];
+    reference[11] = tmp2[1];
+    reference[12] = tmp2[2];
     /* FIXME: reference points should be specified in the control config. */
     reference[NMPC_STATE_DIM + 0] = 0.3f;
     reference[NMPC_STATE_DIM + 1u] = 0.5f;
@@ -491,8 +509,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     out_waypoint->lon = waypoint->lon +
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
-    out_waypoint->alt = waypoint->alt > 100.0 ?
-        waypoint->alt : 100.0;
+    out_waypoint->alt = waypoint->alt > 100.0 ? waypoint->alt : 100.0;
     out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     out_waypoint->yaw = stabilise_heading;
     out_waypoint->pitch = 0.0f;

@@ -333,7 +333,6 @@ void fcs_board_tick(void) {
     */
     struct fcs_measurement_t control_log;
     const struct fcs_control_channel_t *restrict control;
-    float proportional_pos;
 
     #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
     for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {

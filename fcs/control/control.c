@@ -75,7 +75,7 @@ inline static bool is_stabilising() {
 
 inline static bool is_position_error_ok(float err) {
     return is_path_valid() &&
-           (is_stabilising() || err < FCS_CONTROL_POSITION_TOLERANCE);
+           (is_stabilising() || absval(err) < FCS_CONTROL_POSITION_TOLERANCE);
 }
 
 
@@ -178,14 +178,13 @@ void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
     struct fcs_nav_state_t *nav = &fcs_global_nav_state;
-    float controls[NMPC_CONTROL_DIM], state[NMPC_STATE_DIM], wind[3];
+    float controls[NMPC_CONTROL_DIM], alt_diff;
     size_t i;
     uint32_t start_t = cycle_count();
     bool control_timeout = false;
 
     assert(fcs_global_control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
 
-    control_tick++;
     /*
     Check for multiple infeasible results in a row, and reset the trajectory
     if necessary.
@@ -195,6 +194,8 @@ void fcs_control_tick(void) {
         control_timeout = true;
         control_infeasibility_timer = control_tick;
         fcs_global_counters.nmpc_resets++;
+    } else {
+        control_tick++;
     }
 
     /*
@@ -221,6 +222,8 @@ void fcs_control_tick(void) {
     state_estimate.wind_velocity[0] = fcs_global_ahrs_state.wind_velocity[0];
     state_estimate.wind_velocity[1] = fcs_global_ahrs_state.wind_velocity[1];
     state_estimate.wind_velocity[2] = fcs_global_ahrs_state.wind_velocity[2];
+
+    alt_diff = absval(state_estimate.alt - nav->reference_trajectory[0].alt);
 
     /*
     Three options here:
@@ -252,7 +255,7 @@ void fcs_control_tick(void) {
         fcs_trajectory_recalculate(nav, &state_estimate);
         fcs_trajectory_timestep(nav, &state_estimate);
     } else if (!control_timeout && is_navigating() &&
-               is_position_error_ok(vector3_norm_f(state))) {
+               is_position_error_ok(alt_diff)) {
         fcs_trajectory_timestep(nav, &state_estimate);
     } else if (is_path_valid()) {
         /*
