@@ -809,11 +809,11 @@ uint32_t _fcs_init_core0(void) {
       for CorePac 0.
     - Send an IPC interrupt to CorePac 1 (IPCGR1.IPCG) to wake it up.
     */
-    memcpy(
+    /*memcpy(
         (uint8_t*)GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x00800000u),
         (uint8_t*)0x00800000u,
         0x000F0000u
-    );
+    );*/
 
     /*
     0x0087FFFCu is the boot magic address for the local core (it's at the end
@@ -851,6 +851,12 @@ uint32_t _fcs_init_core1(void) {
     volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
 
     KICK_UNLOCK();
+    volatile CSL_CgemRegs *const cgem =
+        (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
+    cgem->MAR[12] = 0x1u;
+    cgem->MAR[13] = 0x1u;
+    cgem->MAR[14] = 0x1u;
+    cgem->MAR[15] = 0x1u;
     _fcs_enable_edc();
     KICK_LOCK();
 

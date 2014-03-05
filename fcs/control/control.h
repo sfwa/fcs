@@ -38,7 +38,7 @@ enum fcs_control_mode_t {
 If the vehicle is more than 10m from where it should be, switch to a recovery
 trajectory to get back on track.
 */
-#define FCS_CONTROL_POSITION_TOLERANCE 40.0
+#define FCS_CONTROL_POSITION_TOLERANCE 10.0
 
 /* Airspeed used for holding patterns etc, in m/s */
 #define FCS_CONTROL_DEFAULT_AIRSPEED 20.0
@@ -49,17 +49,7 @@ trajectory to get back on track.
 /*
 The number of control ticks (@ 50Hz) after which the path should be recomputed
 */
-#define FCS_CONTROL_INFEASIBILITY_TIMEOUT 10u
-
-/*
-Dubins curve heading error tolerance for "straight" sections -- works out to
-about 0.15 degree error, but since curve segments aren't meant to be used for
-long distances that'll be OK.
-
-Improving accuracy here would require _interpolate_dubins to support mixing
-left/straight/right control actions within a single timestep.
-*/
-#define FCS_CONTROL_TURN_TOLERANCE (M_PI * 0.001)
+#define FCS_CONTROL_INFEASIBILITY_TIMEOUT 1u
 
 enum fcs_path_type_t {
     FCS_PATH_LINE = 'L',
@@ -70,8 +60,6 @@ enum fcs_path_type_t {
 
 struct fcs_control_channel_t {
     float setpoint;
-    float min;
-    float max;
     float rate;
 };
 
@@ -120,6 +108,9 @@ struct fcs_path_t {
 /* Marker for 'resume following a partially-flown path' path */
 #define FCS_CONTROL_RESUME_PATH_ID (FCS_CONTROL_MAX_PATHS - 3u)
 
+/* Marker for 'stabilise after loss of control' path */
+#define FCS_CONTROL_STABILISE_PATH_ID (FCS_CONTROL_MAX_PATHS - 4u)
+
 /* Marker for 'last plan position' waypoint ID */
 #define FCS_CONTROL_HOLD_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 1u)
 
@@ -130,6 +121,21 @@ Marker for 'interpolate from an arbitrary state to the next path' waypoint ID
 
 /* Marker for 'partially-flown path resume position' waypoint ID */
 #define FCS_CONTROL_RESUME_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 3u)
+
+/* Marker for 'stabilise path commence' waypoint ID */
+#define FCS_CONTROL_STABILISE_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 4u)
+
+struct fcs_state_estimate_t {
+    double lat;
+    double lon;
+    float alt;
+    float velocity[3];
+    float attitude[4];
+    float angular_velocity[3];
+    float wind_velocity[3];
+    /* Pad so the structure fills two whole L1 cache lines (128 bytes) */
+    uint8_t reserved[56];
+};
 
 struct fcs_boundary_t {
     uint16_t num_waypoint_ids;
@@ -152,8 +158,8 @@ struct fcs_nav_state_t {
     uint16_t reference_path_id[OCP_HORIZON_LENGTH + 1u];
 };
 
-extern struct fcs_control_state_t fcs_global_control_state;
-extern struct fcs_nav_state_t fcs_global_nav_state;
+extern volatile struct fcs_control_state_t fcs_global_control_state;
+extern volatile struct fcs_nav_state_t fcs_global_nav_state;
 
 void fcs_control_init(void);
 void fcs_control_tick(void);

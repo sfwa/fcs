@@ -134,12 +134,14 @@ bool _fcs_read_measurement_packet(enum fcs_stream_device_t dev) {
 
             /* Consume all bytes until the end of the packet */
             fcs_stream_consume(dev, packet_end + 1u);
-        } else if (state == IN_PACKET && packet_start > 0) {
+        } else if (state == IN_PACKET) {
             /*
             Consume bytes until the start of the packet, so we can parse the
             full packet next time
             */
-            fcs_stream_consume(dev, packet_start);
+            if (packet_start > 0) {
+                fcs_stream_consume(dev, packet_start);
+            }
         } else if (state == GOT_ZERO) {
             /* Consume bytes up to the current 0 */
             fcs_stream_consume(dev, nbytes - 1u);

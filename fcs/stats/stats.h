@@ -64,6 +64,6 @@ struct fcs_stats_counter_t {
     uint32_t nmpc_last_cycle_count;
 };
 
-extern struct fcs_stats_counter_t fcs_global_counters;
+extern volatile struct fcs_stats_counter_t fcs_global_counters;
 
 #endif

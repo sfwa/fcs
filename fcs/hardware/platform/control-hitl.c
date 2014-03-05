@@ -115,28 +115,24 @@ void fcs_board_tick(void) {
 
         /* Work out the current control position */
         const struct fcs_control_channel_t *restrict control;
-        float proportional_pos;
         uint16_t controls[FCS_CONTROL_CHANNELS];
 
         #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
         for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
             control = &fcs_global_control_state.controls[i];
-            proportional_pos = (control->setpoint - control->min) /
-                               (control->max - control->min);
-            controls[i] = (uint16_t)(proportional_pos * UINT16_MAX);
+            controls[i] = (uint16_t)(control->setpoint * UINT16_MAX);
         }
 
         /*
         Write current control values back to the HITL host
         */
         size_t control_len;
-        uint8_t control_buf[16];
+        uint8_t control_buf[128];
         control_len = _fcs_format_control_hitl_out_packet(
             control_buf,
             (uint16_t)(fcs_global_ahrs_state.solution_time & 0xFFFFu),
             controls
         );
-        assert(control_len < 16u);
         fcs_stream_write(FCS_STREAM_UART_EXT1, control_buf, control_len);
     }
 
@@ -203,12 +199,14 @@ bool _fcs_read_control_hitl_state_packet(enum fcs_stream_device_t dev) {
 
             /* Consume all bytes until the end of the packet */
             fcs_stream_consume(dev, packet_end + 1u);
-        } else if (state == IN_PACKET && packet_start > 0) {
+        } else if (state == IN_PACKET) {
             /*
             Consume bytes until the start of the packet, so we can parse the
             full packet next time
             */
-            fcs_stream_consume(dev, packet_start);
+        	if (packet_start > 0) {
+        		fcs_stream_consume(dev, packet_start);
+        	}
         } else if (state == GOT_ZERO) {
             /* Consume bytes up to the current 0 */
             fcs_stream_consume(dev, nbytes - 1u);

@@ -464,9 +464,13 @@ float yaw, float pitch, float roll) {
     quaternion_multiply_f(tmp, qy, qx);
     quaternion_multiply_f(result, qz, tmp);
 
-    result[0] = -result[0];
-    result[1] = -result[1];
-    result[2] = -result[2];
+    if (result[3] < 0.0) {
+        result[3] = -result[3];
+    } else {
+        result[0] = -result[0];
+        result[1] = -result[1];
+        result[2] = -result[2];
+    }
 }
 
 /*

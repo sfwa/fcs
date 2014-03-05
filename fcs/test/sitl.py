@@ -88,7 +88,7 @@ ahrs_tick = 0
 
 START_LAT = -37.81358378
 START_LON = 144.9
-START_ALT = 100
+START_ALT = 200
 
 
 sim_state = {
@@ -234,8 +234,6 @@ class AHRSState(Structure):
 class ControlChannel(Structure):
     _fields_ = [
         ("setpoint", c_float),
-        ("min", c_float),
-        ("max", c_float),
         ("rate", c_float)
     ]
 
@@ -542,10 +540,10 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = 0.0
-    pitch = 0.0
-    roll = 0.0
-    velocity = [20.0, 0.0, 0.0]
+    yaw = math.radians(-45.0)
+    pitch = math.radians(45.0)
+    roll = math.radians(45.0)
+    velocity = [20.0, 10.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -565,9 +563,9 @@ def enable_xplane_sim(s):
     update += "set sim/flightmodel/position/local_vy %.6f\n" % -velocity[2]
     update += "set sim/flightmodel/position/local_vz %.6f\n" % -velocity[0]
 
-    update += "set sim/flightmodel/position/P 0\n"
+    update += "set sim/flightmodel/position/P 0.2\n"
     update += "set sim/flightmodel/position/Q 0\n"
-    update += "set sim/flightmodel/position/R 0\n"
+    update += "set sim/flightmodel/position/R 0.4\n"
     s.sendall(update)
 
 
@@ -739,12 +737,16 @@ if __name__ == "__main__":
 
     print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
 
+    controls = [0.0, 0.5, 0.5]
     t = 0
     try:
         while True:
             iter_start = time.time()
 
             recv_state_from_xplane(sock)
+
+            #if controls[1] > 0.0 and controls[1] < 1.0:
+            send_control_to_xplane(sock, controls)
 
             # Skip the rest until we have a full set of data
             if sim_state["lat"] is None or sim_state["lon"] is None or \
@@ -753,20 +755,23 @@ if __name__ == "__main__":
                 continue
 
             controls = tick(**sim_state)
-            send_control_to_xplane(sock, controls)
 
-            print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
+            print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
                 t * 0.02,
                 math.degrees(nav_state.reference_trajectory[0].lat),
                 math.degrees(nav_state.reference_trajectory[0].lon),
                 nav_state.reference_trajectory[0].alt,
                 nav_state.reference_trajectory[0].airspeed,
                 math.degrees(nav_state.reference_trajectory[0].yaw),
+                math.degrees(nav_state.reference_trajectory[0].pitch),
+                math.degrees(nav_state.reference_trajectory[0].roll),
                 math.degrees(sim_state["lat"]),
                 math.degrees(sim_state["lon"]),
                 sim_state["alt"],
                 sim_ref["airspeed"],
                 math.degrees(sim_ref["attitude_yaw"]),
+                math.degrees(sim_ref["attitude_pitch"]),
+                math.degrees(sim_ref["attitude_roll"]),
                 sim_ref["wind_n"],
                 sim_ref["wind_e"],
                 sim_ref["wind_d"],
@@ -777,7 +782,10 @@ if __name__ == "__main__":
 
             t += 1
 
-            if abs(sim_state["alt"] - nav_state.reference_trajectory[0].alt) > 50.0:
+            #if t % 500 == 499:
+            #    nav_state.reference_path_id[0] = 0xFFFF
+
+            if sim_state["alt"] < 50.0:
                 print "LOST CONTROL"
                 print "Reference trajectory was:"
                 print "\n".join(("    " + repr(w)) for w in list(nav_state.reference_trajectory))

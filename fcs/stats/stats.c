@@ -28,4 +28,4 @@ SOFTWARE.
 #include "stats.h"
 
 #pragma DATA_SECTION(fcs_global_counters, ".shared")
-struct fcs_stats_counter_t fcs_global_counters;
+volatile struct fcs_stats_counter_t fcs_global_counters;

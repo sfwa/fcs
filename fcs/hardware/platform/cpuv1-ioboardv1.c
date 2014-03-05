@@ -355,14 +355,11 @@ void fcs_board_tick(void) {
     */
     struct fcs_measurement_t control_log;
     const struct fcs_control_channel_t *restrict control;
-    float proportional_pos;
 
     #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
     for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
         control = &fcs_global_control_state.controls[i];
-        proportional_pos = (control->setpoint - control->min) /
-                           (control->max - control->min);
-        control_log.data.u16[i] = (uint16_t)(proportional_pos * UINT16_MAX);
+        control_log.data.u16[i] = (uint16_t)(control->setpoint * UINT16_MAX);
     }
 
     /* Log to sensor ID 1, because sensor ID 0 is the RC PWM input. */
@@ -456,12 +453,14 @@ struct fcs_measurement_log_t *out_measurements) {
 
             /* Consume all bytes until the end of the packet */
             fcs_stream_consume(dev, packet_end + 1u);
-        } else if (state == IN_PACKET && packet_start > 0) {
+        } else if (state == IN_PACKET) {
             /*
             Consume bytes until the start of the packet, so we can parse the
             full packet next time
             */
-            fcs_stream_consume(dev, packet_start);
+            if (packet_start > 0) {
+                fcs_stream_consume(dev, packet_start);
+            }
         } else if (state == GOT_ZERO) {
             /* Consume bytes up to the current 0 */
             fcs_stream_consume(dev, nbytes - 1u);
@@ -689,7 +688,7 @@ const uint16_t *restrict control_values, uint8_t gpout) {
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
         /* Swap bytes for big-endian AVR32 */
-        packet.pwm[i] = swap_uint16((uint16_t)control_values[i]);
+        packet.pwm[i] = swap_uint16((uint16_t)val);
     }
 
     /* Calculate the packet's CRC8 */

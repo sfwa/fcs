@@ -71,7 +71,7 @@ ahrs_tick = 0
 
 START_LAT = -37.81358378
 START_LON = 144.9
-START_ALT = 100
+START_ALT = 200
 
 
 sim_state = {
@@ -103,6 +103,7 @@ def crc8(data):
 
 def serialize_state(lat=None, lon=None, alt=None, velocity=None,
                     attitude=None, angular_velocity=None, wind_velocity=None):
+    tick = 0
     result = struct.pack("<H3d3d4d3d3d", tick, lat, lon, alt, velocity[0],
                          velocity[1], velocity[2], attitude[0], attitude[1],
                          attitude[2], attitude[3], angular_velocity[0],
@@ -112,7 +113,7 @@ def serialize_state(lat=None, lon=None, alt=None, velocity=None,
 
 
 def deserialize_control(s):
-    s = cobsr.decode(s).strip("\x00")
+    s = cobsr.decode(s.strip("\x00"))
     s_crc = crc8(s[1:])
     if s[0] != s_crc:
         print "CRC8 failure (%x, expected %x): %s" % (
@@ -144,16 +145,17 @@ def euler_to_q(yaw, pitch, roll):
             vectors.Q.rotate("Z", -yaw))
 
 
-def tick(conn, **kwargs):
+def send_state_to_dsp(conn, **kwargs):
     """
     Runs the FCS control and comms tasks with the state data provided as
     though it came from the AHRS, and returns the control output.
     """
-
     # Write the state out to the DSP and wait for the result
-    conn.write(serialize_state(**kwargs))
+    out_packet = serialize_state(**kwargs)
+    conn.write(out_packet)
 
-    # Blocking read, until timeout
+
+def recv_control_from_dsp(conn):
     in_packet = ""
     while not in_packet:
         in_packet = conn.read(60)
@@ -255,10 +257,10 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = 0.0
-    pitch = 0.0
-    roll = 0.0
-    velocity = [20.0, 0.0, 0.0]
+    yaw = math.radians(-45.0)
+    pitch = math.radians(45.0)
+    roll = math.radians(45.0)
+    velocity = [20.0, 10.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -356,7 +358,7 @@ def send_control_to_xplane(s, controls):
 
 
 if __name__ == "__main__":
-    conn = serial.Serial("/dev/tty.usbmodem", 921600, timeout=0.001)
+    conn = serial.Serial("/dev/tty.usbserial", 921600, timeout=0.01)
     conn.read(1024)  # Clear out the read buffer
 
     sock = connect_to_xplane()
@@ -375,18 +377,13 @@ if __name__ == "__main__":
         while True:
             iter_start = time.time()
 
-            recv_state_from_xplane(sock)
-
-            # Skip the rest until we have a full set of data
-            if sim_state["lat"] is None or sim_state["lon"] is None or \
-                    sim_ref["wind_n"] is None:
-                time.sleep(0.02)
-                continue
-
-            try:
-                result = tick(conn, **sim_state)
+            if t > 0:
+                result = recv_control_from_dsp(conn)
+                thr = result["pwm0"] / 65535.0
+                le = result["pwm1"] / 65535.0
+                re = result["pwm2"] / 65535.0
                 send_control_to_xplane(
-                    sock, [result["pwm0"], result["pwm1"], result["pwm2"]])
+                    sock, [thr, le, re])
 
                 print "Objective %.6f, cycles %d" % (result["objective_val"], result["cycles"])
 
@@ -413,19 +410,26 @@ if __name__ == "__main__":
                     result["pwm1"],
                     result["pwm2"]
                 )
-            except:
-                traceback.print_exc()
+
+            recv_state_from_xplane(sock)
+
+            # Skip the rest until we have a full set of data
+            if sim_state["lat"] is None or sim_state["lon"] is None or \
+                    sim_ref["wind_n"] is None:
+                time.sleep(0.02)
+                continue
+
+            send_state_to_dsp(conn, **sim_state)
 
             t += 1
 
-            if abs(sim_state["alt"] - target_alt) > 50.0:
+            if abs(sim_state["alt"]) < 70.0:
                 print "LOST CONTROL"
-                print "Reference trajectory was:"
-                print "\n".join(("    " + repr(w)) for w in list(nav_state.reference_trajectory))
                 raise StopIteration()
 
             slack_time = 0.02 - (time.time() - iter_start)
             if slack_time > 0:
+                print "Time %.3fs" % (time.time() - iter_start)
                 time.sleep(slack_time)
             else:
                 print "DEADLINE MISSED: %.3fs late" % -slack_time

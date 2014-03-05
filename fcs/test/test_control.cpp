@@ -9,33 +9,15 @@ extern "C" {
 #include "util/3dmath.h"
 #include "nmpc/cnmpc.h"
 #include "control/control.h"
+#include "control/trajectory.h"
 
 /* Prototypes for private test functions */
 
 /* from control/control.c */
-float _interpolate_linear(struct fcs_waypoint_t *new_point,
-const struct fcs_waypoint_t *last_point, const float *restrict wind,
-const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
-float t);
-
-float _interpolate_figure_eight(struct fcs_waypoint_t *new_point,
-const struct fcs_waypoint_t *last_point, const float *restrict wind,
-const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
-float t);
-
-float _interpolate_dubins(struct fcs_waypoint_t *new_point,
-const struct fcs_waypoint_t *last_point, const float *restrict wind,
-const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
-float t);
-
 float _next_point_from_path(struct fcs_waypoint_t *new_point,
 const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 enum fcs_path_type_t type, float t);
-
-void _ned_from_point_diff(float *restrict ned,
-const struct fcs_waypoint_t *restrict ref,
-const struct fcs_waypoint_t *restrict point);
 
 void _get_ahrs_state(float *restrict state, float *restrict wind,
 volatile struct fcs_ahrs_state_t *ahrs_state,
@@ -50,11 +32,6 @@ uint16_t *restrict new_point_path_id,
 const struct fcs_waypoint_t *restrict last_point,
 const uint16_t *restrict last_point_path_id, const float *restrict wind,
 struct fcs_nav_state_t *nav);
-
-void _shift_horizon(struct fcs_nav_state_t *nav, const float *restrict wind);
-
-void _recalculate_horizon(struct fcs_nav_state_t *nav,
-const float *restrict wind);
 }
 
 TEST(Control, Initialisation) {
@@ -506,8 +483,8 @@ TEST(Control, InterpolateLinearPathNoWindNE) {
 
     /* Test the start of the path */
     memcpy(&last_point, &start, sizeof(last_point));
-    result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
-                                   t);
+    result_t = fcs_trajectory_interpolate_linear(&result, &last_point, wind,
+                                                 &start, &end, t);
     EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(2.2172830881518887e-07, result.lat);
     EXPECT_DOUBLE_EQ(2.5307276371200866, result.lon);
@@ -520,8 +497,8 @@ TEST(Control, InterpolateLinearPathNoWindNE) {
     /* Test the midpoint of the path */
     last_point.lat = start.lat + 0.5 * (M_PI/180.0);
     last_point.lon = start.lon + 0.5 * (M_PI/180.0);
-    result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
-                                   t);
+    result_t = fcs_trajectory_interpolate_linear(&result, &last_point, wind,
+                                                 &start, &end, t);
     EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(0.008726867992491014, result.lat);
     EXPECT_DOUBLE_EQ(2.5394542833842668, result.lon);
@@ -533,8 +510,8 @@ TEST(Control, InterpolateLinearPathNoWindNE) {
 
     /* Test the end of the path */
     memcpy(&last_point, &end, sizeof(last_point));
-    result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
-                                   t);
+    result_t = fcs_trajectory_interpolate_linear(&result, &last_point, wind,
+                                                 &start, &end, t);
     EXPECT_FLOAT_EQ(0.0, result_t);
     EXPECT_DOUBLE_EQ(end.lat, result.lat);
     EXPECT_DOUBLE_EQ(end.lon, result.lon);
@@ -568,8 +545,8 @@ TEST(Control, InterpolateLinearPathNoWindS) {
 
     /* Test the start of the path */
     memcpy(&last_point, &start, sizeof(last_point));
-    result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
-                                   t);
+    result_t = fcs_trajectory_interpolate_linear(&result, &last_point, wind,
+                                                 &start, &end, t);
     EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(-3.1357118156861731e-07, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
@@ -582,8 +559,8 @@ TEST(Control, InterpolateLinearPathNoWindS) {
     /* Test the midpoint of the path */
     last_point.lat = start.lat - 0.5 * (M_PI/180.0);
     last_point.lon = start.lon;
-    result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
-                                   t);
+    result_t = fcs_trajectory_interpolate_linear(&result, &last_point, wind,
+                                                 &start, &end, t);
     EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(-0.0087269598311532168, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
@@ -595,8 +572,8 @@ TEST(Control, InterpolateLinearPathNoWindS) {
 
     /* Test the end of the path */
     memcpy(&last_point, &end, sizeof(last_point));
-    result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
-                                   t);
+    result_t = fcs_trajectory_interpolate_linear(&result, &last_point, wind,
+                                                 &start, &end, t);
     EXPECT_FLOAT_EQ(0.0, result_t);
     EXPECT_DOUBLE_EQ(end.lat, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
@@ -631,8 +608,8 @@ TEST(Control, InterpolateLinearPathHeadwindS) {
     wind[0] = 50.0;
 
     memcpy(&last_point, &start, sizeof(last_point));
-    result_t = _interpolate_linear(&result, &last_point, wind, &start, &end,
-                                   t);
+    result_t = fcs_trajectory_interpolate_linear(&result, &last_point, wind,
+                                                 &start, &end, t);
     EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(-3.1357118156861731e-07 * 0.5, result.lat);
     EXPECT_DOUBLE_EQ(start.lon, result.lon);
@@ -660,7 +637,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
     memcpy(&last_point, &start, sizeof(last_point));
 
     /* Initial point (centre, heading north and turning clockwise) */
-    result_t = _interpolate_figure_eight(
+    result_t = fcs_trajectory_interpolate_figure_eight(
         &result, &last_point, wind, &start, &end, t);
     EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(6.2713776065103028e-08, result.lat);
@@ -673,7 +650,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
 
     for (i = 0; i < 78; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }
@@ -689,7 +666,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
 
     for (; i < 156; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }
@@ -705,7 +682,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
 
     for (; i < 313; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }
@@ -721,7 +698,7 @@ TEST(Control, InterpolateFigureEightPathEW) {
 
     for (; i < 391; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }
@@ -753,7 +730,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
     memcpy(&last_point, &start, sizeof(last_point));
 
     /* Initial point (centre, heading west and turning clockwise) */
-    result_t = _interpolate_figure_eight(
+    result_t = fcs_trajectory_interpolate_figure_eight(
         &result, &last_point, wind, &start, &end, t);
     EXPECT_FLOAT_EQ(0.02, result_t);
     EXPECT_DOUBLE_EQ(6.2706027183824737e-10, result.lat);
@@ -766,7 +743,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
 
     for (i = 0; i < 78; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }
@@ -782,7 +759,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
 
     for (; i < 156; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }
@@ -798,7 +775,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
 
     for (; i < 313; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }
@@ -814,7 +791,7 @@ TEST(Control, InterpolateFigureEightPathNS) {
 
     for (; i < 391; i++) {
         memcpy(&last_point, &result, sizeof(last_point));
-        result_t = _interpolate_figure_eight(
+        result_t = fcs_trajectory_interpolate_figure_eight(
             &result, &last_point, wind, &start, &end, t);
         EXPECT_FLOAT_EQ(0.02, result_t);
     }

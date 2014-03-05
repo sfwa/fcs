@@ -5,7 +5,7 @@ PROJECT(unittest)
 INCLUDE(ExternalProject)
 
 set(CMAKE_CXX_FLAGS "-O3 -mssse3 -oaddmul")
-set(CMAKE_C_FLAGS "-O3 -mssse3 -oaddmul -Weverything -Werror -Wno-documentation -Wno-padded -Wno-packed -Wno-float-equal -Wno-unknown-pragmas")
+set(CMAKE_C_FLAGS "-O3 -mssse3 -oaddmul -Weverything -Wno-documentation -Wno-padded -Wno-packed -Wno-float-equal -Wno-unknown-pragmas")
 
 # Set default ExternalProject root directory
 SET_DIRECTORY_PROPERTIES(PROPERTIES EP_PREFIX .)
@@ -74,6 +74,10 @@ ADD_EXECUTABLE(unittest
     ../ahrs/ahrs.c
     test_ahrs.cpp
     ../control/control.c
+    ../control/dubins.c
+    ../control/figure-eight.c
+    ../control/linear.c
+    ../control/trajectory.c
     test_control.cpp
     ../hardware/platform/cpuv1-ioboardv1.c
     ../hardware/platform/log-replay.c
@@ -136,7 +140,11 @@ ADD_LIBRARY(fcs SHARED
     ../ahrs/measurement.c
     ../ahrs/wmm.c
     ../ahrs/ahrs.c
-    ../control/control.c)
+    ../control/control.c
+    ../control/trajectory.c
+    ../control/dubins.c
+    ../control/figure-eight.c
+    ../control/linear.c)
 
 ADD_DEPENDENCIES(fcs ukf)
 ADD_DEPENDENCIES(fcs TRICAL)
