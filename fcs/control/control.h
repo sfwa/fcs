@@ -35,10 +35,10 @@ enum fcs_control_mode_t {
 };
 
 /*
-If the vehicle is more than 5m from where it should be, switch to a recovery
+If the vehicle is more than 10m from where it should be, switch to a recovery
 trajectory to get back on track.
 */
-#define FCS_CONTROL_POSITION_TOLERANCE 5.0
+#define FCS_CONTROL_POSITION_TOLERANCE 10.0
 
 /* Airspeed used for holding patterns etc, in m/s */
 #define FCS_CONTROL_DEFAULT_AIRSPEED 20.0

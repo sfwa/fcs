@@ -71,7 +71,7 @@ ahrs_tick = 0
 
 START_LAT = -37.81358378
 START_LON = 144.9
-START_ALT = 100
+START_ALT = 200
 
 
 sim_state = {
@@ -257,10 +257,10 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = 0.0
-    pitch = 0.0
-    roll = 0.0
-    velocity = [20.0, 0.0, 0.0]
+    yaw = math.radians(-45.0)
+    pitch = math.radians(45.0)
+    roll = math.radians(45.0)
+    velocity = [20.0, 10.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0

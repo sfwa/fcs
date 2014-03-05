@@ -234,8 +234,6 @@ class AHRSState(Structure):
 class ControlChannel(Structure):
     _fields_ = [
         ("setpoint", c_float),
-        ("min", c_float),
-        ("max", c_float),
         ("rate", c_float)
     ]
 
@@ -542,10 +540,10 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = math.radians(0.0)
-    pitch = math.radians(0.0)
-    roll = math.radians(0.0)
-    velocity = [20.0, 0.0, 0.0]
+    yaw = math.radians(-45.0)
+    pitch = math.radians(45.0)
+    roll = math.radians(45.0)
+    velocity = [20.0, 10.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0

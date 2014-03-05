@@ -288,5 +288,5 @@ void fcs_control_tick(void) {
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
-    printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
+//    printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
 }
