@@ -31,6 +31,7 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../nmpc/cnmpc.h"
+#include "../exports/exports.h"
 #include "control.h"
 #include "trajectory.h"
 
@@ -39,7 +40,9 @@ float fcs_trajectory_interpolate_figure_eight(
 struct fcs_waypoint_t *new_point, const struct fcs_waypoint_t *last_point,
 const float *restrict wind, const struct fcs_waypoint_t *start,
 const struct fcs_waypoint_t *end, float t) {
+#ifndef __TI_COMPILER_VERSION__
 #pragma unused(end)
+#endif
     /*
     Figure-eight path with the crossover point (middle of the 8) on the
     start waypoint. Altitude is set by the start waypoint; all other

@@ -33,6 +33,7 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../nmpc/cnmpc.h"
+#include "../exports/exports.h"
 #include "control.h"
 #include "trajectory.h"
 
@@ -68,14 +69,14 @@ const struct fcs_waypoint_t *restrict reference);
 
 
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
-    2e-4f, 2e-4f, 2e-4f, /* position */
+    2e-4f, 2e-4f, 5e-5f, /* position */
     1e0f, 1e0f, 1e-1f, /* velocity */
     1e-1f, 1e1f, 1e2f, /* attitude */
     1e0f, 1e1f, 1e3f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
     1e1f, 1e1f, 5e1f,  /* position */
-    1e1f, 1e1f, 1.0f,  /* velocity */
+    1e0f, 1e0f, 1e0f,  /* velocity */
     1.0f, 1.0f, 1.0f,  /* attitude */
     1e1f, 1e1f, 1e2f /* angular velocity */
 };
@@ -94,8 +95,6 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
     struct fcs_path_t *path;
     size_t i, j;
-
-    nmpc_init(true); /* FIXME */
 
     ref = nav->reference_trajectory;
     ref_path_id = nav->reference_path_id;
@@ -167,6 +166,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
     float state_vec[NMPC_STATE_DIM];
+
     _get_ahrs_state(state_vec, state_estimate, nav->reference_trajectory);
 
     nmpc_set_wind_velocity(
@@ -483,7 +483,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     out_waypoint->lon = waypoint->lon +
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
-    out_waypoint->alt = waypoint->alt > 100.0 ? waypoint->alt : 100.0;
+    out_waypoint->alt = state_estimate->alt > 100.0 ? state_estimate->alt : 100.0;
     out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     out_waypoint->yaw = stabilise_heading;
     out_waypoint->pitch = 0.0f;

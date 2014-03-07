@@ -71,9 +71,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "drivers/peripheral.h"
 #include "stats/stats.h"
 #include "comms/comms.h"
-
-#define L1DWIBAR (*((volatile uint32_t*)0x01844030))
-#define L1DWIWC (*((volatile uint32_t*)0x01844034))
+#include "exports/exports.h"
 
 int main(void);
 
@@ -87,6 +85,7 @@ int main(void) {
 
     if (core == FCS_CORE_PLATFORM) {
         fcs_board_init_platform();
+        fcs_exports_init();
     }
     if (core == FCS_CORE_UTIL) {
         fcs_util_init();
@@ -140,13 +139,6 @@ int main(void) {
         if (TSCL - start_t > fcs_global_counters.main_loop_cycle_max[core]) {
             fcs_global_counters.main_loop_cycle_max[core] = TSCL - start_t;
         }
-
-        /*
-        Invalidate L1 to ensure global state is approximately synchronised
-        */
-        L1DWIBAR = 0x0C000000;
-        L1DWIWC = 0xFFFF;
-        while (L1DWIWC & 0xFFFFu);
 
         if (TSCL - start_t > cycles_per_tick) {
             /*

@@ -68,7 +68,9 @@ temperature in deg C.
 */
 static inline double airspeed_from_pressure_temp(double pstatic,
 double pdynamic, double temp) {
+#ifndef __TI_COMPILER_VERSION__
 #pragma unused(temp)
+#endif
 
     return STANDARD_C *
            sqrt((5.0 / STANDARD_TEMP) *

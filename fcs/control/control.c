@@ -38,9 +38,9 @@ SOFTWARE.
 #include "../TRICAL/TRICAL.h"
 #include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
+#include "../exports/exports.h"
 #include "control.h"
 #include "trajectory.h"
-
 #include "../nmpc/config.h"
 #include "../nmpc/cnmpc.h"
 
@@ -79,11 +79,8 @@ inline static bool is_position_error_ok(float err) {
 }
 
 
-#pragma DATA_SECTION(fcs_global_control_state, ".shared")
-volatile struct fcs_control_state_t fcs_global_control_state;
-
-#pragma DATA_SECTION(fcs_global_nav_state, ".shared")
-volatile struct fcs_nav_state_t fcs_global_nav_state;
+struct fcs_control_state_t fcs_global_control_state;
+struct fcs_nav_state_t fcs_global_nav_state;
 
 static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
@@ -206,22 +203,7 @@ void fcs_control_tick(void) {
     We shouldn't access fcs_global_ahrs_state directly, since the cache
     coherence of that structure is not guaranteed.
     */
-    state_estimate.lat = fcs_global_ahrs_state.lat;
-    state_estimate.lon = fcs_global_ahrs_state.lon;
-    state_estimate.alt = fcs_global_ahrs_state.alt;
-    state_estimate.velocity[0] = fcs_global_ahrs_state.velocity[0];
-    state_estimate.velocity[1] = fcs_global_ahrs_state.velocity[1];
-    state_estimate.velocity[2] = fcs_global_ahrs_state.velocity[2];
-    state_estimate.attitude[0] = fcs_global_ahrs_state.attitude[0];
-    state_estimate.attitude[1] = fcs_global_ahrs_state.attitude[1];
-    state_estimate.attitude[2] = fcs_global_ahrs_state.attitude[2];
-    state_estimate.attitude[3] = fcs_global_ahrs_state.attitude[3];
-    state_estimate.angular_velocity[0] = fcs_global_ahrs_state.angular_velocity[0];
-    state_estimate.angular_velocity[1] = fcs_global_ahrs_state.angular_velocity[1];
-    state_estimate.angular_velocity[2] = fcs_global_ahrs_state.angular_velocity[2];
-    state_estimate.wind_velocity[0] = fcs_global_ahrs_state.wind_velocity[0];
-    state_estimate.wind_velocity[1] = fcs_global_ahrs_state.wind_velocity[1];
-    state_estimate.wind_velocity[2] = fcs_global_ahrs_state.wind_velocity[2];
+    fcs_exports_recv_state(&state_estimate);
 
     alt_diff = absval(state_estimate.alt - nav->reference_trajectory[0].alt);
 
@@ -285,6 +267,8 @@ void fcs_control_tick(void) {
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {
         fcs_global_control_state.controls[i].setpoint = controls[i];
     }
+
+    fcs_exports_send_control();
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();

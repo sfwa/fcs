@@ -45,6 +45,7 @@ SOFTWARE.
 #include "../../ahrs/measurement.h"
 #include "../../ahrs/ahrs.h"
 #include "../../control/control.h"
+#include "../../exports/exports.h"
 
 #if !defined(FCS_COMPILE_BOARD_HITL) && !defined(FCS_COMPILE_BOARD_LOG)
 
@@ -354,12 +355,14 @@ void fcs_board_tick(void) {
     output frame, but that's not going to make a difference to anything.
     */
     struct fcs_measurement_t control_log;
-    const struct fcs_control_channel_t *restrict control;
+    struct fcs_control_output_t control;
+
+    fcs_exports_recv_control(&control);
 
     #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
     for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
         control = &fcs_global_control_state.controls[i];
-        control_log.data.u16[i] = (uint16_t)(control->setpoint * UINT16_MAX);
+        control_log.data.u16[i] = (uint16_t)(control.values[i] * UINT16_MAX);
     }
 
     /* Log to sensor ID 1, because sensor ID 0 is the RC PWM input. */

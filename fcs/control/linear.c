@@ -31,6 +31,7 @@ SOFTWARE.
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../nmpc/cnmpc.h"
+#include "../exports/exports.h"
 #include "control.h"
 #include "trajectory.h"
 

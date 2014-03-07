@@ -82,7 +82,8 @@ ADD_EXECUTABLE(unittest
     ../hardware/platform/cpuv1-ioboardv1.c
     ../hardware/platform/log-replay.c
     ../hardware/platform/control-hitl.c
-    test_hardware.cpp)
+    test_hardware.cpp
+    ../exports/exports.c)
 
 # Create dependency of test on googletest, ukf, TRICAL, and nmpc
 ADD_DEPENDENCIES(unittest googletest)
@@ -144,7 +145,8 @@ ADD_LIBRARY(fcs SHARED
     ../control/trajectory.c
     ../control/dubins.c
     ../control/figure-eight.c
-    ../control/linear.c)
+    ../control/linear.c
+    ../exports/exports.c)
 
 ADD_DEPENDENCIES(fcs ukf)
 ADD_DEPENDENCIES(fcs TRICAL)

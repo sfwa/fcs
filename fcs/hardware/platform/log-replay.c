@@ -39,6 +39,7 @@ SOFTWARE.
 #include "../../ahrs/measurement.h"
 #include "../../ahrs/ahrs.h"
 #include "../../control/control.h"
+#include "../../exports/exports.h"
 
 #ifdef FCS_COMPILE_BOARD_LOG
 

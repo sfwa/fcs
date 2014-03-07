@@ -35,10 +35,10 @@ enum fcs_control_mode_t {
 };
 
 /*
-If the vehicle is more than 10m from where it should be, switch to a recovery
+If the vehicle is more than 15m from where it should be, switch to a recovery
 trajectory to get back on track.
 */
-#define FCS_CONTROL_POSITION_TOLERANCE 10.0
+#define FCS_CONTROL_POSITION_TOLERANCE 15.0
 
 /* Airspeed used for holding patterns etc, in m/s */
 #define FCS_CONTROL_DEFAULT_AIRSPEED 20.0
@@ -125,18 +125,6 @@ Marker for 'interpolate from an arbitrary state to the next path' waypoint ID
 /* Marker for 'stabilise path commence' waypoint ID */
 #define FCS_CONTROL_STABILISE_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 4u)
 
-struct fcs_state_estimate_t {
-    double lat;
-    double lon;
-    float alt;
-    float velocity[3];
-    float attitude[4];
-    float angular_velocity[3];
-    float wind_velocity[3];
-    /* Pad so the structure fills two whole L1 cache lines (128 bytes) */
-    uint8_t reserved[56];
-};
-
 struct fcs_boundary_t {
     uint16_t num_waypoint_ids;
     uint16_t waypoint_ids[FCS_CONTROL_BOUNDARY_MAX_WAYPOINTS];
@@ -158,8 +146,8 @@ struct fcs_nav_state_t {
     uint16_t reference_path_id[OCP_HORIZON_LENGTH + 1u];
 };
 
-extern volatile struct fcs_control_state_t fcs_global_control_state;
-extern volatile struct fcs_nav_state_t fcs_global_nav_state;
+extern struct fcs_control_state_t fcs_global_control_state;
+extern struct fcs_nav_state_t fcs_global_nav_state;
 
 void fcs_control_init(void);
 void fcs_control_tick(void);

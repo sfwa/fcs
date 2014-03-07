@@ -45,6 +45,7 @@ SOFTWARE.
 #include "../../ahrs/measurement.h"
 #include "../../ahrs/ahrs.h"
 #include "../../control/control.h"
+#include "../../exports/exports.h"
 
 #ifdef FCS_COMPILE_BOARD_HITL
 
@@ -114,13 +115,14 @@ void fcs_board_tick(void) {
         comms_timeout = FCS_HITL_PACKET_TIMEOUT;
 
         /* Work out the current control position */
-        const struct fcs_control_channel_t *restrict control;
+        struct fcs_control_output_t control;
         uint16_t controls[FCS_CONTROL_CHANNELS];
+
+        fcs_exports_recv_control(&control);
 
         #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
         for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
-            control = &fcs_global_control_state.controls[i];
-            controls[i] = (uint16_t)(control->setpoint * UINT16_MAX);
+            controls[i] = (uint16_t)(control.values[i] * UINT16_MAX);
         }
 
         /*
@@ -275,6 +277,8 @@ bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes) {
     fcs_global_ahrs_state.wind_velocity[2] = packet.wind_velocity[2];
     fcs_global_ahrs_state.mode = FCS_MODE_ACTIVE;
     fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
+
+    fcs_exports_send_state();
 
     return true;
 

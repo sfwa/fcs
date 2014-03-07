@@ -540,7 +540,7 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = math.radians(-45.0)
+    yaw = math.radians(-30.0)
     pitch = math.radians(45.0)
     roll = math.radians(45.0)
     velocity = [20.0, 10.0, 0.0]

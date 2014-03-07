@@ -36,6 +36,7 @@ SOFTWARE.
 #include "../ukf/cukf.h"
 #include "../nmpc/cnmpc.h"
 #include "../control/control.h"
+#include "../exports/exports.h"
 #include "measurement.h"
 #include "wmm.h"
 #include "ahrs.h"
@@ -43,8 +44,7 @@ SOFTWARE.
 #define AHRS_DELTA 0.001
 
 /* Global FCS state structure */
-#pragma DATA_SECTION(fcs_global_ahrs_state, ".shared")
-volatile struct fcs_ahrs_state_t fcs_global_ahrs_state;
+struct fcs_ahrs_state_t fcs_global_ahrs_state;
 
 /* Macro to limit the absolute value of x to l, but preserve the sign */
 #define limitabs(x, l) (x < 0.0 && x < -l ? -l : x > 0.0 && x > l ? l : x)
@@ -86,8 +86,7 @@ double *variance);
 static void _set_ukf_gps_velocity(struct fcs_ahrs_state_t *state,
 double *variance);
 static void _update_gps_info(struct fcs_ahrs_state_t *state);
-static void _update_control_positions(struct fcs_ahrs_state_t* state,
-struct fcs_control_state_t* control);
+static void _update_control_positions(struct fcs_ahrs_state_t* state);
 static void _pitot_calibration(struct fcs_ahrs_state_t *state);
 static void _barometer_calibration(struct fcs_ahrs_state_t *state);
 static void _magnetometer_calibration(struct fcs_ahrs_state_t *state);
@@ -210,8 +209,7 @@ void fcs_ahrs_tick(void) {
         &fcs_global_ahrs_state, params.gps_velocity_covariance);
 
     _update_gps_info(&fcs_global_ahrs_state);
-    _update_control_positions(&fcs_global_ahrs_state,
-                              &fcs_global_control_state);
+    _update_control_positions(&fcs_global_ahrs_state);
 
     /* Use the latest WMM field vector (unit length) */
     vector_copy_d(params.mag_field, fcs_global_ahrs_state.wmm_field_dir, 3u);
@@ -320,6 +318,8 @@ static void _update_state(struct fcs_ahrs_state_t *state,
 double *restrict ukf_state, double *restrict ukf_error) {
     vector_copy_d(&state->lat, ukf_state, 25u);
     vector_copy_d(&state->lat_error, ukf_error, 24u);
+
+    fcs_exports_send_state();
 }
 
 static void _update_wmm(struct fcs_ahrs_state_t *state) {
@@ -540,20 +540,21 @@ static void _update_gps_info(struct fcs_ahrs_state_t *state) {
     }
 }
 
-static void _update_control_positions(struct fcs_ahrs_state_t* state,
-struct fcs_control_state_t* control) {
+static void _update_control_positions(struct fcs_ahrs_state_t* state) {
     /*
     Work out the nominal current control position, taking into account the
     control response time configured in control_rates.
     */
-    const struct fcs_control_channel_t *restrict chan;
     uint8_t i;
+    struct fcs_control_output_t control;
+
+    fcs_exports_recv_control(&control);
 
     #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
     for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
-        chan = &control->controls[i];
         state->control_pos[i] += limitabs(
-            chan->setpoint - state->control_pos[i], chan->rate * AHRS_DELTA);
+            control.values[i] - state->control_pos[i],
+            control.rates[i] * AHRS_DELTA);
     }
 }
 
