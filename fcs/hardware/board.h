@@ -30,7 +30,7 @@ SOFTWARE.
 #define GLOBAL_FROM_L2_ADDRESS(n) ((1u << 28) | \
     (DNUM << 24) | ((uint32_t)(n) & 0x00FFFFFFu))
 
-#define GLOBAL_FROM_CORE_L2_ADDRESS(n, core) ((1u << 28) | \
+#define GLOBAL_FROM_CORE_L2_ADDRESS(core, n) ((1u << 28) | \
     (core << 24) | ((uint32_t)(n) & 0x00FFFFFFu))
 
 /*

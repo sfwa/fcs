@@ -809,19 +809,19 @@ uint32_t _fcs_init_core0(void) {
       for CorePac 0.
     - Send an IPC interrupt to CorePac 1 (IPCGR1.IPCG) to wake it up.
     */
-    /*memcpy(
+    memcpy(
         (uint8_t*)GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x00800000u),
         (uint8_t*)0x00800000u,
         0x000F0000u
-    );*/
+    );
 
     /*
-    0x0087FFFCu is the boot magic address for the local core (it's at the end
+    0x008FFFFCu is the boot magic address for the local core (it's at the end
     of L2 SRAM). Here, we convert that local address for CorePac 1's L2 SRAM
     to a global address, then copy the value of CorePac 0's boot magic address
     to it.
     */
-    *(volatile uint32_t*)(GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x0087FFFCu)) =
+    *(volatile uint32_t*)(GLOBAL_FROM_CORE_L2_ADDRESS(1u, 0x008FFFFCu)) =
         (uint32_t)_c_int00;
 
     /*
@@ -837,6 +837,8 @@ uint32_t _fcs_init_core0(void) {
     Sending this interrupt wakes CorePac 1 up.
     */
     cfg->IPCGR[1] |= 0x1u;
+    /* Just in case the above is wrong */
+    *(volatile uint32_t*)0x02620244 |= 0x1u;
 
     KICK_LOCK();
 

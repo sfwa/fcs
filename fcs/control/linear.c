@@ -43,6 +43,11 @@ float t) {
     float delta_n, delta_e, x, end_ned[3], distance, target_roll,
           target_airspeed, wind_n, wind_e, wind_dot;
 
+    /* Handle zero-length paths */
+    if (start == end) {
+        return 0.0;
+    }
+
     /*
     Linear interpolation of lat, lon, alt, airspeed and roll; pitch is set
     based on climb rate, and yaw is set based on heading between start

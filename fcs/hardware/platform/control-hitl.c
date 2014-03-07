@@ -89,8 +89,7 @@ enum msg_type_t {
 /* Prototypes of internal functions */
 bool _fcs_read_control_hitl_state_packet(enum fcs_stream_device_t dev);
 bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes);
-size_t _fcs_format_control_hitl_out_packet(uint8_t *buf, uint16_t tick,
-const uint16_t *restrict control_values);
+size_t _fcs_format_control_hitl_out_packet(uint8_t *buf, uint16_t tick);
 
 void fcs_board_init_platform(void) {
     /*
@@ -114,17 +113,6 @@ void fcs_board_tick(void) {
     if (_fcs_read_control_hitl_state_packet(FCS_STREAM_UART_EXT1)) {
         comms_timeout = FCS_HITL_PACKET_TIMEOUT;
 
-        /* Work out the current control position */
-        struct fcs_control_output_t control;
-        uint16_t controls[FCS_CONTROL_CHANNELS];
-
-        fcs_exports_recv_control(&control);
-
-        #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
-        for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
-            controls[i] = (uint16_t)(control.values[i] * UINT16_MAX);
-        }
-
         /*
         Write current control values back to the HITL host
         */
@@ -132,8 +120,7 @@ void fcs_board_tick(void) {
         uint8_t control_buf[128];
         control_len = _fcs_format_control_hitl_out_packet(
             control_buf,
-            (uint16_t)(fcs_global_ahrs_state.solution_time & 0xFFFFu),
-            controls
+            (uint16_t)(fcs_global_ahrs_state.solution_time & 0xFFFFu)
         );
         fcs_stream_write(FCS_STREAM_UART_EXT1, control_buf, control_len);
     }
@@ -276,7 +263,6 @@ bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes) {
     fcs_global_ahrs_state.wind_velocity[1] = packet.wind_velocity[1];
     fcs_global_ahrs_state.wind_velocity[2] = packet.wind_velocity[2];
     fcs_global_ahrs_state.mode = FCS_MODE_ACTIVE;
-    fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
 
     fcs_exports_send_state();
 
@@ -287,36 +273,35 @@ invalid:
 }
 
 /*
-Serialize a control packet containing `control_values` into `buf`.
+Serialize a packet containing control state into `buf`.
 */
-size_t _fcs_format_control_hitl_out_packet(uint8_t *buf, uint16_t tick,
-const uint16_t *restrict control_values) {
+size_t _fcs_format_control_hitl_out_packet(uint8_t *buf, uint16_t tick) {
     assert(buf);
-    assert(control_values);
 
     struct control_hitl_out_packet_t packet;
+    struct fcs_control_output_t control;
+
+    fcs_exports_recv_control(&control);
 
     packet.tick = tick;
 
     uint8_t i;
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
-        packet.pwm[i] = (uint16_t)control_values[i];
+        packet.pwm[i] = (uint16_t)(control.values[i] * UINT16_MAX);
     }
 
-    packet.objective_val = fcs_global_counters.nmpc_objective_value;
-    packet.cycles = fcs_global_counters.nmpc_last_cycle_count;
+    packet.objective_val = control.objective_val;
+    packet.cycles = control.cycles;
 
     /* Copy the current reference point into the packet as well */
-    packet.reference_lat = fcs_global_nav_state.reference_trajectory[0].lat;
-    packet.reference_lon = fcs_global_nav_state.reference_trajectory[0].lon;
-    packet.reference_alt = fcs_global_nav_state.reference_trajectory[0].alt;
-    packet.reference_airspeed =
-        fcs_global_nav_state.reference_trajectory[0].airspeed;
-    packet.reference_yaw = fcs_global_nav_state.reference_trajectory[0].yaw;
-    packet.reference_pitch =
-        fcs_global_nav_state.reference_trajectory[0].pitch;
-    packet.reference_roll = fcs_global_nav_state.reference_trajectory[0].roll;
+    packet.reference_lat = control.reference_lat;
+    packet.reference_lon = control.reference_lon;
+    packet.reference_alt = control.reference_alt;
+    packet.reference_airspeed = control.reference_airspeed;
+    packet.reference_yaw = control.reference_yaw;
+    packet.reference_pitch = control.reference_pitch;
+    packet.reference_roll = control.reference_roll;
 
     /* Calculate the packet's CRC8 */
     packet.crc = fcs_crc8((uint8_t*)&packet.tick, sizeof(packet) - 1u, 0);

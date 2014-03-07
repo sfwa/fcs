@@ -257,10 +257,10 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = math.radians(-45.0)
-    pitch = math.radians(45.0)
-    roll = math.radians(45.0)
-    velocity = [20.0, 10.0, 0.0]
+    yaw = math.radians(0.0)
+    pitch = math.radians(0.0)
+    roll = math.radians(0.0)
+    velocity = [20.0, 0.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -423,7 +423,7 @@ if __name__ == "__main__":
 
             t += 1
 
-            if abs(sim_state["alt"]) < 70.0:
+            if abs(sim_state["alt"]) < 50.0:
                 print "LOST CONTROL"
                 raise StopIteration()
 

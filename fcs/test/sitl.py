@@ -332,6 +332,8 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     ahrs_state.angular_velocity = (c_double * 3)(*angular_velocity)
     ahrs_state.wind_velocity = (c_double * 3)(*wind_velocity)
 
+    _fcs.fcs_exports_send_state()
+
     _fcs.fcs_control_tick()
 
     return [
@@ -439,6 +441,10 @@ def init(dll_path):
     _fcs.fcs_control_tick.argtypes = []
     _fcs.fcs_control_tick.restype = None
 
+    # From exports/exports.h
+    _fcs.fcs_exports_send_state.argtypes = []
+    _fcs.fcs_exports_send_state.restype = None
+
     # From util/util.h
     _fcs.fcs_util_init.argtypes = []
     _fcs.fcs_util_init.restype = None
@@ -540,7 +546,7 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = math.radians(-30.0)
+    yaw = math.radians(0.0)
     pitch = math.radians(45.0)
     roll = math.radians(45.0)
     velocity = [20.0, 10.0, 0.0]
@@ -724,7 +730,7 @@ if __name__ == "__main__":
     nav_state.paths[5].next_path_id = 0
 
     # Register the path with the FCS
-    nav_state.reference_path_id[0] = 0
+    #nav_state.reference_path_id[0] = 0
 
     sock = connect_to_xplane()
     reset_xplane_state(sock)

@@ -167,7 +167,8 @@ void fcs_control_init(void) {
     control_infeasibility_timer = 0;
     control_tick = 0;
 
-    fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
+    //fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
+    fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
 }
 
 #include <stdio.h>
@@ -228,8 +229,15 @@ void fcs_control_tick(void) {
     three elements of `state`, since all positions are given in NED relative
     to the first point in the reference trajectory.
     */
-    if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
-            nav->reference_path_id[1] == FCS_CONTROL_INVALID_PATH_ID) {
+    if (fcs_global_control_state.mode == FCS_CONTROL_MODE_MANUAL) {
+        /*
+        While in manual mode, continuously try to enter a holding pattern
+        */
+        fcs_trajectory_start_hold(nav, &state_estimate);
+        fcs_trajectory_recalculate(nav, &state_estimate);
+        fcs_trajectory_timestep(nav, &state_estimate);
+    } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
+               nav->reference_path_id[1] == FCS_CONTROL_INVALID_PATH_ID) {
         /*
         FIXME -- hack to get the path to initialise when only the first ID
         has been set.

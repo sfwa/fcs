@@ -38,8 +38,6 @@ SOFTWARE.
 #include "trajectory.h"
 
 
-#include <stdio.h>
-
 static void _shift_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind);
 
@@ -155,12 +153,13 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     If we're not currently in a holding pattern, set the hold waypoint to
     the end of the reference trajectory.
     */
-    if (*last_point_path_id != FCS_CONTROL_HOLD_PATH_ID) {
+    if (*last_point_path_id != FCS_CONTROL_HOLD_PATH_ID &&
+            *last_point_path_id != FCS_CONTROL_STABILISE_PATH_ID &&
+            *last_point_path_id != FCS_CONTROL_INTERPOLATE_PATH_ID) {
         assert(new_point);
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
     }
-//    printf("recalculate trajectory\n");
 }
 
 void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
@@ -217,6 +216,10 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         */
         nav->paths[FCS_CONTROL_RESUME_PATH_ID].start_waypoint_id =
             FCS_CONTROL_RESUME_WAYPOINT_ID;
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].next_path_id =
+            FCS_CONTROL_RESUME_PATH_ID;
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
+            FCS_CONTROL_RESUME_WAYPOINT_ID;
     }
 
     /*
@@ -228,13 +231,9 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     */
     nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].start_waypoint_id =
         FCS_CONTROL_INTERPOLATE_WAYPOINT_ID;
-    nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
-        FCS_CONTROL_RESUME_WAYPOINT_ID;
     nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].type =
         FCS_PATH_DUBINS_CURVE;
     nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].flags = 0;
-    nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].next_path_id =
-        FCS_CONTROL_RESUME_PATH_ID;
 
     /*
     Start a 5-second stabilisation path before following the interpolation
@@ -244,7 +243,6 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     _stabilise_path_to_waypoint(nav, state_estimate,
                                 FCS_CONTROL_INTERPOLATE_WAYPOINT_ID,
                                 FCS_CONTROL_INTERPOLATE_PATH_ID);
-//    printf("start recover\n");
 }
 
 void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
@@ -253,10 +251,14 @@ const struct fcs_state_estimate_t *state_estimate) {
     Start a 5-second stabilisation path and enter a holding pattern at the
     end of it.
     */
- //   printf("start hold\n");
     _stabilise_path_to_waypoint(nav, state_estimate,
                                 FCS_CONTROL_HOLD_WAYPOINT_ID,
                                 FCS_CONTROL_HOLD_PATH_ID);
+
+    nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].next_path_id =
+        FCS_CONTROL_HOLD_PATH_ID;
+    nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
+        FCS_CONTROL_HOLD_WAYPOINT_ID;
 }
 
 /*
@@ -298,7 +300,9 @@ const float *restrict wind) {
     If we're not currently in a holding pattern, shift the hold waypoint to
     the end of the reference trajectory.
     */
-    if (*last_point_path_id != FCS_CONTROL_HOLD_PATH_ID) {
+    if (*last_point_path_id != FCS_CONTROL_HOLD_PATH_ID &&
+            *last_point_path_id != FCS_CONTROL_STABILISE_PATH_ID &&
+            *last_point_path_id != FCS_CONTROL_INTERPOLATE_PATH_ID) {
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
     }
@@ -483,7 +487,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     out_waypoint->lon = waypoint->lon +
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
-    out_waypoint->alt = state_estimate->alt > 100.0 ? state_estimate->alt : 100.0;
+    out_waypoint->alt = state_estimate->alt;
     out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     out_waypoint->yaw = stabilise_heading;
     out_waypoint->pitch = 0.0f;

@@ -107,7 +107,7 @@ void fcs_ahrs_init(void) {
     /* TODO: don't reset position if any of the entries are non-zero */
     fcs_global_ahrs_state.lat = -37.8136 * M_PI / 180.0;
     fcs_global_ahrs_state.lon = 144.9631 * M_PI / 180.0;
-    fcs_global_ahrs_state.alt = 70.0;
+    fcs_global_ahrs_state.alt = 100.0;
 
     /* TODO: don't reset attitude if any of the entries are non-zero */
     vector_set_d(fcs_global_ahrs_state.attitude, 0, 4u);

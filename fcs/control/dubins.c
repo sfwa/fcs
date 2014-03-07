@@ -180,6 +180,11 @@ float t) {
     int8_t first_action, last_action; /* -1 = left, 0 = straight, 1 = right */
     uint8_t path_type = 0xFFu; /* FCS_WAYPOINT_FLAG_DUBINS_LSL &c */
 
+    /* Handle zero-length paths */
+    if (start == end) {
+        return 0.0;
+    }
+
     _ned_from_point_diff(end_ned, start, end);
 
     theta = mod_2pi_f((float)atan2(end_ned[1], end_ned[0]));
