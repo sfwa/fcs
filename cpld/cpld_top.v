@@ -62,7 +62,7 @@ module cpld_top(
 	output reg cell_gps_en_INV,
 	output cell_disable_INV,
 	output[3:0] led,
-	inout[4:0] gpio,
+	inout reg[4:0] gpio,
 	/* BANK 2 -- DSP 1V8 */
 	input dsp_spi_clk,
 	input dsp_spi_mosi,
@@ -159,7 +159,7 @@ wire[3:0] c66x_state;
 assign led[0] = (c66x_state == 4'b1001);
 assign led[1] = dsp_resetfull_INV;
 assign led[2] = pll_locked;
-assign led[3] = cpu_pmic_pwron;
+assign led[3] = gpio[2];
 
 /*
 Break out the CDCE62002 SPI signals to the external SPI connector to enable
@@ -174,8 +174,11 @@ Global system enable -- wait until the board power supplies are good
 */
 assign sys_enable = pg_3v3 & pg_5v;
 
+/*
 assign gpio[4:0] = { 1'bz, spi_flash_cs_INV, spi_flash_clk, spi_flash_mosi,
                      spi_flash_miso };
+*/
+
 assign smbus_cntrl = 1'bz;
 assign smbus_clk = 1'bz;
 assign smbus_data = 1'bz;
@@ -233,14 +236,20 @@ always @(*) begin
 	dsp_gpio[19:0] = 20'b0;
 	if (dsp_bootmode_enable & dsp_bank_enable) begin
 		dsp_gpio = { 4'bz, dsp_bootmode };
+		gpio = { 5'bz };
 		ioboard_2_reset_out = 1'b0;
 		ioboard_1_reset_out = 1'b0;
 	end else if (dsp_bank_enable) begin
-		dsp_gpio = { 18'bz, dsp_ext_uart1_int, dsp_ext_uart0_int };
+		dsp_gpio = { 12'bz, gpio[3], gpio[2], 4'bz, dsp_ext_uart1_int,
+		             dsp_ext_uart0_int };
+		gpio[4] = 1'bz;
+	    gpio[1] = 1'bz;
+		gpio[0] = dsp_gpio[4];
 		ioboard_2_reset_out = dsp_gpio[3];
 		ioboard_1_reset_out = dsp_gpio[2];
 	end else begin
 		dsp_gpio = 20'bz;
+		gpio = 5'bz;
 		ioboard_2_reset_out = 1'b0;
 		ioboard_1_reset_out = 1'b0;
 	end

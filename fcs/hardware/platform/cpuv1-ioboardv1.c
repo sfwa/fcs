@@ -128,6 +128,7 @@ enum msg_type_t {
 #define FCS_IOBOARD_PACKET_TIMEOUT 5
 
 static uint16_t pwm_state[2][FCS_CONTROL_CHANNELS];
+static float pwm_neutral[FCS_CONTROL_CHANNELS];
 
 /* Prototypes of internal functions */
 bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
@@ -302,11 +303,14 @@ void fcs_board_init_platform(void) {
                &pitot_calibration, sizeof(pitot_calibration));
         memcpy(&map[barometer_calibration.sensor | sensor_id_bits],
                &barometer_calibration, sizeof(barometer_calibration));
+        memcpy(&map[iv_calibration.sensor | sensor_id_bits],
+                       &iv_calibration, sizeof(iv_calibration));
     }
 }
 
 void fcs_board_tick(void) {
     static int16_t ioboard_timeout[2];
+    uint16_t pwm_out[4];
 
     uint8_t i;
     for (i = 0; i < 2; i++){
@@ -356,16 +360,43 @@ void fcs_board_tick(void) {
     */
     struct fcs_measurement_t control_log;
     struct fcs_control_output_t control;
+    float val;
 
     fcs_exports_recv_control(&control);
 
-    #pragma MUST_ITERATE(FCS_CONTROL_CHANNELS, FCS_CONTROL_CHANNELS)
-    for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
-        control = &fcs_global_control_state.controls[i];
-        control_log.data.u16[i] = (uint16_t)(control.values[i] * UINT16_MAX);
+    /* Throttle */
+    pwm_out[0] = (uint16_t)(control.values[0] * UINT16_MAX);
+
+    /* Left elevon */
+    val = control.values[1] + (pwm_neutral[1] - 0.5f);
+    if (fcs_global_ahrs_state.mode == FCS_MODE_SAFE) {
+        /* In safe mode, output the neutral value */
+        val = pwm_neutral[1];
     }
+    if (val > 1.0f) {
+        val = 1.0f;
+    } else if (val < 0.0f) {
+        val = 0.0f;
+    }
+    pwm_out[1] = (uint16_t)(val * UINT16_MAX);
+
+    /* Right elevon */
+    val = 1.0f - control.values[2] + (pwm_neutral[2] - 0.5f);
+    if (fcs_global_ahrs_state.mode == FCS_MODE_SAFE) {
+        /* In safe mode, output the neutral value */
+        val = pwm_neutral[2];
+    }
+    if (val > 1.0f) {
+        val = 1.0f;
+    } else if (val < 0.0f) {
+        val = 0.0f;
+    }
+    pwm_out[2] = (uint16_t)(val * UINT16_MAX);
+
+    pwm_out[3] = 0;
 
     /* Log to sensor ID 1, because sensor ID 0 is the RC PWM input. */
+    memcpy(&control_log.data, pwm_out, sizeof(pwm_out));
     fcs_measurement_set_header(&control_log, 16u, 4u);
     fcs_measurement_set_sensor(&control_log, 1u,
                                FCS_MEASUREMENT_TYPE_CONTROL_POS);
@@ -381,7 +412,7 @@ void fcs_board_tick(void) {
     control_len = _fcs_format_control_packet(
         control_buf,
         (uint8_t)(fcs_global_ahrs_state.solution_time & 0xFFu),
-        control_log.data.u16,
+        pwm_out,
         fcs_global_control_state.gpio_state
     );
     assert(control_len < 16u);
@@ -625,16 +656,24 @@ struct fcs_measurement_log_t *out_measurements) {
     Update the current PWM state for the appropriate channel, then save all
     PWM values in the measurement control log.
     */
-    pwm_state[board_id][(packet.gpin_state & 0xF0u) >> 4u] = swap_uint16(packet.pwm_in);
-    if (board_id == 0) {
+    pwm_state[board_id][(packet.gpin_state & 0xF0u) >> 4u] =
+        swap_uint16(packet.pwm_in);
+    if (board_id == 1) {
     	for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
     	    measurement.data.u16[i] = pwm_state[board_id][i];
+
+            /* Set neutral value during calibration */
+            if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
+                pwm_neutral[i] += (float)pwm_state[board_id][i] *
+                              (1.0f / 65535.0f);
+                pwm_neutral[i] *= 0.5;
+            }
     	}
     	fcs_measurement_set_header(&measurement, 16u, 4u);
     	fcs_measurement_set_sensor(&measurement, 0,
     	                           FCS_MEASUREMENT_TYPE_CONTROL_POS);
     	fcs_measurement_log_add(out_measurements, &measurement);
-    } else if (board_id == 1u) {
+    } else if (board_id == 0) {
         /* Set payload presence based on GPIN 0 (high == present). */
         if (packet.gpin_state & 0x1u) {
             fcs_global_ahrs_state.payload_present = false;
@@ -691,7 +730,7 @@ const uint16_t *restrict control_values, uint8_t gpout) {
     #pragma MUST_ITERATE(4, 4)
     for (i = 0; i < 4u; i++) {
         /* Swap bytes for big-endian AVR32 */
-        packet.pwm[i] = swap_uint16((uint16_t)val);
+        packet.pwm[i] = swap_uint16(control_values[i]);
     }
 
     /* Calculate the packet's CRC8 */

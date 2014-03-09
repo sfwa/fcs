@@ -47,6 +47,8 @@ SOFTWARE.
 
 #ifdef __TI_COMPILER_VERSION__
 #include <c6x.h>
+#include "../c66x-csl/ti/csl/cslr_device.h"
+#include "../c66x-csl/ti/csl/cslr_gpio.h"
 inline uint32_t cycle_count(void) {
     return TSCL;
 }
@@ -167,11 +169,9 @@ void fcs_control_init(void) {
     control_infeasibility_timer = 0;
     control_tick = 0;
 
-    //fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
-    fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
+    fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
 }
 
-#include <stdio.h>
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
@@ -182,6 +182,18 @@ void fcs_control_tick(void) {
     bool control_timeout = false;
 
     assert(fcs_global_control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
+
+#ifdef __TI_COMPILER_VERSION__
+    /* FIXME -- move this to the board definition file instead */
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+    if (gpio->BANK_REGISTERS[0].IN_DATA & 0x40u) {
+        fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
+    } else {
+        fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
+    }
+#else
+    fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
+#endif
 
     /*
     Check for multiple infeasible results in a row, and reset the trajectory
@@ -280,5 +292,4 @@ void fcs_control_tick(void) {
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
-//    printf("cycles: %u\n", fcs_global_counters.nmpc_last_cycle_count);
 }

@@ -91,7 +91,7 @@ int main(void) {
         fcs_util_init();
     }
     if (core == FCS_CORE_COMMS) {
-        //fcs_comms_init();
+        fcs_comms_init();
     }
     if (core == FCS_CORE_AHRS) {
         fcs_ahrs_init();
@@ -122,13 +122,13 @@ int main(void) {
             fcs_board_tick();
         }
         if (core == FCS_CORE_AHRS) {
-            //fcs_ahrs_tick();
+            fcs_ahrs_tick();
         }
         if (core == FCS_CORE_CONTROL) {
             fcs_control_tick();
         }
         if (core == FCS_CORE_COMMS) {
-            //fcs_comms_tick();
+            fcs_comms_tick();
         }
 
         /* Wait until next frame start time */

@@ -38,6 +38,7 @@ SOFTWARE.
 #include "../drivers/peripheral.h"
 #include "../nmpc/cnmpc.h"
 #include "../control/control.h"
+#include "../exports/exports.h"
 #include "comms.h"
 
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
@@ -95,6 +96,10 @@ const struct fcs_ahrs_state_t *restrict state) {
     q[W] = (float)state->attitude[W];
 
     yaw_pitch_roll_from_quaternion_f(&yaw, &pitch, &roll, q);
+
+    yaw *= (180.0 / M_PI);
+    pitch *= (180.0 / M_PI);
+    roll *= (180.0 / M_PI);
 
     if (yaw < 0.0) {
         yaw += 360.0;
@@ -174,7 +179,13 @@ const struct fcs_ahrs_state_t *restrict state) {
         buf[index++] = 'M';
     }
 
-    buf[index++] = fcs_global_control_state.mode;
+    struct fcs_control_output_t control;
+    fcs_exports_recv_control(&control);
+    if (control.mode == FCS_CONTROL_MODE_MANUAL) {
+        buf[index++] = 'R';
+    } else {
+        buf[index++] = 'F';
+    }
 
     memset(&buf[index], '-', 5u);
     index += 5u;
