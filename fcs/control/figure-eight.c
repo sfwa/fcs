@@ -126,8 +126,9 @@ const struct fcs_waypoint_t *end, float t) {
     new_point->roll = target_roll;
 
     /* Scale roll angle to resolve discontinuity during direction change */
-    if (absval(target_yaw) < 1.5f) {
-        new_point->roll *= max(0.01f, absval(target_yaw) * (1.0f/1.5f));
+    if (absval(target_yaw) < 1.0f) {
+        new_point->roll *=
+            max(0.01f, absval(target_yaw) * absval(target_yaw));
     }
 
     /* Work out next yaw value, constraining to 0..2*pi. */

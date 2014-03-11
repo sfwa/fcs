@@ -121,14 +121,16 @@ int main(void) {
         if (core == FCS_CORE_PLATFORM) {
             fcs_board_tick();
         }
+#ifndef FCS_COMPILE_BOARD_HITL
         if (core == FCS_CORE_AHRS) {
             fcs_ahrs_tick();
         }
-        if (core == FCS_CORE_CONTROL) {
-            fcs_control_tick();
-        }
         if (core == FCS_CORE_COMMS) {
             fcs_comms_tick();
+        }
+#endif
+        if (core == FCS_CORE_CONTROL) {
+            fcs_control_tick();
         }
 
         /* Wait until next frame start time */

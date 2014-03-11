@@ -44,6 +44,8 @@ SOFTWARE.
 #include "../nmpc/config.h"
 #include "../nmpc/cnmpc.h"
 
+#include <stdio.h>
+
 
 #ifdef __TI_COMPILER_VERSION__
 #include <c6x.h>
@@ -204,6 +206,8 @@ void fcs_control_tick(void) {
         control_timeout = true;
         control_infeasibility_timer = control_tick;
         fcs_global_counters.nmpc_resets++;
+
+        printf("Infeasibility timeout\n");
     } else {
         control_tick++;
     }
@@ -248,6 +252,8 @@ void fcs_control_tick(void) {
         fcs_trajectory_start_hold(nav, &state_estimate);
         fcs_trajectory_recalculate(nav, &state_estimate);
         fcs_trajectory_timestep(nav, &state_estimate);
+
+        printf("Manual control\n");
     } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
                nav->reference_path_id[1] == FCS_CONTROL_INVALID_PATH_ID) {
         /*
@@ -282,6 +288,7 @@ void fcs_control_tick(void) {
         control_infeasibility_timer = control_tick;
     } else {
     	fcs_global_counters.nmpc_errors++;
+        printf("Infeasible\n");
     }
 
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {

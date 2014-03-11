@@ -37,6 +37,8 @@ SOFTWARE.
 #include "control.h"
 #include "trajectory.h"
 
+#include <stdio.h>
+
 
 static void _shift_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind);
@@ -64,6 +66,8 @@ uint16_t out_waypoint_id, uint16_t out_path_id);
 static void _get_ahrs_state(float *restrict state,
 const struct fcs_state_estimate_t *restrict state_estimate,
 const struct fcs_waypoint_t *restrict reference);
+
+void _get_next_reference_point(float *restrict state);
 
 
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
@@ -93,6 +97,8 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
     struct fcs_path_t *path;
     size_t i, j;
+
+    printf("Recalculate\n");
 
     ref = nav->reference_trajectory;
     ref_path_id = nav->reference_path_id;
@@ -178,6 +184,9 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
     uint16_t original_path_id;
+
+    printf("Start recover\n");
+
     /*
     Construct a path sequence that gets the vehicle back to the next point in
     the reference trajectory. This is done in three parts:
@@ -251,6 +260,8 @@ const struct fcs_state_estimate_t *state_estimate) {
     Start a 5-second stabilisation path and enter a holding pattern at the
     end of it.
     */
+    printf("Start hold\n");
+
     _stabilise_path_to_waypoint(nav, state_estimate,
                                 FCS_CONTROL_HOLD_WAYPOINT_ID,
                                 FCS_CONTROL_HOLD_PATH_ID);
@@ -353,7 +364,8 @@ const float *restrict wind) {
     Determine reference velocity based on airspeed, yaw and current wind;
     determine reference attitude based on waypoint yaw, pitch and roll.
     */
-    float next_reference_velocity[3], next_reference_attitude[4];
+    float next_reference_velocity[3], next_reference_attitude[4],
+          last_reference_attitude[4], tmp[4], tmp2[4];
 
     next_reference_velocity[0] =
         current_point->airspeed * (float)cos(current_point->yaw) + wind[0];
@@ -362,9 +374,27 @@ const float *restrict wind) {
     next_reference_velocity[2] = (1.0f / OCP_STEP_LENGTH) *
                                  (last_point->alt - current_point->alt);
 
+    /* Calculate angular velocity based on the reference attitudes */
     quaternion_f_from_yaw_pitch_roll(next_reference_attitude,
                                      current_point->yaw, current_point->pitch,
                                      current_point->roll);
+
+    quaternion_f_from_yaw_pitch_roll(last_reference_attitude, last_point->yaw,
+                                     last_point->pitch, last_point->roll);
+
+    tmp[0] = (next_reference_attitude[0] - last_reference_attitude[0]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+    tmp[1] = (next_reference_attitude[1] - last_reference_attitude[1]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+    tmp[2] = (next_reference_attitude[2] - last_reference_attitude[2]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+    tmp[3] = (next_reference_attitude[3] - last_reference_attitude[3]) *
+             2.0f * (1.0f / OCP_STEP_LENGTH);
+
+    /* Take the conjugate of last_reference_attitude */
+    last_reference_attitude[3] *= -1.0;
+
+    quaternion_multiply_f(tmp2, tmp, last_reference_attitude);
 
     /*
     Update the horizon with the next reference trajectory step. The first
@@ -380,13 +410,18 @@ const float *restrict wind) {
     reference[7] = next_reference_attitude[1];
     reference[8] = next_reference_attitude[2];
     reference[9] = next_reference_attitude[3];
-    reference[10] = 0.0;
-    reference[11] = 0.0;
-    reference[12] = 0.0;
+    reference[10] = tmp2[0];
+    reference[11] = tmp2[1];
+    reference[12] = tmp2[2];
     /* FIXME: reference points should be specified in the control config. */
     reference[NMPC_STATE_DIM + 0] = 0.3f;
     reference[NMPC_STATE_DIM + 1u] = 0.5f;
     reference[NMPC_STATE_DIM + 2u] = 0.5f;
+
+    //printf("R: %9.6f %9.6f %9.6f %9.6f %9.6f %9.6f %9.6f (%9.6f %9.6f %9.6f)\n",
+    //    current_point->lat, current_point->lon, current_point->alt,
+    //    current_point->airspeed, current_point->yaw, current_point->pitch,
+    //    current_point->roll, reference[10], reference[11], reference[12]);
 }
 
 /*
@@ -556,4 +591,10 @@ const struct fcs_waypoint_t *restrict reference) {
     state[10] = state_estimate->angular_velocity[0];
     state[11] = state_estimate->angular_velocity[1];
     state[12] = state_estimate->angular_velocity[2];
+}
+
+void _get_next_reference_point(float *restrict state) {
+    assert(state);
+
+    nmpc_get_reference_point(state, 0);
 }

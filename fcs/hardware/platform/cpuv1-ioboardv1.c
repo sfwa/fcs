@@ -277,7 +277,7 @@ void fcs_board_init_platform(void) {
         divide by (65536 / 10) to get 0.628V in, and then multiply by the I/V
         sensor voltage scale factor of 15.7 to get an input voltage of 9.86V.
         */
-        .params = { 0.0, 15.70, 0.0, 54.64 },
+        .params = { 0.0, 15.70f, 0.0, 54.64f },
         .scale_factor = 10.0f
     };
 
@@ -369,10 +369,6 @@ void fcs_board_tick(void) {
 
     /* Left elevon */
     val = control.values[1] + (pwm_neutral[1] - 0.5f);
-    if (fcs_global_ahrs_state.mode == FCS_MODE_SAFE) {
-        /* In safe mode, output the neutral value */
-        val = pwm_neutral[1];
-    }
     if (val > 1.0f) {
         val = 1.0f;
     } else if (val < 0.0f) {
@@ -382,10 +378,6 @@ void fcs_board_tick(void) {
 
     /* Right elevon */
     val = 1.0f - control.values[2] + (pwm_neutral[2] - 0.5f);
-    if (fcs_global_ahrs_state.mode == FCS_MODE_SAFE) {
-        /* In safe mode, output the neutral value */
-        val = pwm_neutral[2];
-    }
     if (val > 1.0f) {
         val = 1.0f;
     } else if (val < 0.0f) {

@@ -53,8 +53,8 @@ void nmpc_set_control_weights(float coeffs[NMPC_CONTROL_DIM]);
 void nmpc_set_terminal_weights(float coeffs[NMPC_DELTA_DIM]);
 void nmpc_set_lower_control_bound(float coeffs[NMPC_CONTROL_DIM]);
 void nmpc_set_upper_control_bound(float coeffs[NMPC_CONTROL_DIM]);
-void nmpc_set_reference_point(float coeffs[NMPC_REFERENCE_DIM],
-uint32_t i);
+void nmpc_set_reference_point(float coeffs[NMPC_REFERENCE_DIM], uint32_t i);
+void nmpc_get_reference_point(float coeffs[NMPC_REFERENCE_DIM], uint32_t i);
 
 float nmpc_get_objective_value(void);
 

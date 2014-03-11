@@ -449,6 +449,10 @@ def init(dll_path):
     _fcs.fcs_util_init.argtypes = []
     _fcs.fcs_util_init.restype = None
 
+    # From control/trajectory.h
+    _fcs._get_next_reference_point.argtypes = [POINTER(c_float * 13), c_ulong]
+    _fcs._get_next_reference_point.restype = None
+
     reset()
 
 
@@ -497,10 +501,10 @@ def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
     disable_xplane_sim(s)
 
     s.sendall("world-set %f %f %f\n" % (-37.8136, START_LON, START_ALT))
+    s.sendall("sub sim/operation/failures/rel_engfir0")
     time.sleep(1.0)
 
     # Clear the engine fire -- this happens whenever the X8 is on the ground
-    s.sendall("sub sim/operation/failures/rel_engfir0")
     s.sendall("set sim/operation/failures/rel_engfir0 0")
     s.sendall("unsub sim/operation/failures/rel_engfir0")
 
@@ -547,9 +551,9 @@ def enable_xplane_sim(s):
     update = ""
 
     yaw = math.radians(0.0)
-    pitch = math.radians(45.0)
-    roll = math.radians(45.0)
-    velocity = [20.0, 10.0, 0.0]
+    pitch = math.radians(0.0)
+    roll = math.radians(0.0)
+    velocity = [20.0, 0.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -569,9 +573,9 @@ def enable_xplane_sim(s):
     update += "set sim/flightmodel/position/local_vy %.6f\n" % -velocity[2]
     update += "set sim/flightmodel/position/local_vz %.6f\n" % -velocity[0]
 
-    update += "set sim/flightmodel/position/P 0.2\n"
+    update += "set sim/flightmodel/position/P 0\n"
     update += "set sim/flightmodel/position/Q 0\n"
-    update += "set sim/flightmodel/position/R 0.4\n"
+    update += "set sim/flightmodel/position/R 0\n"
     s.sendall(update)
 
 
@@ -637,6 +641,31 @@ def recv_state_from_xplane(s):
 
     if sim_state["attitude"][3] < 0:
         sim_state["attitude"] = map(lambda x: -x, sim_state["attitude"])
+
+
+def send_state_to_xplane(s):
+    state = (c_float * 13)()
+    _fcs._get_next_reference_point(state, 0)
+
+    velocity = state[3:6]
+    attitude = state[6:10]
+    angular_velocity = state[10:13]
+
+    s.sendall("world-set %f %f %f\n" % (
+        math.degrees(nav_state.reference_trajectory[0].lat),
+        math.degrees(nav_state.reference_trajectory[0].lon),
+        nav_state.reference_trajectory[0].alt))
+
+    q = (attitude[3], -attitude[0], -attitude[1], -attitude[2])
+    yaw = math.atan2(2.0 * (q[0] * q[3] + q[1] * q[2]), 1.0 - 2.0 * (q[2] ** 2.0 + q[3] ** 2.0))
+    pitch = math.asin(2.0 * (q[0] * q[2] - q[3] * q[1]))
+    roll = math.atan2(2.0 * (q[0] * q[1] + q[2] * q[3]), 1.0 - 2.0 * (q[1] ** 2.0 + q[2] ** 2.0))
+
+    update = "set sim/flightmodel/position/psi %.6f\n" % math.degrees(yaw)
+    update += "set sim/flightmodel/position/theta %.6f\n" % math.degrees(pitch)
+    update += "set sim/flightmodel/position/phi %.6f\n" % math.degrees(roll)
+
+    s.sendall(update)
 
 
 def send_control_to_xplane(s, controls):
@@ -741,6 +770,8 @@ if __name__ == "__main__":
 
     time.sleep(0.1)
 
+    #disable_xplane_sim(sock)
+
     print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
 
     controls = [0.0, 0.5, 0.5]
@@ -751,8 +782,9 @@ if __name__ == "__main__":
 
             recv_state_from_xplane(sock)
 
-            #if controls[1] > 0.0 and controls[1] < 1.0:
             send_control_to_xplane(sock, controls)
+
+            #send_state_to_xplane(sock)
 
             # Skip the rest until we have a full set of data
             if sim_state["lat"] is None or sim_state["lon"] is None or \
