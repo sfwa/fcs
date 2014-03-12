@@ -37,8 +37,6 @@ SOFTWARE.
 #include "control.h"
 #include "trajectory.h"
 
-#include <stdio.h>
-
 
 static void _shift_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind);
@@ -92,13 +90,14 @@ trajectory.
 */
 void fcs_trajectory_recalculate(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
+    assert(nav);
+    assert(state_estimate);
+
     float reference[NMPC_REFERENCE_DIM], weights[NMPC_DELTA_DIM];
     struct fcs_waypoint_t *ref, *new_point, *last_point;
     uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
     struct fcs_path_t *path;
     size_t i, j;
-
-    printf("Recalculate\n");
 
     ref = nav->reference_trajectory;
     ref_path_id = nav->reference_path_id;
@@ -170,6 +169,9 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 
 void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
+    assert(nav);
+    assert(state_estimate);
+
     float state_vec[NMPC_STATE_DIM];
 
     _get_ahrs_state(state_vec, state_estimate, nav->reference_trajectory);
@@ -183,9 +185,10 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 
 void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
-    uint16_t original_path_id;
+    assert(nav);
+    assert(state_estimate);
 
-    printf("Start recover\n");
+    uint16_t original_path_id;
 
     /*
     Construct a path sequence that gets the vehicle back to the next point in
@@ -256,12 +259,13 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 
 void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *state_estimate) {
+    assert(nav);
+    assert(state_estimate);
+
     /*
     Start a 5-second stabilisation path and enter a holding pattern at the
     end of it.
     */
-    printf("Start hold\n");
-
     _stabilise_path_to_waypoint(nav, state_estimate,
                                 FCS_CONTROL_HOLD_WAYPOINT_ID,
                                 FCS_CONTROL_HOLD_PATH_ID);
@@ -284,6 +288,9 @@ should be called instead.
 */
 static void _shift_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind) {
+    assert(nav);
+    assert(wind);
+
     float reference[NMPC_REFERENCE_DIM];
     struct fcs_waypoint_t *ref, *new_point, *last_point;
     uint16_t *ref_path_id, *new_point_path_id, *last_point_path_id;
@@ -353,8 +360,10 @@ const float *restrict wind) {
     assert(reference);
     assert(current_point);
     assert(start);
+    assert(wind);
     _nassert((size_t)reference % 4u == 0);
     _nassert((size_t)current_point % 8u == 0);
+    _nassert((size_t)wind % 4u == 0);
 
     if (!last_point) {
         last_point = current_point;
@@ -417,11 +426,6 @@ const float *restrict wind) {
     reference[NMPC_STATE_DIM + 0] = 0.3f;
     reference[NMPC_STATE_DIM + 1u] = 0.5f;
     reference[NMPC_STATE_DIM + 2u] = 0.5f;
-
-    //printf("R: %9.6f %9.6f %9.6f %9.6f %9.6f %9.6f %9.6f (%9.6f %9.6f %9.6f)\n",
-    //    current_point->lat, current_point->lon, current_point->alt,
-    //    current_point->airspeed, current_point->yaw, current_point->pitch,
-    //    current_point->roll, reference[10], reference[11], reference[12]);
 }
 
 /*
@@ -434,11 +438,17 @@ uint16_t *restrict new_point_path_id,
 const struct fcs_waypoint_t *restrict last_point,
 const uint16_t *restrict last_point_path_id, const float *restrict wind,
 struct fcs_nav_state_t *nav) {
+    assert(new_point);
+    assert(new_point_path_id);
+    assert(last_point);
+    assert(last_point_path_id);
+    assert(wind);
+    assert(nav);
+    assert(*last_point_path_id != FCS_CONTROL_INVALID_PATH_ID);
+
     float t;
     struct fcs_path_t *path;
     size_t i;
-
-    assert(*last_point_path_id != FCS_CONTROL_INVALID_PATH_ID);
 
     /*
     Since we might have hit the end of a path, and it's theoretically possible
@@ -494,6 +504,8 @@ const struct fcs_state_estimate_t *restrict state_estimate,
 uint16_t out_waypoint_id, uint16_t out_path_id) {
     assert(nav);
     assert(state_estimate);
+    assert(out_path_id != FCS_CONTROL_INVALID_PATH_ID);
+    assert(out_waypoint_id != FCS_CONTROL_INVALID_WAYPOINT_ID);
 
     struct fcs_waypoint_t *waypoint, *out_waypoint;
     float stabilise_delta, stabilise_heading;
@@ -563,6 +575,11 @@ const struct fcs_waypoint_t *restrict point) {
 static void _get_ahrs_state(float *restrict state,
 const struct fcs_state_estimate_t *restrict state_estimate,
 const struct fcs_waypoint_t *restrict reference) {
+    assert(state);
+    assert(state_estimate);
+    assert(reference);
+    _nassert((size_t)state % 4u == 0);
+
     /*
     Get the latest data from the AHRS. Since we don't lock anything here, it's
     possible for the UKF to start updating the data under us, but the

@@ -294,6 +294,20 @@ class NavState(Structure):
     ]
 
 
+class AHRSStateEstimate(Structure):
+    _fields_ = [
+        ("lat", c_double),
+        ("lon", c_double),
+        ("alt", c_float),
+        ("velocity", c_float * 3),
+        ("attitude", c_float * 4),
+        ("angular_velocity", c_float * 3),
+        ("wind_velocity", c_float * 3),
+        ("mode", c_ubyte),
+        ("reserved", c_ubyte * 55)
+    ]
+
+
 def reset():
     """
     (Re-)initializes all FCS modules.
@@ -452,6 +466,10 @@ def init(dll_path):
     # From control/trajectory.h
     _fcs._get_next_reference_point.argtypes = [POINTER(c_float * 13), c_ulong]
     _fcs._get_next_reference_point.restype = None
+
+    _fcs.fcs_trajectory_recalculate.argtypes = [POINTER(NavState),
+                                                POINTER(AHRSStateEstimate)]
+    _fcs.fcs_trajectory_recalculate.restype = None
 
     reset()
 

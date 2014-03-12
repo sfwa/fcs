@@ -44,8 +44,6 @@ SOFTWARE.
 #include "../nmpc/config.h"
 #include "../nmpc/cnmpc.h"
 
-#include <stdio.h>
-
 
 #ifdef __TI_COMPILER_VERSION__
 #include <c6x.h>
@@ -206,40 +204,39 @@ void fcs_control_tick(void) {
         control_timeout = true;
         control_infeasibility_timer = control_tick;
         fcs_global_counters.nmpc_resets++;
-
-        printf("Infeasibility timeout\n");
     } else {
         control_tick++;
     }
 
     /*
-    TODO:
     Read the relevant parts of the AHRS output and convert them to a format
     usable by the control system.
 
-    We shouldn't access fcs_global_ahrs_state directly, since the cache
-    coherence of that structure is not guaranteed.
+    Don't access fcs_global_ahrs_state directly, since the cache coherence of
+    that structure is not guaranteed.
     */
     fcs_exports_recv_state(&state_estimate);
 
     alt_diff = absval(state_estimate.alt - nav->reference_trajectory[0].alt);
 
     /*
-    Three options here:
-    1. The current position is fairly near the expected position, so we're
+    Four options here:
+    1. We're in manual mode -- just recalculate the trajectory each time as
+       though we were going through recovery to a holding pattern.
+    2. The current position is fairly near the expected position, so we're
        following the path OK.
-    2. The current position is more than N metres from the expected position,
+    3. The current position is more than N metres from the expected position,
        so we need to add a new path to get back on track.
-    3. There's no expected position, because the path hasn't been initialized.
+    4. There's no expected position, because the path hasn't been initialized.
 
-    If option 1, we get the next point from the planner and update the last
+    If option 2, we get the next point from the planner and update the last
     point in the horizon. This is the common case.
 
-    If option 2, we effectively need to add a path between the current point
+    If option 3, we effectively need to add a path between the current point
     and the first point in the reference trajectory. Once that's done we
     re-calculate the entire reference trajectory in one go.
 
-    If option 3, we switch to the hold path around the current position.
+    If option 4, we switch to the hold path around the current position.
 
     The offset between current and expected position is given by the first
     three elements of `state`, since all positions are given in NED relative
@@ -250,16 +247,6 @@ void fcs_control_tick(void) {
         While in manual mode, continuously try to enter a holding pattern
         */
         fcs_trajectory_start_hold(nav, &state_estimate);
-        fcs_trajectory_recalculate(nav, &state_estimate);
-        fcs_trajectory_timestep(nav, &state_estimate);
-
-        printf("Manual control\n");
-    } else if (nav->reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID &&
-               nav->reference_path_id[1] == FCS_CONTROL_INVALID_PATH_ID) {
-        /*
-        FIXME -- hack to get the path to initialise when only the first ID
-        has been set.
-        */
         fcs_trajectory_recalculate(nav, &state_estimate);
         fcs_trajectory_timestep(nav, &state_estimate);
     } else if (!control_timeout && is_navigating() &&
@@ -288,7 +275,6 @@ void fcs_control_tick(void) {
         control_infeasibility_timer = control_tick;
     } else {
     	fcs_global_counters.nmpc_errors++;
-        printf("Infeasible\n");
     }
 
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {

@@ -111,6 +111,9 @@ struct fcs_path_t {
 /* Marker for 'stabilise after loss of control' path */
 #define FCS_CONTROL_STABILISE_PATH_ID (FCS_CONTROL_MAX_PATHS - 4u)
 
+/* Invalid/uninitialized waypoint ID */
+#define FCS_CONTROL_INVALID_WAYPOINT_ID 0xFFFFu
+
 /* Marker for 'last plan position' waypoint ID */
 #define FCS_CONTROL_HOLD_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 1u)
 
