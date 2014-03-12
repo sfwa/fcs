@@ -37,6 +37,9 @@ struct fcs_state_estimate_t {
 };
 
 struct fcs_control_output_t {
+    uint64_t nmpc_errors;
+    uint64_t nmpc_resets;
+
     float values[4];
     float rates[4];
 
@@ -51,13 +54,14 @@ struct fcs_control_output_t {
     float reference_pitch;
     float reference_roll;
 
+    uint32_t nav_state_version;
     uint16_t path_id;
 
     uint8_t gpio;
     uint8_t mode;
 
     /* Pad so the structure fills two whole L1 cache lines (128 bytes) */
-    uint8_t reserved[48];
+    uint8_t reserved[32];
 };
 
 void fcs_exports_init(void);

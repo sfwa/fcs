@@ -153,6 +153,11 @@ void fcs_exports_send_control(void) {
         fcs_global_counters.nmpc_objective_value;
     fcs_export_control.cycles =
     	fcs_global_counters.nmpc_last_cycle_count;
+    fcs_export_control.nmpc_errors =
+        fcs_global_counters.nmpc_errors;
+    fcs_export_control.nmpc_resets =
+        fcs_global_counters.nmpc_resets;
+    fcs_export_control.nav_state_version = fcs_global_nav_state.version;
 
     /* Copy the current reference point into the packet as well */
     fcs_export_control.reference_lat =

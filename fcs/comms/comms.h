@@ -79,6 +79,7 @@ GCS information (CPU->FCS): $PSFWAG
 Status information (FCS->CPU): $PSFWAT
 - packet time (ms) -- 9 chars
 - flags -- 4 chars
+- nav state version -- 9 chars
 - I/O board resets -- 2x 3 chars
 - TRICAL resets -- 2x 3 chars
 - UKF resets -- 3 chars
@@ -93,8 +94,8 @@ Status information (FCS->CPU): $PSFWAT
 - Telemetry packet RX errors -- 6 chars
 - CRC32 -- 8 chars
 
-=> 113 bytes + 7 bytes prefix + * +
-   2 bytes checksum + CRLF = 125 bytes total
+=> 123 bytes + 7 bytes prefix + * +
+   2 bytes checksum + CRLF = 135 bytes total
 
 
 Command packet (CPU->FCS, FCS->CPU): $PSFWAC
@@ -106,8 +107,9 @@ Command packet (CPU->FCS, FCS->CPU): $PSFWAC
    224 bytes
 
 
-Waypoint information (FCS<->CPU): $PSFWAW
+Waypoint information (CPU->FCS): $PSFWAW
 - packet time (ms) -- 9 chars
+- nav state version -- 9 chars
 - waypoint ID -- 4 chars
 - flags -- 4 chars
 - lat (up to 7dp) -- 12 chars
@@ -116,12 +118,13 @@ Waypoint information (FCS<->CPU): $PSFWAW
 - attitude (yaw/pitch/roll, degrees to 1dp) -- 16 chars
 - CRC32 -- 8 chars
 
-=> 72 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   92 bytes total
+=> 81 bytes + 9 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   102 bytes total
 
 
-Path information (FCS<->CPU): $PSFWAP
+Path information (CPU->FCS): $PSFWAP
 - packet time (ms) -- 9 chars
+- nav state version -- 9 chars
 - path ID -- 4 chars
 - flags -- 4 chars
 - start waypoint ID -- 4 chars
@@ -130,8 +133,8 @@ Path information (FCS<->CPU): $PSFWAP
 - next path ID -- 4 chars
 - CRC32 -- 8 chars
 
-=> 38 bytes + 8 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
-   58 bytes
+=> 47 bytes + 9 separators + 7 bytes prefix + * + 2 bytes checksum + CRLF =
+   68 bytes
 */
 
 /* Init functions for comms module */

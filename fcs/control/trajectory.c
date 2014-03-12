@@ -563,7 +563,8 @@ const struct fcs_waypoint_t *restrict point) {
     /*
     Convert lat/lon to N, E by linearizing around current position -- this
     will break around the poles, and isn't accurate over medium distances
-    (a few kilometres), but is adequate for reference trajectory calculation.
+    (several kilometres), but is adequate for reference trajectory
+    calculation.
     */
     ned[0] = (float)((point->lat - ref->lat) * WGS84_A);
     ned[1] = (float)((point->lon - ref->lon) * WGS84_A * cos(ref->lat));
@@ -581,14 +582,10 @@ const struct fcs_waypoint_t *restrict reference) {
     _nassert((size_t)state % 4u == 0);
 
     /*
-    Get the latest data from the AHRS. Since we don't lock anything here, it's
-    possible for the UKF to start updating the data under us, but the
-    worst-case scenario is that we get some data from 1ms later, which
-    shouldn't be an issue.
-
-    Since the NMPC code only looks at deltas between states, we can set the
-    current position to the NED offset between the lat/lon/alt of the vehicle
-    and the lat/lon/alt of the first point in the reference trajectory.
+    Get the latest data from the AHRS. Since the NMPC code only looks at
+    deltas between states, we can set the current position to the NED offset
+    between the lat/lon/alt of the vehicle and the lat/lon/alt of the first
+    point in the reference trajectory.
     */
     struct fcs_waypoint_t current_point;
 

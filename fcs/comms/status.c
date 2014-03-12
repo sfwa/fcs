@@ -36,6 +36,7 @@ SOFTWARE.
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
 #include "../drivers/peripheral.h"
+#include "../exports/exports.h"
 #include "comms.h"
 
 size_t fcs_comms_serialize_status(uint8_t *restrict buf,
@@ -52,7 +53,10 @@ bool counter_reset) {
     assert(peripheral_state);
 
     uint64_t count;
+    struct fcs_control_output_t control;
     size_t index = 0, i;
+
+    fcs_exports_recv_control(&control);
 
     memcpy(buf, "$PSFWAT,", 8u);
     index += 8u;
@@ -63,6 +67,11 @@ bool counter_reset) {
 
     memset(&buf[index], '-', 4u);
     index += 4u;
+    buf[index++] = ',';
+
+    /* Output the current navigation state structure version */
+    index += fcs_ascii_from_int32(
+        &buf[index], (int32_t)(control.nav_state_version & 0x3FFFFFFFu), 9u);
     buf[index++] = ',';
 
     /*
@@ -104,13 +113,13 @@ bool counter_reset) {
     }
 
     /* And for NMPC resets */
-    count = counters->nmpc_resets - last_nmpc_resets;
+    count = control.nmpc_resets - last_nmpc_resets;
     index += fcs_ascii_from_int32(
         &buf[index], (int32_t)(count & 0x0FFFFFFFu), 3u);
     buf[index++] = ',';
 
     if (counter_reset) {
-        last_nmpc_resets = counters->nmpc_resets;
+        last_nmpc_resets = control.nmpc_resets;
     }
 
     /* Output the peak core cycle counts */

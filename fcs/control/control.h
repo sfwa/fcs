@@ -141,6 +141,8 @@ struct fcs_control_state_t {
 };
 
 struct fcs_nav_state_t {
+    uint32_t version;
+
     struct fcs_path_t paths[FCS_CONTROL_MAX_PATHS];
     struct fcs_waypoint_t waypoints[FCS_CONTROL_MAX_WAYPOINTS];
     struct fcs_boundary_t boundary;

@@ -53,11 +53,9 @@ const uint8_t *restrict packet, size_t packet_length) {
     int32_t packet_time;
     uint8_t flags[4];
 
-    //if (memcmp(packet, "$PSFWAG,", 8u) != 0) {
-    //    return FCS_DESERIALIZATION_ERROR;
-    //}
-    if (packet[0] != '$' || packet[1] != 'P' || packet[2] != 'S' || packet[3] != 'F' ||
-    		packet[4] != 'W' || packet[5] != 'A' || packet[6] != 'G' || packet[7] != ',') {
+    if (packet[0] != '$' || packet[1] != 'P' || packet[2] != 'S' ||
+            packet[3] != 'F' || packet[4] != 'W' || packet[5] != 'A' ||
+            packet[6] != 'G' || packet[7] != ',') {
     	return FCS_DESERIALIZATION_ERROR;
     }
 
