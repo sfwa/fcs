@@ -51,11 +51,13 @@ struct fcs_control_output_t {
     float reference_pitch;
     float reference_roll;
 
+    uint16_t path_id;
+
     uint8_t gpio;
     uint8_t mode;
 
     /* Pad so the structure fills two whole L1 cache lines (128 bytes) */
-    uint8_t reserved[50];
+    uint8_t reserved[48];
 };
 
 void fcs_exports_init(void);

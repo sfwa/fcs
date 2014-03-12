@@ -170,6 +170,8 @@ void fcs_exports_send_control(void) {
     fcs_export_control.reference_roll =
         fcs_global_nav_state.reference_trajectory[0].roll;
 
+    fcs_export_control.path_id = fcs_global_nav_state.reference_path_id[0];
+
 #ifdef __TI_COMPILER_VERSION__
     /* Write back L1 */
     L1DWBAR = (uint32_t)&fcs_export_control;

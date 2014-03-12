@@ -551,9 +551,9 @@ def enable_xplane_sim(s):
     update = ""
 
     yaw = math.radians(0.0)
-    pitch = math.radians(0.0)
-    roll = math.radians(0.0)
-    velocity = [20.0, 0.0, 0.0]
+    pitch = math.radians(45.0)
+    roll = math.radians(45.0)
+    velocity = [20.0, 10.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -573,9 +573,9 @@ def enable_xplane_sim(s):
     update += "set sim/flightmodel/position/local_vy %.6f\n" % -velocity[2]
     update += "set sim/flightmodel/position/local_vz %.6f\n" % -velocity[0]
 
-    update += "set sim/flightmodel/position/P 0\n"
+    update += "set sim/flightmodel/position/P 0.2\n"
     update += "set sim/flightmodel/position/Q 0\n"
-    update += "set sim/flightmodel/position/R 0\n"
+    update += "set sim/flightmodel/position/R 0.4\n"
     s.sendall(update)
 
 
@@ -769,6 +769,8 @@ if __name__ == "__main__":
     enable_xplane_sim(sock)
 
     time.sleep(0.1)
+
+    #recv_state_from_xplane(sock)
 
     #disable_xplane_sim(sock)
 

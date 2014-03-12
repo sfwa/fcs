@@ -47,6 +47,7 @@ const struct fcs_ahrs_state_t *restrict state) {
     assert(state);
 
     size_t index = 0, i;
+    struct fcs_control_output_t control;
 
     memcpy(buf, "$PSFWAS,", 8u);
     index += 8u;
@@ -57,11 +58,12 @@ const struct fcs_ahrs_state_t *restrict state) {
     buf[index++] = ',';
 
     /* Current path ID -- convert to 4-character hex */
-    uint16_t path_id = fcs_global_nav_state.reference_path_id[0];
+    fcs_exports_recv_control(&control);
+
     index += fcs_ascii_hex_from_uint8(
-        &buf[index], (uint8_t)(path_id & 0xFF00u) >> 8u);
+        &buf[index], (uint8_t)(control.path_id & 0xFF00u) >> 8u);
     index += fcs_ascii_hex_from_uint8(
-        &buf[index], (uint8_t)(path_id & 0x00FFu));
+        &buf[index], (uint8_t)(control.path_id & 0x00FFu));
     buf[index++] = ',';
 
     /* Serialize position -- convert lat and lon to degrees first */
@@ -179,8 +181,6 @@ const struct fcs_ahrs_state_t *restrict state) {
         buf[index++] = 'M';
     }
 
-    struct fcs_control_output_t control;
-    fcs_exports_recv_control(&control);
     if (control.mode == FCS_CONTROL_MODE_MANUAL) {
         buf[index++] = 'R';
     } else {
