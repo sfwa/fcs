@@ -79,7 +79,7 @@ GCS information (CPU->FCS): $PSFWAG
 Status information (FCS->CPU): $PSFWAT
 - packet time (ms) -- 9 chars
 - flags -- 4 chars
-- nav state version -- 9 chars
+- nav state version -- 8 (hex) chars
 - I/O board resets -- 2x 3 chars
 - TRICAL resets -- 2x 3 chars
 - UKF resets -- 3 chars
@@ -109,7 +109,7 @@ Command packet (CPU->FCS, FCS->CPU): $PSFWAC
 
 Waypoint information (CPU->FCS): $PSFWAW
 - packet time (ms) -- 9 chars
-- nav state version -- 9 chars
+- nav state version -- 8 (hex) chars
 - waypoint ID -- 4 chars
 - flags -- 4 chars
 - lat (up to 7dp) -- 12 chars
@@ -124,7 +124,7 @@ Waypoint information (CPU->FCS): $PSFWAW
 
 Path information (CPU->FCS): $PSFWAP
 - packet time (ms) -- 9 chars
-- nav state version -- 9 chars
+- nav state version -- 8 (hex) chars
 - path ID -- 4 chars
 - flags -- 4 chars
 - start waypoint ID -- 4 chars
@@ -148,23 +148,25 @@ enum fcs_deserialization_result_t {
 
 /* In all these cases, buf must be at least 256 chars long */
 
-/* State serialization */
 size_t fcs_comms_serialize_state(uint8_t *restrict buf,
 const struct fcs_ahrs_state_t *restrict state);
 
-/* Status serialization */
 size_t fcs_comms_serialize_status(uint8_t *restrict buf,
 const struct fcs_ahrs_state_t *restrict state,
 const struct fcs_stats_counter_t *restrict counters,
 const struct fcs_peripheral_state_t *restrict peripheral_state,
 bool counter_reset);
 
-/* Command deserialization */
 enum fcs_deserialization_result_t fcs_comms_deserialize_command(
 const uint8_t *packet, size_t packet_length);
 
-/* GCS packet deserialization */
 enum fcs_deserialization_result_t fcs_comms_deserialize_gcs(
 const uint8_t *packet, size_t packet_length);
+
+enum fcs_deserialization_result_t fcs_comms_deserialize_waypoint(
+const uint8_t *restrict packet, size_t packet_length);
+
+enum fcs_deserialization_result_t fcs_comms_deserialize_path(
+const uint8_t *restrict packet, size_t packet_length);
 
 #endif

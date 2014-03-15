@@ -189,6 +189,19 @@ enum fcs_conversion_result_t fcs_uint8_from_ascii_hex(uint8_t *result,
 const uint8_t *restrict value, size_t len);
 
 /*
+fcs_ascii_hex_from_uint16 -- convert a uint16_t value to four uppercase hex
+digits
+*/
+size_t fcs_ascii_hex_from_uint16(uint8_t *restrict result, uint16_t value);
+
+/*
+fcs_uint16_from_ascii_hex -- convert four uppercase hex digits to a uint16.
+The len parameter must be 4.
+*/
+enum fcs_conversion_result_t fcs_uint16_from_ascii_hex(uint16_t *result,
+const uint8_t *restrict value, size_t len);
+
+/*
 fcs_ascii_hex_from_uint32 -- convert a uint32_t value to eight uppercase
 hex digits (MSB first)
 */

@@ -64,6 +64,8 @@ ADD_EXECUTABLE(unittest
     ../comms/gcs.c
     ../comms/state.c
     ../comms/status.c
+    ../comms/path.c
+    ../comms/waypoint.c
     test_comms.cpp
     ../drivers/stream.c
     ../drivers/peripheral.c
@@ -135,6 +137,8 @@ ADD_LIBRARY(fcs SHARED
     ../comms/gcs.c
     ../comms/state.c
     ../comms/status.c
+    ../comms/path.c
+    ../comms/waypoint.c
     ../hardware/platform/cpuv1-ioboardv1.c
     ../hardware/platform/log-replay.c
     ../hardware/platform/control-hitl.c

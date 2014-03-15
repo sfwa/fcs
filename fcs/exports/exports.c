@@ -242,3 +242,21 @@ void fcs_exports_recv_control(struct fcs_control_output_t *control) {
     semaphore->SEM[FCS_SEMAPHORE_CONTROL] = 1u;
 #endif
 }
+
+void fcs_exports_send_waypoint_update(uint32_t nav_state_version,
+uint16_t waypoint_id, const struct fcs_waypoint_t *waypoint) {
+
+}
+
+void fcs_exports_send_path_update(uint32_t nav_state_version,
+uint16_t path_id, const struct fcs_path_t *path) {
+
+}
+
+void fcs_exports_recv_waypoint_update(struct fcs_waypoint_update_t *update){
+
+}
+
+void fcs_exports_recv_path_update(struct fcs_path_update_t *update) {
+
+}

@@ -970,6 +970,72 @@ TEST(UInt8FromASCIIHex, WrongLength) {
     );
 }
 
+TEST(ASCIIHexFromUInt16, Exhaustive) {
+    uint64_t i;
+    uint8_t result[5];
+    size_t result_len;
+
+    char *endptr;
+    uint64_t check_result;
+
+    for (i = 0; i <= 0xFFFFu; i++) {
+        result_len = fcs_ascii_hex_from_uint16(result, i);
+
+        result[4] = 0;
+        check_result = strtol((char*)result, &endptr, 16u);
+
+        EXPECT_EQ(4u, result_len);
+        EXPECT_EQ(i, check_result);
+    }
+}
+
+TEST(ASCIIHexFromUInt16, NoBuffer) {
+    EXPECT_DEATH(
+        { fcs_ascii_hex_from_uint16(NULL, 1); }, "Assertion.*failed");
+}
+
+TEST(UInt16FromASCIIHex, Exhaustive) {
+    uint64_t i;
+    uint16_t result;
+    uint8_t value[4];
+    enum fcs_conversion_result_t status;
+
+    for (i = 0; i <= 0xFFFFu; i++) {
+        fcs_ascii_hex_from_uint16(value, i & 0xFFFFu);
+        status = fcs_uint16_from_ascii_hex(&result, value, 4u);
+
+        EXPECT_EQ(FCS_CONVERSION_OK, status);
+        EXPECT_EQ(i, result);
+    }
+}
+
+TEST(UInt16FromASCIIHex, NoBuffer) {
+    EXPECT_DEATH(
+        { fcs_uint16_from_ascii_hex(NULL, NULL, 4); }, "Assertion.*failed");
+
+    EXPECT_DEATH(
+        { uint16_t x; uint8_t y[4]; fcs_uint16_from_ascii_hex(&x, NULL, 4); },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        { uint16_t x; uint8_t y[4]; fcs_uint16_from_ascii_hex(NULL, y, 4); },
+        "Assertion.*failed"
+    );
+}
+
+TEST(UInt16FromASCIIHex, WrongLength) {
+    EXPECT_DEATH(
+        { uint16_t x; uint8_t y[4]; fcs_uint16_from_ascii_hex(&x, y, 1); },
+        "Assertion.*failed"
+    );
+
+    EXPECT_DEATH(
+        { uint16_t x; uint8_t y[4]; fcs_uint16_from_ascii_hex(&x, y, 9); },
+        "Assertion.*failed"
+    );
+}
+
 TEST(ASCIIHexFromUInt32, FullRange) {
     uint64_t i;
     uint8_t result[9];

@@ -218,7 +218,7 @@ void fcs_board_init_platform(void) {
         .header = sizeof(struct fcs_calibration_t) - 1u,
         .sensor = FCS_MEASUREMENT_TYPE_GPS_POSITION,
         .type = FCS_CALIBRATION_NONE,
-        .error = 3.1623e-6f,
+        .error = 3.1623e-7f,
         .scale_factor = 1.0f
     };
     struct fcs_calibration_t gps_velocity_calibration = {

@@ -218,12 +218,11 @@ void _fcs_comms_parse_packets(enum fcs_stream_device_t dev) {
                                                        comms_buf_len);
                 break;
             case 'W':
-                /* TODO */
-                result = FCS_DESERIALIZATION_ERROR;
+                result = fcs_comms_deserialize_waypoint(comms_buf,
+                                                        comms_buf_len);
                 break;
             case 'P':
-                /* TODO */
-                result = FCS_DESERIALIZATION_ERROR;
+                result = fcs_comms_deserialize_path(comms_buf, comms_buf_len);
                 break;
             default:
                 result = FCS_DESERIALIZATION_ERROR;

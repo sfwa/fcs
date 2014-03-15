@@ -122,7 +122,7 @@ void fcs_ahrs_init(void) {
         7e-5, 7e-5, 7e-5, /* velocity N, E, D */
         2e-4, 2e-4, 2e-4, /* acceleration x, y, z */
         1e-9, 1e-9, 1e-9, /* attitude roll, pitch, yaw */
-        3e-3, 3e-3, 3e-3, /* angular velocity roll, pitch, yaw */
+        3e-6, 3e-6, 3e-6, /* angular velocity roll, pitch, yaw */
         1e-3, 1e-3, 1e-3, /* angular acceleration roll, pitch, yaw */
         1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
         1.5e-12, 1.5e-12, 1.5e-12 /* gyro bias x, y, z */

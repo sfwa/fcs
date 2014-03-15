@@ -36,6 +36,8 @@ SOFTWARE.
 #include "../ahrs/ahrs.h"
 #include "../stats/stats.h"
 #include "../drivers/peripheral.h"
+#include "../nmpc/cnmpc.h"
+#include "../control/control.h"
 #include "../exports/exports.h"
 #include "comms.h"
 
@@ -70,8 +72,8 @@ bool counter_reset) {
     buf[index++] = ',';
 
     /* Output the current navigation state structure version */
-    index += fcs_ascii_from_int32(
-        &buf[index], (int32_t)(control.nav_state_version & 0x3FFFFFFFu), 9u);
+    index += fcs_ascii_hex_from_uint32(&buf[index],
+                                       control.nav_state_version);
     buf[index++] = ',';
 
     /*

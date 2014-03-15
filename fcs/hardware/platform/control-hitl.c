@@ -104,7 +104,6 @@ void fcs_board_init_platform(void) {
 
 void fcs_board_tick(void) {
     static int16_t comms_timeout;
-    size_t i;
 
     /*
     Write one output packet per input packet to make sure things don't get

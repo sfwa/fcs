@@ -369,7 +369,7 @@ digits */
 size_t fcs_ascii_hex_from_uint8(uint8_t *restrict result, uint8_t value) {
     assert(result);
 
-    result[0] = _fcs_hex_digits[(value & 0xF0u) >> 4];
+    result[0] = _fcs_hex_digits[(value & 0xF0u) >> 4u];
     result[1] = _fcs_hex_digits[value & 0x0Fu];
 
     return 2u;
@@ -406,6 +406,50 @@ const uint8_t *restrict value, size_t len) {
 
 invalid:
     *result = 0xFFu;
+    return FCS_CONVERSION_ERROR;
+}
+
+/* fcs_ascii_hex_from_uint16 -- convert a uint16_t value to two uppercase hex
+digits */
+size_t fcs_ascii_hex_from_uint16(uint8_t *restrict result, uint16_t value) {
+    assert(result);
+
+    result[0] = _fcs_hex_digits[(value & 0xF000u) >> 12u];
+    result[1] = _fcs_hex_digits[(value & 0x0F00u) >> 8u];
+    result[2] = _fcs_hex_digits[(value & 0x00F0u) >> 4u];
+    result[3] = _fcs_hex_digits[(value & 0x000Fu)];
+
+    return 4u;
+}
+
+/* fcs_uint16_from_ascii_hex -- convert two uppercase hex digits to a uint16.
+The len parameter must be 4. */
+enum fcs_conversion_result_t fcs_uint16_from_ascii_hex(uint16_t *result,
+const uint8_t *restrict value, size_t len) {
+    assert(result);
+    assert(value);
+    assert(len == 4u);
+
+    uint16_t output = 0;
+    uint8_t i;
+    #pragma MUST_ITERATE(4, 4)
+    for (i = 0; i < 4u; i++) {
+        output <<= 4u;
+
+        if ('0' <= value[i] && value[i] <= '9') {
+            output += value[i] - '0';
+        } else if ('A' <= value[i] && value[i] <= 'F') {
+            output += value[i] - 'A' + 10u;
+        } else {
+            goto invalid;
+        }
+    }
+
+    *result = output;
+    return FCS_CONVERSION_OK;
+
+invalid:
+    *result = 0xFFFFu;
     return FCS_CONVERSION_ERROR;
 }
 

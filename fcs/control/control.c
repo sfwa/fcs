@@ -38,11 +38,9 @@ SOFTWARE.
 #include "../TRICAL/TRICAL.h"
 #include "../ahrs/measurement.h"
 #include "../ahrs/ahrs.h"
-#include "../exports/exports.h"
 #include "control.h"
+#include "../exports/exports.h"
 #include "trajectory.h"
-#include "../nmpc/config.h"
-#include "../nmpc/cnmpc.h"
 
 
 #ifdef __TI_COMPILER_VERSION__

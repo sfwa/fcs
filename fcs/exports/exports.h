@@ -64,6 +64,20 @@ struct fcs_control_output_t {
     uint8_t reserved[32];
 };
 
+struct fcs_waypoint_update_t {
+    uint32_t nav_state_version;
+    uint16_t waypoint_id;
+
+    struct fcs_waypoint_t waypoint;
+};
+
+struct fcs_path_update_t {
+    uint32_t nav_state_version;
+    uint16_t path_id;
+
+    struct fcs_path_t path;
+};
+
 void fcs_exports_init(void);
 
 void fcs_exports_send_state(void);
@@ -71,5 +85,13 @@ void fcs_exports_send_control(void);
 
 void fcs_exports_recv_state(struct fcs_state_estimate_t *state);
 void fcs_exports_recv_control(struct fcs_control_output_t *control);
+
+void fcs_exports_send_waypoint_update(uint32_t nav_state_version,
+uint16_t waypoint_id, const struct fcs_waypoint_t *waypoint);
+void fcs_exports_send_path_update(uint32_t nav_state_version,
+uint16_t path_id, const struct fcs_path_t *path);
+
+void fcs_exports_recv_waypoint_update(struct fcs_waypoint_update_t *update);
+void fcs_exports_recv_path_update(struct fcs_path_update_t *update);
 
 #endif

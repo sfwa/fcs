@@ -90,9 +90,11 @@ int main(void) {
     if (core == FCS_CORE_UTIL) {
         fcs_util_init();
     }
+#ifndef FCS_COMPILE_BOARD_HITL
     if (core == FCS_CORE_COMMS) {
         fcs_comms_init();
     }
+#endif
     if (core == FCS_CORE_AHRS) {
         fcs_ahrs_init();
     }
@@ -155,5 +157,11 @@ int main(void) {
         }
     }
 
+    /*
+    Avoid the "unreachable statement" error -- this is valid C99 (main returns
+    0 if no return statement), and TI's compiler ignores the error even though
+    it only implements sort-of C90.
+
     return 0;
+    */
 }

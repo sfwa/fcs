@@ -286,6 +286,7 @@ class NavBoundary(Structure):
 
 class NavState(Structure):
     _fields_ = [
+        ("version", c_uint),
         ("paths", NavPath * 500),
         ("waypoints", NavWaypoint * 1000),
         ("boundary", NavBoundary),
