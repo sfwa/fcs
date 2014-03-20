@@ -108,7 +108,8 @@ def serialize_state(lat=None, lon=None, alt=None, velocity=None,
                          velocity[1], velocity[2], attitude[0], attitude[1],
                          attitude[2], attitude[3], angular_velocity[0],
                          angular_velocity[1], angular_velocity[2],
-                         wind_velocity[0], wind_velocity[1], wind_velocity[2])
+                         0.0, 0.0, 0.0)
+                         #wind_velocity[0], wind_velocity[1], wind_velocity[2])
     return "\x00" + cobsr.encode(crc8(result) + result) + "\x00"
 
 
@@ -216,10 +217,14 @@ def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
     s.sendall("unsub sim/operation/failures/rel_engfir0")
 
     if not velocity:
-        velocity = [20.0, 0.0, 0.0]
+        velocity = [15.52, 0.51, 0.74]
 
     # Set the simulation's initial state
     update = ""
+
+    yaw = math.radians(0.0)
+    pitch = math.radians(13.4)
+    roll = math.radians(1.1)
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -258,9 +263,9 @@ def enable_xplane_sim(s):
     update = ""
 
     yaw = math.radians(0.0)
-    pitch = math.radians(0.0)
-    roll = math.radians(0.0)
-    velocity = [20.0, 0.0, 0.0]
+    pitch = math.radians(13.4)
+    roll = math.radians(1.1)
+    velocity = [15.52, 0.51, 0.74]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -280,9 +285,9 @@ def enable_xplane_sim(s):
     update += "set sim/flightmodel/position/local_vy %.6f\n" % -velocity[2]
     update += "set sim/flightmodel/position/local_vz %.6f\n" % -velocity[0]
 
-    update += "set sim/flightmodel/position/P 0\n"
-    update += "set sim/flightmodel/position/Q 0\n"
-    update += "set sim/flightmodel/position/R 0\n"
+    update += "set sim/flightmodel/position/P %.6f\n" % math.radians(-6.7)
+    update += "set sim/flightmodel/position/Q %.6f\n" % math.radians(-5.0)
+    update += "set sim/flightmodel/position/R %.6f\n" % math.radians(14.4)
     s.sendall(update)
 
 
@@ -352,8 +357,8 @@ def recv_state_from_xplane(s):
 
 def send_control_to_xplane(s, controls):
     update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % controls[0]
-    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % math.degrees(controls[1] - 0.5)
-    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % math.degrees(controls[2] - 0.5)
+    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 2.0)
+    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 2.0)
     s.sendall(update)
 
 
@@ -387,7 +392,7 @@ if __name__ == "__main__":
 
                 print "Objective %.6f, cycles %d" % (result["objective_val"], result["cycles"])
 
-                print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
+                print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
                     t * 0.02,
                     math.degrees(result["reference_lat"]),
                     math.degrees(result["reference_lon"]),
@@ -399,7 +404,10 @@ if __name__ == "__main__":
                     math.degrees(sim_state["lat"]),
                     math.degrees(sim_state["lon"]),
                     sim_state["alt"],
-                    sim_ref["airspeed"],
+                    #sim_ref["airspeed"],
+                    sim_state["velocity"][0],
+                    sim_state["velocity"][1],
+                    sim_state["velocity"][2],
                     math.degrees(sim_ref["attitude_yaw"]),
                     math.degrees(sim_ref["attitude_pitch"]),
                     math.degrees(sim_ref["attitude_roll"]),

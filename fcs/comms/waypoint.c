@@ -38,6 +38,7 @@ SOFTWARE.
 #include "../drivers/peripheral.h"
 #include "../nmpc/cnmpc.h"
 #include "../control/control.h"
+#include "../exports/exports.h"
 #include "comms.h"
 
 
@@ -54,6 +55,7 @@ const uint8_t *restrict packet, size_t packet_length) {
     double tmp;
     uint32_t nav_state_version = 0;
     uint16_t waypoint_id = FCS_CONTROL_INVALID_WAYPOINT_ID;
+    struct fcs_waypoint_t waypoint;
     int32_t packet_time;
     uint8_t flags[4];
 
@@ -126,36 +128,37 @@ const uint8_t *restrict packet, size_t packet_length) {
 
                 memcpy(flags, &packet[field_start], field_len);
                 result = FCS_CONVERSION_OK;
+                /* TODO */
                 break;
             case 4u:
-                /* TODO: lat */
                 result = fcs_double_from_ascii_fixed(
                     &tmp, &packet[field_start], field_len);
+                waypoint.lat = tmp;
                 break;
             case 5u:
-                /* TODO: lon */
                 result = fcs_double_from_ascii_fixed(
                     &tmp, &packet[field_start], field_len);
+                waypoint.lon = tmp;
                 break;
             case 6u:
-                /* TODO: alt */
                 result = fcs_double_from_ascii_fixed(
                     &tmp, &packet[field_start], field_len);
+                waypoint.alt = (float)tmp;
                 break;
             case 7u:
-                /* TODO: yaw */
                 result = fcs_double_from_ascii_fixed(
                     &tmp, &packet[field_start], field_len);
+                waypoint.yaw = (float)tmp;
                 break;
             case 8u:
-                /* TODO: pitch */
                 result = fcs_double_from_ascii_fixed(
                     &tmp, &packet[field_start], field_len);
+                waypoint.pitch = (float)tmp;
                 break;
             case 9u:
-                /* TODO: roll */
                 result = fcs_double_from_ascii_fixed(
                     &tmp, &packet[field_start], field_len);
+                waypoint.roll = (float)tmp;
                 break;
             case 10u:
                 if (field_len != 8u) {
@@ -206,6 +209,8 @@ const uint8_t *restrict packet, size_t packet_length) {
     Everything's valid -- send a message to the control core to update the
     relevant waypoint
     */
+    fcs_exports_send_waypoint_update(nav_state_version, waypoint_id,
+                                     &waypoint);
 
     return FCS_DESERIALIZATION_OK;
 }

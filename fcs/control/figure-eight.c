@@ -126,9 +126,9 @@ const struct fcs_waypoint_t *end, float t) {
     new_point->roll = target_roll;
 
     /* Scale roll angle to resolve discontinuity during direction change */
-    if (absval(target_yaw) < 1.0f) {
+    if (absval(target_yaw) < 0.333333f) {
         new_point->roll *=
-            max(0.01f, absval(target_yaw) * absval(target_yaw));
+            max(0.01f, absval(target_yaw) * 3.0f);
     }
 
     /* Work out next yaw value, constraining to 0..2*pi. */
@@ -160,7 +160,7 @@ const struct fcs_waypoint_t *end, float t) {
 
     new_point->alt = start->alt;
     new_point->airspeed = target_airspeed;
-    new_point->pitch = 0.0f;
+    new_point->pitch = 4.0f * (M_PI / 180.0f);
 
     /* Always returning t means we never advance to the next path. */
     return t;

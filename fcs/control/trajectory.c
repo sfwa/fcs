@@ -71,14 +71,14 @@ void _get_next_reference_point(float *restrict state);
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     2e-4f, 2e-4f, 5e-5f, /* position */
     1e0f, 1e0f, 1e-1f, /* velocity */
-    1e-1f, 1e1f, 1e2f, /* attitude */
-    1e0f, 1e1f, 1e3f /* angular velocity */
+    1e-1f, 1e1f, 1e1f, /* attitude */
+    1e0f, 1e1f, 1e1f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
-    1e1f, 1e1f, 5e1f,  /* position */
+    5e0f, 5e0f, 3e1f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
     1.0f, 1.0f, 1.0f,  /* attitude */
-    1e1f, 1e1f, 1e2f /* angular velocity */
+    1e1f, 1e1f, 1e1f /* angular velocity */
 };
 
 
@@ -424,8 +424,8 @@ const float *restrict wind) {
     reference[12] = tmp2[2];
     /* FIXME: reference points should be specified in the control config. */
     reference[NMPC_STATE_DIM + 0] = 0.3f;
-    reference[NMPC_STATE_DIM + 1u] = 0.5f;
-    reference[NMPC_STATE_DIM + 2u] = 0.5f;
+    reference[NMPC_STATE_DIM + 1u] = 0.48f;
+    reference[NMPC_STATE_DIM + 2u] = 0.48f;
 }
 
 /*
@@ -508,17 +508,32 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     assert(out_waypoint_id != FCS_CONTROL_INVALID_WAYPOINT_ID);
 
     struct fcs_waypoint_t *waypoint, *out_waypoint;
-    float stabilise_delta, stabilise_heading;
+    float stabilise_delta, stabilise_heading, airflow[3], airspeed, alt;
+
+    out_waypoint = &nav->waypoints[out_waypoint_id];
+
+    /* Start with actual airspeed if it's lower than the reference */
+    airflow[0] = state_estimate->wind_velocity[0] - state_estimate->velocity[0];
+    airflow[1] = state_estimate->wind_velocity[1] - state_estimate->velocity[1];
+    airflow[2] = state_estimate->velocity[2];
+    airspeed = vector3_norm_f(airflow);
+
+    /* Pick whichever altitude is the higher */
+    if (out_waypoint->alt > state_estimate->alt) {
+        alt = out_waypoint->alt;
+    } else {
+        alt = state_estimate->alt;
+    }
 
     /* Set up the stabilisation path waypoint */
     waypoint = &nav->waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID];
     waypoint->lat = state_estimate->lat;
     waypoint->lon = state_estimate->lon;
-    waypoint->alt = state_estimate->alt;
-    waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
-    waypoint->yaw = (float)atan2(state_estimate->velocity[1],
-                                 state_estimate->velocity[0]);
-    waypoint->pitch = 0.0f;
+    waypoint->alt = alt;
+    waypoint->airspeed = airspeed > FCS_CONTROL_DEFAULT_AIRSPEED ?
+        FCS_CONTROL_DEFAULT_AIRSPEED : airspeed;
+    waypoint->yaw = (float)atan2(-airflow[1], -airflow[0]);
+    waypoint->pitch = 4.0f * (M_PI / 180.0f);
     waypoint->roll = 0.0f;
 
     /*
@@ -528,16 +543,15 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     stabilise_delta = waypoint->airspeed * 5.0f;
     stabilise_heading = waypoint->yaw;
 
-    out_waypoint = &nav->waypoints[out_waypoint_id];
     out_waypoint->lat = waypoint->lat +
         (1.0/WGS84_A) * cos(stabilise_heading) * stabilise_delta;
     out_waypoint->lon = waypoint->lon +
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
-    out_waypoint->alt = state_estimate->alt;
+    out_waypoint->alt = alt;
     out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     out_waypoint->yaw = stabilise_heading;
-    out_waypoint->pitch = 0.0f;
+    out_waypoint->pitch = 4.0f * (M_PI / 180.0f);
     out_waypoint->roll = 0.0f;
 
     nav->paths[FCS_CONTROL_STABILISE_PATH_ID].start_waypoint_id =

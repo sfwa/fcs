@@ -93,10 +93,9 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 3e2, 3e2, 3e2 };
-    float lower_control_bound[NMPC_CONTROL_DIM];
-    float upper_control_bound[NMPC_CONTROL_DIM];
-    size_t i;
+    float control_weights[NMPC_CONTROL_DIM] = { 3e2, 5e2, 5e2 };
+    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.0f, 0.25f, 0.25f };
+    float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
     /* Clear GPIO outs */
     fcs_global_control_state.gpio_state = 0;
@@ -128,11 +127,6 @@ void fcs_control_init(void) {
     Set up NMPC parameters -- state and control weights as well as control
     bounds
     */
-    for (i = 0; i < NMPC_CONTROL_DIM; i++) {
-        lower_control_bound[i] = 0.0;
-        upper_control_bound[i] = 1.0;
-    }
-
     nmpc_set_state_weights(state_weights);
     nmpc_set_control_weights(control_weights);
     nmpc_set_terminal_weights(terminal_weights);

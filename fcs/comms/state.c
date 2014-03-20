@@ -61,7 +61,7 @@ const struct fcs_ahrs_state_t *restrict state) {
     fcs_exports_recv_control(&control);
 
     index += fcs_ascii_hex_from_uint8(
-        &buf[index], (uint8_t)(control.path_id & 0xFF00u) >> 8u);
+        &buf[index], (uint8_t)((control.path_id & 0xFF00u) >> 8u));
     index += fcs_ascii_hex_from_uint8(
         &buf[index], (uint8_t)(control.path_id & 0x00FFu));
     buf[index++] = ',';

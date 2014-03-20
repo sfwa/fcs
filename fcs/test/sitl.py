@@ -26,6 +26,7 @@ import time
 import socket
 import vectors
 import datetime
+import collections
 from ctypes import *
 
 
@@ -100,6 +101,8 @@ sim_state = {
     "angular_velocity": [0.0, 0.0, 0.0],
     "wind_velocity": [0.0, 0.0, 0.0]
 }
+sim_state_delay = collections.deque()
+
 
 sim_ref = {
     "wind_n": None,
@@ -569,10 +572,10 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = math.radians(0.0)
-    pitch = math.radians(45.0)
-    roll = math.radians(45.0)
-    velocity = [20.0, 10.0, 0.0]
+    yaw = math.radians(284.6)
+    pitch = math.radians(13.4)
+    roll = math.radians(1.1)
+    velocity = [15.52, 0.51, 0.74]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -592,9 +595,9 @@ def enable_xplane_sim(s):
     update += "set sim/flightmodel/position/local_vy %.6f\n" % -velocity[2]
     update += "set sim/flightmodel/position/local_vz %.6f\n" % -velocity[0]
 
-    update += "set sim/flightmodel/position/P 0.2\n"
-    update += "set sim/flightmodel/position/Q 0\n"
-    update += "set sim/flightmodel/position/R 0.4\n"
+    update += "set sim/flightmodel/position/P %.6f\n" % math.radians(14.4)
+    update += "set sim/flightmodel/position/Q %.6f\n" % math.radians(-5.0)
+    update += "set sim/flightmodel/position/R %.6f\n" % math.radians(-6.7)
     s.sendall(update)
 
 
@@ -689,8 +692,8 @@ def send_state_to_xplane(s):
 
 def send_control_to_xplane(s, controls):
     update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % controls[0]
-    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % math.degrees(controls[1] - 0.5)
-    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % math.degrees(controls[2] - 0.5)
+    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 2.0)
+    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 2.0)
     s.sendall(update)
 
 
@@ -807,13 +810,23 @@ if __name__ == "__main__":
 
             #send_state_to_xplane(sock)
 
+            sim_state_delay.append(sim_state)
+
             # Skip the rest until we have a full set of data
-            if sim_state["lat"] is None or sim_state["lon"] is None or \
-                    sim_ref["wind_n"] is None:
+            if len(sim_state_delay) < 10:
                 time.sleep(0.02)
                 continue
 
-            controls = tick(**sim_state)
+            sim_state_delay.popleft()
+
+            fused_state = sim_state
+
+            controls = tick(
+                lat=sim_state_delay[0]["lat"], lon=sim_state_delay[0]["lon"],
+                alt=sim_state_delay[-1]["alt"], velocity=sim_state_delay[0]["velocity"],
+                attitude=sim_state_delay[-2]["attitude"],
+                angular_velocity=sim_state_delay[-1]["angular_velocity"],
+                wind_velocity=sim_state_delay[0]["wind_velocity"])
 
             print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
                 t * 0.02,

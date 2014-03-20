@@ -40,8 +40,6 @@ SOFTWARE.
 
 
 #define MODE_CMD "set mode to "
-#define QUERY_WAYPOINT_CMD "query waypoint "
-#define QUERY_PATH_CMD "query path "
 
 
 enum fcs_deserialization_result_t fcs_comms_deserialize_command(
@@ -153,12 +151,6 @@ const uint8_t *packet, size_t packet_length) {
             memcmp(MODE_CMD, command, sizeof(MODE_CMD) - 1) == 0) {
         uint8_t new_mode = command[sizeof(MODE_CMD) - 1];
         fcs_ahrs_set_mode((enum fcs_mode_t)new_mode);
-    } else if (command_length > sizeof(QUERY_PATH_CMD) - 1 &&
-            memcmp(QUERY_PATH_CMD, command, sizeof(MODE_CMD) - 1) == 0) {
-        /* TODO: Got a path query -- send info on the requested path */
-    } else if (command_length > sizeof(QUERY_WAYPOINT_CMD) - 1 &&
-            memcmp(QUERY_WAYPOINT_CMD, command, sizeof(MODE_CMD) - 1) == 0) {
-        /* TODO: Got a waypoint query -- send info on the requested waypoint */
     }
 
     return FCS_DESERIALIZATION_OK;

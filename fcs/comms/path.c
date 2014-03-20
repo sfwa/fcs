@@ -51,7 +51,7 @@ const uint8_t *restrict packet, size_t packet_length) {
     uint8_t field = 0,
             checksum = 'P' ^ 'S' ^ 'F' ^ 'W' ^ 'A' ^ 'P' ^ ',';
     size_t idx = 8u;
-    enum fcs_conversion_result_t result;
+    enum fcs_conversion_result_t result = FCS_CONVERSION_ERROR;
     int32_t packet_time;
     uint32_t nav_state_version = 0;
     struct fcs_path_t path;
@@ -127,6 +127,7 @@ const uint8_t *restrict packet, size_t packet_length) {
 
                 memcpy(flags, &packet[field_start], field_len);
                 result = FCS_CONVERSION_OK;
+                /* TODO */
                 break;
             case 4u:
                 if (field_len != 4u) {
