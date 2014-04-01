@@ -355,7 +355,7 @@ float t) {
 
     /*
     Smooth roll changes by interpolating from 0 to maximum over the course of
-    1.5 radians in yaw.
+    1/3 of a radian in yaw.
     */
     if (absval(target_yaw) < 0.333333f) {
         target_roll *= max(0.01f, absval(target_yaw) * 3.0f);
@@ -422,7 +422,7 @@ float t) {
     */
     new_point->airspeed = target_airspeed;
     new_point->yaw = out[2];
-    new_point->pitch = 4.0f * (M_PI / 180.0f);
+    new_point->pitch = 4.0f * ((float)M_PI / 180.0f);
     new_point->roll = target_roll;
     new_point->lat = start->lat + (1.0/WGS84_A) * out[0];
     new_point->lon = start->lon +

@@ -169,6 +169,8 @@ void fcs_control_tick(void) {
     struct fcs_state_estimate_t state_estimate;
     struct fcs_nav_state_t *nav = &fcs_global_nav_state;
     float controls[NMPC_CONTROL_DIM], alt_diff;
+    struct fcs_waypoint_update_t waypoint_update;
+    struct fcs_path_update_t path_update;
     size_t i;
     uint32_t start_t = cycle_count();
     bool control_timeout = false;
@@ -198,6 +200,25 @@ void fcs_control_tick(void) {
         fcs_global_counters.nmpc_resets++;
     } else {
         control_tick++;
+    }
+
+    /* Handle path and waypoint updates */
+    fcs_exports_recv_waypoint_update(&waypoint_update);
+    if (waypoint_update.nav_state_version > nav->version) {
+        assert(waypoint_update.waypoint_id < FCS_CONTROL_MAX_WAYPOINTS);
+
+        /* Process the waypoint update */
+        nav->waypoints[waypoint_update.waypoint_id] = waypoint_update.waypoint;
+        nav->version = waypoint_update.nav_state_version;
+    }
+
+    fcs_exports_recv_path_update(&path_update);
+    if (path_update.nav_state_version > nav->version) {
+        assert(path_update.path_id < FCS_CONTROL_MAX_PATHS);
+
+        /* Process the path update */
+        nav->paths[path_update.path_id] = path_update.path;
+        nav->version = path_update.nav_state_version;
     }
 
     /*
@@ -273,8 +294,8 @@ void fcs_control_tick(void) {
         fcs_global_control_state.controls[i].setpoint = controls[i];
     }
 
-    fcs_exports_send_control();
-
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
+
+    fcs_exports_send_control();
 }

@@ -23,7 +23,7 @@ SOFTWARE.
 #ifndef _FCS_BOARD_H
 #define _FCS_BOARD_H
 
-#define FCS_COMPILE_BOARD_HITL
+/* #define FCS_COMPILE_BOARD_HITL */
 /* #define FCS_COMPILE_BOARD_LOG */
 
 /* Convert an address in an individual core's L2 SRAM to global */

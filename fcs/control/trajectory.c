@@ -533,7 +533,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     waypoint->airspeed = airspeed > FCS_CONTROL_DEFAULT_AIRSPEED ?
         FCS_CONTROL_DEFAULT_AIRSPEED : airspeed;
     waypoint->yaw = (float)atan2(-airflow[1], -airflow[0]);
-    waypoint->pitch = 4.0f * (M_PI / 180.0f);
+    waypoint->pitch = 4.0f * ((float)M_PI / 180.0f);
     waypoint->roll = 0.0f;
 
     /*
@@ -551,7 +551,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     out_waypoint->alt = alt;
     out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     out_waypoint->yaw = stabilise_heading;
-    out_waypoint->pitch = 4.0f * (M_PI / 180.0f);
+    out_waypoint->pitch = 4.0f * ((float)M_PI / 180.0f);
     out_waypoint->roll = 0.0f;
 
     nav->paths[FCS_CONTROL_STABILISE_PATH_ID].start_waypoint_id =

@@ -50,6 +50,8 @@ SOFTWARE.
 #ifdef __TI_COMPILER_VERSION__
 #define FCS_SEMAPHORE_STATE 1u
 #define FCS_SEMAPHORE_CONTROL 2u
+#define FCS_SEMAPHORE_PATH 3u
+#define FCS_SEMAPHORE_WAYPOINT 4u
 #define FCS_SEMAPHORE_TIMEOUT 1000u
 
 #define L1DWIBAR (*((volatile uint32_t*)0x01844030))
@@ -66,6 +68,12 @@ volatile static struct fcs_state_estimate_t fcs_export_state;
 
 #pragma DATA_SECTION(fcs_export_control, ".shared")
 volatile static struct fcs_control_output_t fcs_export_control;
+
+#pragma DATA_SECTION(fcs_export_waypoint_update, ".shared");
+volatile static struct fcs_waypoint_update_t fcs_export_waypoint_update;
+
+#pragma DATA_SECTION(fcs_export_path_update, ".shared");
+volatile static struct fcs_path_update_t fcs_export_path_update;
 
 
 void fcs_exports_init(void) {
@@ -245,18 +253,112 @@ void fcs_exports_recv_control(struct fcs_control_output_t *control) {
 
 void fcs_exports_send_waypoint_update(uint32_t nav_state_version,
 uint16_t waypoint_id, const struct fcs_waypoint_t *waypoint) {
+#ifdef __TI_COMPILER_VERSION__
+    /* Acquire the global control semaphore; exit if that's not possible */
+    volatile CSL_SemRegs *const semaphore =
+            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_WAYPOINT];
+    if (sem_val != 1u) {
+        return;
+    }
+#endif
 
+#ifdef __TI_COMPILER_VERSION__
+    /* Invalidate L1 */
+    L1DIBAR = (uint32_t)&fcs_export_waypoint_update;
+    L1DIWC = sizeof(fcs_export_waypoint_update) / 4u;
+    while (L1DIWC & 0xFFFFu);
+#endif
+
+    fcs_export_waypoint_update.nav_state_version = nav_state_version;
+    fcs_export_waypoint_update.waypoint_id = waypoint_id;
+    fcs_export_waypoint_update.waypoint = *waypoint;
+
+#ifdef __TI_COMPILER_VERSION__
+    /* Release the semaphore */
+    semaphore->SEM[FCS_SEMAPHORE_WAYPOINT] = 1u;
+#endif
 }
 
 void fcs_exports_send_path_update(uint32_t nav_state_version,
 uint16_t path_id, const struct fcs_path_t *path) {
+#ifdef __TI_COMPILER_VERSION__
+    /* Acquire the global control semaphore; exit if that's not possible */
+    volatile CSL_SemRegs *const semaphore =
+            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_PATH];
+    if (sem_val != 1u) {
+        return;
+    }
+#endif
 
+#ifdef __TI_COMPILER_VERSION__
+    /* Invalidate L1 */
+    L1DIBAR = (uint32_t)&fcs_export_path_update;
+    L1DIWC = sizeof(fcs_export_path_update) / 4u;
+    while (L1DIWC & 0xFFFFu);
+#endif
+
+    fcs_export_path_update.nav_state_version = nav_state_version;
+    fcs_export_path_update.path_id = path_id;
+    fcs_export_path_update.path = *path;
+
+#ifdef __TI_COMPILER_VERSION__
+    /* Release the semaphore */
+    semaphore->SEM[FCS_SEMAPHORE_PATH] = 1u;
+#endif
 }
 
 void fcs_exports_recv_waypoint_update(struct fcs_waypoint_update_t *update){
+#ifdef __TI_COMPILER_VERSION__
+    /* Wait until we can acquire the semaphore */
+    volatile CSL_SemRegs *const semaphore =
+            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    uint32_t sem_val = 0, i = 0;
+    while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
+        sem_val = semaphore->SEM[FCS_SEMAPHORE_WAYPOINT];
+        i++;
+    }
+#endif
 
+#ifdef __TI_COMPILER_VERSION__
+    /* Invalidate L1 */
+    L1DIBAR = (uint32_t)&fcs_export_waypoint_update;
+    L1DIWC = sizeof(fcs_export_waypoint_update) / 4u;
+    while (L1DIWC & 0xFFFFu);
+#endif
+
+    *update = fcs_export_waypoint_update;
+
+#ifdef __TI_COMPILER_VERSION__
+    /* Release the semaphore */
+    semaphore->SEM[FCS_SEMAPHORE_WAYPOINT] = 1u;
+#endif
 }
 
 void fcs_exports_recv_path_update(struct fcs_path_update_t *update) {
+#ifdef __TI_COMPILER_VERSION__
+    /* Wait until we can acquire the semaphore */
+    volatile CSL_SemRegs *const semaphore =
+            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
+    uint32_t sem_val = 0, i = 0;
+    while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
+        sem_val = semaphore->SEM[FCS_SEMAPHORE_PATH];
+        i++;
+    }
+#endif
 
+#ifdef __TI_COMPILER_VERSION__
+    /* Invalidate L1 */
+    L1DIBAR = (uint32_t)&fcs_export_path_update;
+    L1DIWC = sizeof(fcs_export_path_update) / 4u;
+    while (L1DIWC & 0xFFFFu);
+#endif
+
+    *update = fcs_export_path_update;
+
+#ifdef __TI_COMPILER_VERSION__
+    /* Release the semaphore */
+    semaphore->SEM[FCS_SEMAPHORE_PATH] = 1u;
+#endif
 }

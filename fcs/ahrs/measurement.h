@@ -23,6 +23,8 @@ SOFTWARE.
 #ifndef _MEASUREMENT_H_
 #define _MEASUREMENT_H_
 
+typedef uint16_t float16_t;
+
 enum fcs_measurement_type_t {
     FCS_MEASUREMENT_TYPE_INVALID,
     FCS_MEASUREMENT_TYPE_ACCELEROMETER,
@@ -92,6 +94,8 @@ struct fcs_measurement_t {
         int16_t i16[7];
         uint32_t u32[3];
         int32_t i32[3];
+        float16_t f16[7];
+        float f32[3];
     } __attribute__ ((packed)) data;
 } __attribute__ ((packed));
 
@@ -207,12 +211,17 @@ Max usage:
 8 magnetometer 1 x, y, z
 8 magnetometer 2 x, y, z
 14 gps pos 1 lat, lon, alt
+14 gps pos 2 lat, lon, alt
 8 gps velocity 1 n, e, d
-4 gps fix mode, num SVs, error
+8 gps velocity 2 n, e, d
+4 gps 1 fix mode, num SVs, error
+4 gps 2 fix mode, num SVs, error
+8 radio RSSI, noise, #packets, #errors
+10 gcs reference pressure, alt
 10 control pos
 2 bytes CRC16
 
-Total: 130 + COBS-R + NUL + NUL = 133
+Total: 174 + COBS-R + NUL + NUL = 177
 */
 struct fcs_measurement_log_t {
     uint8_t data[256];
@@ -239,9 +248,23 @@ Modifies `mlog` to include a CRC16SBP.
 size_t fcs_measurement_log_serialize(uint8_t *restrict out_buf,
 size_t out_buf_len, struct fcs_measurement_log_t *mlog);
 
+/* Deserialize a measurement log frame */
+enum fcs_deserialization_result_t fcs_measurement_log_deserialize(
+struct fcs_measurement_log_t *mlog, const uint8_t *restrict in_buf,
+size_t in_buf_len);
+
 /*
-Add a sensor value entry to a log packet. Returns true if the sensor value
-could be added, or false if it couldn't.
+Merge the measurement logs `src` and `dst`, with the result stored in `dst`.
+Updates the sensor ID of all measurements in `src` with `src_sensor_id`.
+
+If `dst` has insufficient space available, return `false`, otherwise `true`.
+*/
+bool fcs_measurement_log_merge(struct fcs_measurement_log_t *restrict dst,
+const struct fcs_measurement_log_t *restrict src, uint8_t src_sensor_id);
+
+/*
+Add a sensor value entry to a log packet. Returns `true` if the sensor value
+could be added, or `false` if it couldn't.
 */
 bool fcs_measurement_log_add(struct fcs_measurement_log_t *restrict mlog,
 struct fcs_measurement_t *restrict measurement);

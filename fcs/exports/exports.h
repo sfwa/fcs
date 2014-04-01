@@ -69,6 +69,9 @@ struct fcs_waypoint_update_t {
     uint16_t waypoint_id;
 
     struct fcs_waypoint_t waypoint;
+
+    /* Pad the structure to an L1 cache line */
+    uint8_t reserved[128u - sizeof(struct fcs_waypoint_t) - 6u];
 };
 
 struct fcs_path_update_t {
@@ -76,6 +79,9 @@ struct fcs_path_update_t {
     uint16_t path_id;
 
     struct fcs_path_t path;
+
+    /* Pad the structure to an L1 cache line */
+    uint8_t reserved[128u - sizeof(struct fcs_path_t) - 6u];
 };
 
 void fcs_exports_init(void);

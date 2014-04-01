@@ -47,15 +47,14 @@ SOFTWARE.
 #include "../../control/control.h"
 #include "../../exports/exports.h"
 
-#if !defined(FCS_COMPILE_BOARD_HITL) && !defined(FCS_COMPILE_BOARD_LOG)
-
 struct sensor_packet_t {
     /* Base fields */
     uint8_t crc;
+    uint8_t state;
     uint16_t tick;
     uint8_t sensor_update_flags;
     uint8_t cpu_load;
-    uint16_t pwm_in; /* PWM input value; channel is tick % 4 */
+    uint16_t pwm_in[3]; /* PWM input values */
 
     /* Sensor fields */
     struct {
@@ -66,14 +65,18 @@ struct sensor_packet_t {
     } __attribute__ ((packed)) gyro;
     int16_t accel_gyro_temp; /* -40 to 85degC, 340LSb/degC,
         -512 = 35degC */
+
     uint16_t pressure; /* 10-1200mbar, 1LSb = 0.02mbar */
     uint16_t barometer_temp; /* -40 to 125degC, in 0.01degC increments,
         0 = -40degC */
-    int16_t pitot; /* 16-bit ADC reading -- pitot sensor */
+
+    int16_t pitot; /* 16-bit pitot sensor differential pressure reading */
+    uint16_t pitot_temp; /* 16-bit pitot sensor temperature reading */
+
     int16_t i; /* 16-bit ADC reading -- current sensor */
     int16_t v; /* 16-bit ADC reading -- voltage sensor */
-    int16_t range; /* 16-bit ADC reading -- rangefinder */
-    uint8_t gpin_state; /* & 0x0f for pin state, & 0xf0 for PWM read */
+    int16_t range; /* 16-bit ADC reading -- aux */
+    uint8_t gpin_state;
 
     /* Magnetometer */
     struct {

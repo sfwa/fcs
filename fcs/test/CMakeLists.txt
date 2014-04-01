@@ -5,7 +5,7 @@ PROJECT(unittest)
 INCLUDE(ExternalProject)
 
 set(CMAKE_CXX_FLAGS "-O3 -mssse3 -oaddmul")
-set(CMAKE_C_FLAGS "-O3 -mssse3 -oaddmul -Weverything -Wno-documentation -Wno-padded -Wno-packed -Wno-float-equal -Wno-unknown-pragmas")
+set(CMAKE_C_FLAGS "-O3 -mssse3 -oaddmul -Weverything -Wno-documentation -Wno-padded -Wno-packed -Wno-float-equal -Wno-unknown-pragmas -Werror")
 
 # Set default ExternalProject root directory
 SET_DIRECTORY_PROPERTIES(PROPERTIES EP_PREFIX .)

@@ -119,6 +119,9 @@ const uint8_t *restrict packet, size_t packet_length) {
 
                 result = fcs_uint16_from_ascii_hex(
                     &path_id, &packet[field_start], field_len);
+                if (path_id >= FCS_CONTROL_MAX_PATHS) {
+                    return FCS_DESERIALIZATION_ERROR;
+                }
                 break;
             case 3u:
                 if (field_len != 4u) {
@@ -203,7 +206,10 @@ const uint8_t *restrict packet, size_t packet_length) {
         return FCS_DESERIALIZATION_ERROR;
     }
 
-    assert(path_id != FCS_CONTROL_INVALID_PATH_ID);
+    /*
+    TODO
+    Check data for validity -- return an error if any values are out of range
+    */
 
     /*
     Everything's valid -- send a message to the control core to update the
