@@ -40,8 +40,8 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     overlap */
     assert(dst_buf_ptr);
     assert(src_ptr);
-    assert(dst_buf_len <= 256u);
-    assert(src_len <= 256u);
+    assert(dst_buf_len <= FCS_COBSR_SIZE_LIMIT);
+    assert(src_len <= FCS_COBSR_SIZE_LIMIT);
     assert(dst_buf_ptr + dst_buf_len < src_ptr ||
            dst_buf_ptr > src_ptr + src_len);
 
@@ -52,7 +52,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     uint8_t *           dst_code_write_ptr  = dst_buf_ptr;
     uint8_t *           dst_write_ptr       = dst_code_write_ptr + 1u;
     uint8_t             src_byte            = 0;
-    uint8_t             search_len          = 1u;
+    size_t              search_len          = 1u;
 
     /* Iterate over the source bytes */
     for (;;) {
@@ -127,8 +127,8 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     overlap */
     assert(dst_buf_ptr);
     assert(src_ptr);
-    assert(dst_buf_len <= 256u);
-    assert(src_len <= 256u);
+    assert(dst_buf_len <= FCS_COBSR_SIZE_LIMIT);
+    assert(src_len <= FCS_COBSR_SIZE_LIMIT);
     assert(dst_buf_ptr + dst_buf_len < src_ptr ||
            dst_buf_ptr > src_ptr + src_len);
 
@@ -166,7 +166,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
                 num_output_bytes = remaining_output_bytes;
             }
 
-            assert(num_output_bytes <= 256u);
+            assert(num_output_bytes <= FCS_COBSR_SIZE_LIMIT);
             for (i = num_output_bytes; i != 0; i--) {
                 src_byte = *src_ptr++;
                 if (src_byte == 0) {
@@ -198,7 +198,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
                 num_output_bytes = remaining_output_bytes;
             }
 
-            assert(num_output_bytes <= 256u);
+            assert(num_output_bytes <= FCS_COBSR_SIZE_LIMIT);
             for (i = num_output_bytes; i != 0; i--) {
                 src_byte = *src_ptr++;
                 if (src_byte == 0) {

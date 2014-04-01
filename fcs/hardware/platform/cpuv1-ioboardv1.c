@@ -33,7 +33,6 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
 #endif
 
-#include "../../config/config.h"
 #include "../board.h"
 #include "../../util/util.h"
 #include "../../util/3dmath.h"
@@ -47,85 +46,10 @@ SOFTWARE.
 #include "../../control/control.h"
 #include "../../exports/exports.h"
 
-struct sensor_packet_t {
-    /* Base fields */
-    uint8_t crc;
-    uint8_t state;
-    uint16_t tick;
-    uint8_t sensor_update_flags;
-    uint8_t cpu_load;
-    uint16_t pwm_in[3]; /* PWM input values */
-
-    /* Sensor fields */
-    struct {
-        int16_t x, y, z; /* [-4,4]g, 8192LSb/g */
-    } __attribute__ ((packed)) accel;
-    struct {
-        int16_t x, y, z; /* [-500,500]deg/s, 65.5LSb/(deg/s) */
-    } __attribute__ ((packed)) gyro;
-    int16_t accel_gyro_temp; /* -40 to 85degC, 340LSb/degC,
-        -512 = 35degC */
-
-    uint16_t pressure; /* 10-1200mbar, 1LSb = 0.02mbar */
-    uint16_t barometer_temp; /* -40 to 125degC, in 0.01degC increments,
-        0 = -40degC */
-
-    int16_t pitot; /* 16-bit pitot sensor differential pressure reading */
-    uint16_t pitot_temp; /* 16-bit pitot sensor temperature reading */
-
-    int16_t i; /* 16-bit ADC reading -- current sensor */
-    int16_t v; /* 16-bit ADC reading -- voltage sensor */
-    int16_t range; /* 16-bit ADC reading -- aux */
-    uint8_t gpin_state;
-
-    /* Magnetometer */
-    struct {
-        int16_t x, y, z; /* [-2,2]Ga, 1090LSb/Ga */
-    } __attribute__ ((packed)) mag;
-
-    /* GPS fields */
-    struct {
-        struct {
-            int32_t lat, lng; /* lat, lng in 10^-7 degress */
-            int32_t alt; /* alt above msl in  cm */
-        } position;
-        struct {
-            int16_t n, e, d; /* NED in cm/s */
-        } __attribute__ ((packed)) velocity;
-    } __attribute__ ((packed)) gps;
-
-    struct {
-        uint8_t fix_mode_num_satellites; /* 2x 4-bit values */
-        uint8_t pos_err; /* error estimate in metres */
-    } __attribute__ ((packed)) gps_info;
-} __attribute__ ((packed));
-
-#define UPDATED_ACCEL 0x01u
-#define UPDATED_GYRO 0x02u
-#define UPDATED_BAROMETER 0x04u
-#define UPDATED_MAG 0x08u
-#define UPDATED_GPS_POS 0x10u
-#define UPDATED_GPS_INFO 0x20u
-#define UPDATED_ADC_GPIO 0x40u
 
 #define ACCEL_SENSITIVITY 4096.0f /* LSB/g @ ±8g FS */
 #define GYRO_SENSITIVITY 65.5f /* LSB/(deg/s) @ 500deg/s FS */
 #define MAG_SENSITIVITY 1090.0f /* LSB/G @ ±2G FS */
-
-struct control_packet_t {
-    uint8_t crc;
-    uint8_t tick;
-    uint8_t msg_type;
-    uint8_t gpout;
-    uint16_t pwm[4];
-} __attribute__ ((packed));
-
-enum msg_type_t {
-    MSG_TYPE_NONE = 0,
-    MSG_TYPE_CONTROL = 1,
-    MSG_TYPE_FIRMWARE = 2,
-    MSG_TYPE_CMD = 3
-};
 
 #define FCS_IOBOARD_RESET_TIMEOUT 50
 #define FCS_IOBOARD_PACKET_TIMEOUT 5
@@ -424,6 +348,17 @@ void fcs_board_tick(void) {
 
     Otherwise, it should be set to FCS_CONTROL_MODE_MANUAL.
     */
+
+    /*
+    Write the log values to internal stream 1 -- the CPLD will route this to
+    the CPU UART
+    */
+
+    comms_buf_len = fcs_measurement_log_serialize(
+        comms_buf, sizeof(comms_buf), &fcs_global_ahrs_state.measurements);
+    write_len = fcs_stream_write(FCS_STREAM_UART_INT1, comms_buf,
+                                 comms_buf_len);
+    assert(comms_buf_len == write_len);
 }
 
 /*
@@ -653,51 +588,20 @@ struct fcs_measurement_log_t *out_measurements) {
     */
     pwm_state[board_id][(packet.gpin_state & 0xF0u) >> 4u] =
         swap_uint16(packet.pwm_in);
-    if (board_id == 1) {
-    	for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
-    	    measurement.data.u16[i] = pwm_state[board_id][i];
+	for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
+	    measurement.data.u16[i] = pwm_state[board_id][i];
 
-            /* Set neutral value during calibration */
-            if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
-                pwm_neutral[i] += (float)pwm_state[board_id][i] *
-                              (1.0f / 65535.0f);
-                pwm_neutral[i] *= 0.5;
-            }
-    	}
-    	fcs_measurement_set_header(&measurement, 16u, 4u);
-    	fcs_measurement_set_sensor(&measurement, 0,
-    	                           FCS_MEASUREMENT_TYPE_CONTROL_POS);
-    	fcs_measurement_log_add(out_measurements, &measurement);
-    } else if (board_id == 0) {
-        /* Set payload presence based on GPIN 0 (high == present). */
-        if (packet.gpin_state & 0x1u) {
-            fcs_global_ahrs_state.payload_present = false;
-        } else {
-            fcs_global_ahrs_state.payload_present = true;
+        /* Set neutral value during calibration */
+        if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
+            pwm_neutral[i] += (float)pwm_state[board_id][i] *
+                          (1.0f / 65535.0f);
+            pwm_neutral[i] *= 0.5;
         }
-
-        /*
-        FIXME: this is a temporary addition to enable payload release via
-        RC PWM control. Should be removed once we have waypoint-based support
-        for payload release.
-        */
-
-        /* Trigger payload release after 25 consecutive pulses > 1.5ms. */
-        static uint16_t payload_release_ticks;
-        if (pwm_state[board_id][2] > 32767) {
-            payload_release_ticks++;
-        } else {
-            payload_release_ticks = 0;
-        }
-
-        if (payload_release_ticks > 25u && payload_release_ticks < 525u) {
-            /* Re-trigger to keep magnet going for up to half a second. */
-            fcs_global_control_state.gpio_state =
-                payload_release_ticks & 0x1u;
-        } else {
-            fcs_global_control_state.gpio_state = 0;
-        }
-    }
+	}
+	fcs_measurement_set_header(&measurement, 16u, 4u);
+	fcs_measurement_set_sensor(&measurement, 0,
+	                           FCS_MEASUREMENT_TYPE_CONTROL_POS);
+	fcs_measurement_log_add(out_measurements, &measurement);
 
     fcs_global_counters.ioboard_packet_rx[dev]++;
     return true;
@@ -707,43 +611,5 @@ invalid:
     return false;
 }
 
-/*
-Serialize a control packet containing `control_values` into `buf`.
-*/
-size_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
-const uint16_t *restrict control_values, uint8_t gpout) {
-    assert(buf);
-    assert(control_values);
-
-    struct control_packet_t packet;
-
-    packet.tick = tick;
-    packet.msg_type = MSG_TYPE_CONTROL;
-    packet.gpout = gpout;
-
-    uint8_t i;
-    #pragma MUST_ITERATE(4, 4)
-    for (i = 0; i < 4u; i++) {
-        /* Swap bytes for big-endian AVR32 */
-        packet.pwm[i] = swap_uint16(control_values[i]);
-    }
-
-    /* Calculate the packet's CRC8 */
-    packet.crc = fcs_crc8(&(packet.tick), sizeof(packet) - 1u, 0);
-
-    /* Set the packet start/end and COBS-R encode the result */
-    struct fcs_cobsr_encode_result result;
-    result = fcs_cobsr_encode(&buf[1], sizeof(packet) + 3u, (uint8_t*)&packet,
-                              sizeof(packet));
-    assert(result.status == FCS_COBSR_ENCODE_OK);
-
-    /* Set the NUL packet delimiters */
-    buf[0] = 0;
-    buf[result.out_len + 1u] = 0;
-
-    /* Return the total length */
-    assert(result.out_len > 0 && (size_t)result.out_len < SIZE_MAX - 2u);
-    return (size_t)(result.out_len + 2u);
-}
 
 #endif

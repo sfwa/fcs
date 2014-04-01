@@ -27,7 +27,6 @@ SOFTWARE.
 #include <assert.h>
 #include <math.h>
 
-#include "../config/config.h"
 #include "../util/3dmath.h"
 #include "../util/util.h"
 #include "../drivers/stream.h"
@@ -226,25 +225,27 @@ uint16_t frame_id) {
 Serialize and add COBS-R + framing to log packet, and copy the result to
 `out_buf`. Returns the length of the serialized data.
 
-Modifies `mlog` to include a CRC16SBP.
+Modifies `mlog` to include a CRC32.
 */
 size_t fcs_measurement_log_serialize(uint8_t *restrict out_buf,
 size_t out_buf_length, struct fcs_measurement_log_t *restrict mlog) {
     assert(out_buf);
     assert(out_buf_length);
     assert(mlog);
-    /* 2 bytes for CRC, 3 bytes for COBS-R + NUL start/end */
-    assert(out_buf_length >= mlog->length + 2u + 3u);
+    /* 4 bytes for CRC, 3 bytes for COBS-R + NUL start/end */
+    assert(out_buf_length >= mlog->length + 4u + 3u);
 
     /* Calculate checksum and update the packet with the result */
-    uint16_t crc = fcs_crc16_sbp(mlog->data, mlog->length, 0xFFFFu);
-    mlog->data[mlog->length + 0] = (crc & 0x00FFu);
-    mlog->data[mlog->length + 1u] = (crc & 0xFF00u) >> 8u;
+    uint32_t crc = fcs_crc32(mlog->data, mlog->length, 0xFFFFFFFFu);
+    mlog->data[mlog->length + 0u] = (crc >> 0u) & 0xFFu;
+    mlog->data[mlog->length + 1u] = (crc >> 8u) & 0xFFu;
+    mlog->data[mlog->length + 2u] = (crc >> 16u) & 0xFFu;
+    mlog->data[mlog->length + 3u] = (crc >> 24u) & 0xFFu;
 
     /* Write COBS-R encoded result to out_buf */
     struct fcs_cobsr_encode_result result;
     result = fcs_cobsr_encode(&out_buf[1], out_buf_length - 2u, mlog->data,
-                              mlog->length + 2u);
+                              mlog->length + 4u);
     assert(result.status == FCS_COBSR_ENCODE_OK);
 
     /* Add NUL start/end bytes */
@@ -269,11 +270,11 @@ struct fcs_measurement_t *restrict measurement) {
 
     /*
     If there's not enough space in the log record to save the value, return
-    false. 250 bytes to allow space for the CRC16, the COBS-R encoding and
+    false. 250 bytes to allow space for the CRC32, the COBS-R encoding and
     two NUL bytes within a 256-byte packet.
     */
     size_t length = fcs_measurement_get_length(measurement);
-    if (mlog->length + length > 250u) {
+    if (mlog->length + length > FCS_MEASUREMENT_LOG_LENGTH - 6u) {
         return false;
     }
 
@@ -295,7 +296,7 @@ const struct fcs_measurement_log_t *restrict mlog,
 enum fcs_measurement_type_t type, uint8_t measurement_id,
 struct fcs_measurement_t *restrict out_measurement) {
     assert(mlog);
-    assert(5u <= mlog->length && mlog->length <= 256u);
+    assert(5u <= mlog->length && mlog->length <= FCS_MEASUREMENT_LOG_LENGTH);
     assert(out_measurement);
 
     uint8_t search_key;
@@ -339,7 +340,7 @@ const struct fcs_calibration_map_t *restrict cmap,
 enum fcs_measurement_type_t type, double out_value[4], double *out_error,
 double *out_offset, double prescale) {
     assert(mlog);
-    assert(5u <= mlog->length && mlog->length <= 256u);
+    assert(5u <= mlog->length && mlog->length <= FCS_MEASUREMENT_LOG_LENGTH);
     assert(cmap);
     assert(out_value);
     assert(out_error);

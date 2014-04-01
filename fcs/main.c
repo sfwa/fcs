@@ -59,7 +59,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <c6x.h>
 
-#include "config/config.h"
 #include "hardware/board.h"
 #include "TRICAL/TRICAL.h"
 #include "ukf/cukf.h"
@@ -68,9 +67,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ahrs/ahrs.h"
 #include "control/control.h"
 #include "util/util.h"
-#include "drivers/peripheral.h"
 #include "stats/stats.h"
-#include "comms/comms.h"
 #include "exports/exports.h"
 
 int main(void);
@@ -87,14 +84,6 @@ int main(void) {
         fcs_board_init_platform();
         fcs_exports_init();
     }
-    if (core == FCS_CORE_UTIL) {
-        fcs_util_init();
-    }
-#ifndef FCS_COMPILE_BOARD_HITL
-    if (core == FCS_CORE_COMMS) {
-        fcs_comms_init();
-    }
-#endif
     if (core == FCS_CORE_AHRS) {
         fcs_ahrs_init();
     }
@@ -120,20 +109,16 @@ int main(void) {
                                      tick++);
         }
 
-        if (core == FCS_CORE_PLATFORM) {
-            fcs_board_tick();
-        }
-#ifndef FCS_COMPILE_BOARD_HITL
+        fcs_board_start_tick(core);
+
         if (core == FCS_CORE_AHRS) {
             fcs_ahrs_tick();
         }
-        if (core == FCS_CORE_COMMS) {
-            fcs_comms_tick();
-        }
-#endif
         if (core == FCS_CORE_CONTROL) {
             fcs_control_tick();
         }
+
+        fcs_board_end_tick(core);
 
         /* Wait until next frame start time */
         start_t = frame * cycles_per_tick;

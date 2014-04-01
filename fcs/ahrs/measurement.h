@@ -184,13 +184,15 @@ struct fcs_calibration_map_t {
     struct fcs_calibration_t sensor_calibration[128];
 };
 
+#define FCS_MEASUREMENT_LOG_LENGTH 256u
+
 /*
 Binary log packet (all multi-byte values are LE):
 1 byte type
 2 bytes reserved (0)
 2 bytes frame index
 ... (sensor readings -- fcs_measurement_t)
-2 bytes CRC16
+4 bytes CRC32
 
 Max usage:
 1 type
@@ -219,12 +221,12 @@ Max usage:
 8 radio RSSI, noise, #packets, #errors
 10 gcs reference pressure, alt
 10 control pos
-2 bytes CRC16
+4 bytes CRC32
 
-Total: 174 + COBS-R + NUL + NUL = 177
+Total: 176 + COBS-R + NUL + NUL = 179
 */
 struct fcs_measurement_log_t {
-    uint8_t data[256];
+    uint8_t data[FCS_MEASUREMENT_LOG_LENGTH];
     size_t length;
 };
 

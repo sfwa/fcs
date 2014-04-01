@@ -4,7 +4,6 @@
 #include <cmath>
 
 extern "C" {
-#include "config/config.h"
 #include "util/util.h"
 #include "util/3dmath.h"
 #include "nmpc/cnmpc.h"

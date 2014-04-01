@@ -37,7 +37,6 @@ SOFTWARE.
 #include "../../c66x-csl/ti/csl/cslr_xmc.h"
 #include "../../c66x-csl/ti/csl/cslr_sem.h"
 
-#include "../../config/config.h"
 #include "../board.h"
 
 static void _fcs_core_pll_setup(void);

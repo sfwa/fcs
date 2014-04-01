@@ -25,7 +25,6 @@ SOFTWARE.
 #include <cstdlib>
 
 extern "C" {
-#include "config/config.h"
 #include "util/util.h"
 #include "drivers/stream.h"
 

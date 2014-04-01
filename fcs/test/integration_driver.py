@@ -237,13 +237,6 @@ def init(dll_path):
                                               c_ushort]
     _fcs.fcs_measurement_log_init.restype = None
 
-    # From comms/comms.h
-    _fcs.fcs_comms_init.argtypes = []
-    _fcs.fcs_comms_init.restype = None
-
-    _fcs.fcs_comms_tick.argtypes = []
-    _fcs.fcs_comms_tick.restype = None
-
     # From drivers/stream.c
     _fcs._fcs_stream_write_to_rx_buffer.argtypes = [c_ubyte, c_char_p,
                                                     c_ulong]
@@ -266,10 +259,6 @@ def init(dll_path):
 
     _fcs.fcs_control_tick.argtypes = []
     _fcs.fcs_control_tick.restype = None
-
-    # From util/util.h
-    _fcs.fcs_util_init.argtypes = []
-    _fcs.fcs_util_init.restype = None
 
     reset()
 

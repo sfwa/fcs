@@ -35,7 +35,6 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
 #endif
 
-#include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../ukf/cukf.h"

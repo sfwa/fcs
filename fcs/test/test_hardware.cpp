@@ -26,10 +26,8 @@ SOFTWARE.
 #include <cmath>
 
 extern "C" {
-#include "config/config.h"
 #include "util/util.h"
 #include "util/3dmath.h"
-#include "comms/comms.h"
 #include "ukf/cukf.h"
 #include "TRICAL/TRICAL.h"
 #include "ahrs/measurement.h"

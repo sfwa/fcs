@@ -27,7 +27,6 @@ SOFTWARE.
 #include <math.h>
 #include <assert.h>
 
-#include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../ukf/cukf.h"

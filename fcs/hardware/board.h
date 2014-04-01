@@ -23,8 +23,16 @@ SOFTWARE.
 #ifndef _FCS_BOARD_H
 #define _FCS_BOARD_H
 
-/* #define FCS_COMPILE_BOARD_HITL */
-/* #define FCS_COMPILE_BOARD_LOG */
+#define FCS_CORE_AHRS 0
+#define FCS_CORE_CONTROL 1u
+#define FCS_CORE_UTIL 0
+#define FCS_CORE_COMMS 0
+#define FCS_CORE_CONFIG 0
+#define FCS_CORE_PLATFORM 0
+
+#define FCS_CLOCK_HZ 1000000000u
+#define FCS_CORE0_TICK_HZ 1000u
+#define FCS_CORE1_TICK_HZ 50u
 
 /* Convert an address in an individual core's L2 SRAM to global */
 #define GLOBAL_FROM_L2_ADDRESS(n) ((1u << 28) | \

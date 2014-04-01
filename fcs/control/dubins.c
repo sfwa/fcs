@@ -27,7 +27,6 @@ SOFTWARE.
 #include <assert.h>
 #include <float.h>
 
-#include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "../nmpc/cnmpc.h"

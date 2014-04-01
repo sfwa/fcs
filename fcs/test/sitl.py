@@ -429,13 +429,6 @@ def init(dll_path):
                                               c_ushort]
     _fcs.fcs_measurement_log_init.restype = None
 
-    # From comms/comms.h
-    _fcs.fcs_comms_init.argtypes = []
-    _fcs.fcs_comms_init.restype = None
-
-    _fcs.fcs_comms_tick.argtypes = []
-    _fcs.fcs_comms_tick.restype = None
-
     # From drivers/stream.c
     _fcs._fcs_stream_write_to_rx_buffer.argtypes = [c_ubyte, c_char_p,
                                                     c_ulong]
@@ -462,10 +455,6 @@ def init(dll_path):
     # From exports/exports.h
     _fcs.fcs_exports_send_state.argtypes = []
     _fcs.fcs_exports_send_state.restype = None
-
-    # From util/util.h
-    _fcs.fcs_util_init.argtypes = []
-    _fcs.fcs_util_init.restype = None
 
     # From control/trajectory.h
     _fcs._get_next_reference_point.argtypes = [POINTER(c_float * 13), c_ulong]

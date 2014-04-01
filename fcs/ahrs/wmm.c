@@ -49,7 +49,6 @@ However, in relation to this code following disclaimer applies:
 #include <math.h>
 #include <assert.h>
 
-#include "../config/config.h"
 #include "../util/util.h"
 #include "../util/3dmath.h"
 #include "wmm.h"
