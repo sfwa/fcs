@@ -137,156 +137,139 @@ void fcs_board_init_platform(void) {
 #endif
 
     /* Set up default sensor calibration */
-    struct fcs_calibration_t accel_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_ACCELEROMETER_XYZ,
-        .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                            FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 0.98f, /* about 0.1g */
-        .params = {
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f
+    struct fcs_calibration_t calibration[] = {
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_ACCELEROMETER_XYZ,
+            .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
+                                FCS_CALIBRATION_BIAS_SCALE_3X3,
+            .error = 0.98f, /* about 0.1g */
+            .params = {
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f
+            },
+            .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .offset = { 0.0f, 0.0f, 0.0f },
+            .scale_factor = 1.0f / ACCEL_SENSITIVITY
         },
-        .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
-        .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = 1.0f / ACCEL_SENSITIVITY
-    };
-    struct fcs_calibration_t gyro_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_GYROSCOPE_XYZ,
-        .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                            FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 0.0349f, /* approx 2 degrees */
-        .params = {
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_GYROSCOPE_XYZ,
+            .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
+                                FCS_CALIBRATION_BIAS_SCALE_3X3,
+            .error = 0.0349f, /* approx 2 degrees */
+            .params = {
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f
+            },
+            .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .offset = { 0.0f, 0.0f, 0.0f },
+            .scale_factor = (float)(M_PI/180.0) / GYRO_SENSITIVITY
         },
-        .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
-        .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = (float)(M_PI/180.0) / GYRO_SENSITIVITY
-    };
-    struct fcs_calibration_t mag_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
-        .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                            FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 0.1f, /* = 0.1 Gauss */
-        .params = {
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
+            .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
+                                FCS_CALIBRATION_BIAS_SCALE_3X3,
+            .error = 0.1f, /* = 0.1 Gauss */
+            .params = {
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f
+            },
+            .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .offset = { 0.0f, 0.0f, 0.0f },
+            .scale_factor = 1.0f / MAG_SENSITIVITY
         },
-        .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
-        .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = 1.0f / MAG_SENSITIVITY
-    };
-    struct fcs_calibration_t gps_position_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_GPS_POSITION_LLA,
-        .calibration_type = FCS_CALIBRATION_NONE,
-        .error = 3.1623e-7f,
-        .scale_factor = 1.0f
-    };
-    struct fcs_calibration_t gps_velocity_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_GPS_VELOCITY_NED,
-        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_3X3,
-        .error = 3.0f,
-        .params = {
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_GPS_POSITION_LLA,
+            .calibration_type = FCS_CALIBRATION_NONE,
+            .error = 3.1623e-7f,
+            .scale_factor = 1.0f
         },
-        .scale_factor = 1e-3f
-    };
-    struct fcs_calibration_t pitot_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_PITOT,
-        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
-        .error = 3.0f,
-        /*
-        Scale pitot output voltage from -2000.0 to 2000.0Pa, with 0.2533 being
-        1.65V (=0kPa)
-        */
-        .params = { 0.2533f, 4000.0f / 0.5066f },
-        .scale_factor = 1.0f
-    };
-    struct fcs_calibration_t barometer_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_PRESSURE_TEMP,
-        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
-        .error = 1.0f,
-        /*
-        0.02 is the sensor scale factor for conversion to mbar; multiply by
-        100 for Pa.
-        */
-        .params = { 0.0, 1.0f },
-        .scale_factor = 0.02f * 100.0f
-    };
-    struct fcs_calibration_t iv_calibration = {
-        .header = sizeof(struct fcs_calibration_t) - 1u,
-        .device = 0,
-        .type = FCS_PARAMETER_IV,
-        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_2D,
-        .error = 1.0f,
-        /*
-        To convert from 16-bit unsigned ints to input voltage (ie. voltage
-        into the op-amp), divide by 65536 then multiply by (VCC*2). So, for
-        5V VCC, divide by 65536 and multiply by 10.
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_GPS_VELOCITY_NED,
+            .calibration_type = FCS_CALIBRATION_BIAS_SCALE_3X3,
+            .error = 3.0f,
+            .params = {
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f
+            },
+            .scale_factor = 1e-3f
+        },
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_PITOT,
+            .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
+            .error = 3.0f,
+            /*
+            Scale pitot output voltage from -2000.0 to 2000.0Pa, with 0.2533
+            being 1.65V (=0kPa)
+            */
+            .params = { 0.2533f, 4000.0f / 0.5066f },
+            .scale_factor = 1.0f
+        },
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_PRESSURE_TEMP,
+            .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
+            .error = 1.0f,
+            /*
+            0.02 is the sensor scale factor for conversion to mbar; multiply
+            by 100 for Pa.
+            */
+            .params = { 0.0, 1.0f },
+            .scale_factor = 0.02f * 100.0f
+        },
+        {
+            .header = sizeof(struct fcs_calibration_t) - 1u,
+            .device = 0,
+            .type = FCS_PARAMETER_IV,
+            .calibration_type = FCS_CALIBRATION_BIAS_SCALE_2D,
+            .error = 1.0f,
+            /*
+            To convert from 16-bit unsigned ints to input voltage (ie. voltage
+            into the op-amp), divide by 65536 then multiply by (VCC*2). So,
+            for 5V VCC, divide by 65536 and multiply by 10.
 
-        Then, for the Attopilot 180A I/V sensor, the scaling factors are as
-        follows:
-        Voltage: 63.69mV/V (multiply by a factor of 15.70)
-        Current: 18.3mV/A (multiply by a factor of 54.64)
+            Then, for the Attopilot 180A I/V sensor, the scaling factors are
+            as follows:
+            Voltage: 63.69mV/V (multiply by a factor of 15.70)
+            Current: 18.3mV/A (multiply by a factor of 54.64)
 
-        So for a raw reading of 4114 for the voltage input with a 5V VCC,
-        divide by (65536 / 10) to get 0.628V in, and then multiply by the I/V
-        sensor voltage scale factor of 15.7 to get an input voltage of 9.86V.
-        */
-        .params = { 0.0, 15.70f, 0.0, 54.64f },
-        .scale_factor = 10.0f / 65535.0f
+            So for a raw reading of 4114 for the voltage input with a 5V VCC,
+            divide by (65536 / 10) to get 0.628V in, and then multiply by the
+            I/V sensor voltage scale factor of 15.7 to get an input voltage of
+            9.86V.
+            */
+            .params = { 0.0, 15.70f, 0.0, 54.64f },
+            .scale_factor = 10.0f / 65535.0f
+        }
     };
 
-    uint8_t i;
+    uint8_t i,j ;
     for (i = 0; i < FCS_IOBOARD_COUNT; i++) {
-        accel_calibration.device = i;
-        gyro_calibration.device = i;
-        mag_calibration.device = i;
-        gps_position_calibration.device = i;
-        gps_velocity_calibration.device = i;
-        pitot_calibration.device = i;
-        barometer_calibration.device = i;
-        iv_calibration.device = i;
-
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &accel_calibration);
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &gyro_calibration);
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &mag_calibration);
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &gps_position_calibration);
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &gps_velocity_calibration);
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &pitot_calibration);
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &barometer_calibration);
-        fcs_calibration_map_register_calibration(
-            &board_calibration, &iv_calibration);
+        for (j = 0; j < sizeof(calibration) / sizeof(calibration[0]); j++) {
+            calibration[j].device = i;
+            fcs_calibration_map_register_calibration(&board_calibration,
+                                                     &calibration[j]);
+        }
     }
 
     /*

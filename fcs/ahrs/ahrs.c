@@ -51,7 +51,7 @@ static double ahrs_process_noise[] = {
     1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
     1.5e-12, 1.5e-12, 1.5e-12 /* gyro bias x, y, z */
 };
-static double ahrs_wmm_field_dir[3], ahrs_wmm_field_norm;
+static double ahrs_wmm_field[3];
 static uint64_t ahrs_solution_time;
 static enum ukf_model_t ahrs_dynamics_model;
 static uint64_t ahrs_mode_start_time;
@@ -70,11 +70,19 @@ inline static bool _vec_hasnan_d(const double *vec, size_t n) {
     return false;
 }
 
-static void _update_wmm(double lla[3], double field[3], double *norm);
+static void _update_wmm(double lla[3], double field[3]);
 static bool _get_hal_sensor_value(const struct fcs_log_t *plog,
 enum fcs_parameter_type_t param_type, double *restrict value,
 double *restrict variance, size_t n);
 static void _reset_state(void);
+static void _set_estimate_value_i32(struct fcs_log_t *elog,
+enum fcs_parameter_type_t param_type, uint8_t value_size,
+const int32_t *restrict v, size_t n);
+static void _populate_estimate_log(struct fcs_log_t *estimate_log,
+const double *restrict state_values, const double *restrict error,
+const double *restrict field, enum fcs_mode_t mode, double static_pressure,
+double static_temp);
+
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
@@ -85,9 +93,8 @@ void fcs_ahrs_init(void) {
 
     ahrs_solution_time = 0;
     ahrs_mode_start_time = 0;
-    ahrs_wmm_field_dir[0] = 1.0;
-    ahrs_wmm_field_dir[1] = ahrs_wmm_field_dir[2] = 0.0;
-    ahrs_wmm_field_norm = 1.0;
+    ahrs_wmm_field[0] = 1.0;
+    ahrs_wmm_field[1] = ahrs_wmm_field[2] = 0.0;
 
     fcs_wmm_init();
 
@@ -180,7 +187,8 @@ void fcs_ahrs_tick(void) {
     assert(!hal_log);
 
     /* Use the latest WMM field vector (unit length) */
-    vector_copy_d(params.mag_field, ahrs_wmm_field_dir, 3u);
+    vector_copy_d(params.mag_field, ahrs_wmm_field, 3u);
+    vector3_scale_d(params.mag_field, vector3_norm_d(ahrs_wmm_field));
 
     /*
     Run the UKF, taking sensor readings and current control position into
@@ -227,31 +235,15 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Get a new WMM field estimate */
-    _update_wmm(state_values, ahrs_wmm_field_dir, &ahrs_wmm_field_norm);
+    _update_wmm(state_values, ahrs_wmm_field);
 
-    /* TODO: Update the estimate log */
+    /* Update the estimate log */
     estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, 'w');
     assert(estimate_log);
 
-/*
-    FCS_PARAMETER_ESTIMATED_LAT_LON
-    FCS_PARAMETER_ESTIMATED_ALT
-    FCS_PARAMETER_ESTIMATED_VELOCITY_NED
-    FCS_PARAMETER_ESTIMATED_ATTITUDE_ZYX
-    FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ
-    FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED
-    FCS_PARAMETER_ESTIMATED_GYRO_BIAS_XYZ
-    FCS_PARAMETER_ESTIMATED_POS_SD
-    FCS_PARAMETER_ESTIMATED_VELOCITY_SD
-    FCS_PARAMETER_ESTIMATED_ATTITUDE_SD
-    FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_SD
-    FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_SD
-    FCS_PARAMETER_ESTIMATED_STATIC_PRESSURE
-    FCS_PARAMETER_ESTIMATED_STATIC_TEMP
-
-    FCS_PARAMETER_AHRS_MODE
-    FCS_PARAMETER_AHRS_STATUS
-*/
+    _populate_estimate_log(estimate_log, state_values, error,
+                           ahrs_wmm_field, ahrs_mode, STANDARD_PRESSURE,
+                           STANDARD_TEMP);
 
     estimate_log = fcs_exports_log_close(estimate_log);
     assert(!estimate_log);
@@ -321,20 +313,125 @@ static void _reset_state(void) {
     fcs_global_counters.ukf_resets++;
 }
 
-static void _update_wmm(double lla[3], double field[3], double *norm) {
+static void _update_wmm(double lla[3], double field[3]) {
     /* Calculate WMM field at current lat/lon/alt/time */
     if (!fcs_wmm_calculate_field(lla[0], lla[1], lla[2], 2014.0, field)) {
         fcs_global_counters.wmm_errors++;
     } else {
-        *norm = vector3_norm_d(field);
-        vector3_scale_d(field, 1.0 / *norm);
-
         /*
         WMM returns the field in nT; the magnetometer sensitivity is in Gauss
-        (1G = 100 000nT). Convert the field norm to G.
+        (1G = 100 000nT). Convert the field to G.
         */
-        *norm *= (1.0 / 100000.0);
+        vector3_scale_d(field, 1.0 / 100000.0);
     }
+}
+
+static void _populate_estimate_log(struct fcs_log_t *estimate_log,
+const double *restrict state_values, const double *restrict error,
+const double *restrict field, enum fcs_mode_t mode, double static_pressure,
+double static_temp) {
+    struct fcs_parameter_t param;
+    int32_t tmp[4];
+
+    /* Lat/lon in (INT32_MAX/PI); alt in cm */
+    tmp[0] = (int32_t)(state_values[0] * ((double)INT32_MAX / M_PI));
+    tmp[1] = (int32_t)(state_values[1] * ((double)INT32_MAX / M_PI));
+    tmp[2] = (int32_t)(state_values[2] * 1e-2);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_LLA, 4u, tmp, 3u);
+
+    /* Velocity in cm/s */
+    tmp[0] = (int32_t)(state_values[3] * 1e-2);
+    tmp[1] = (int32_t)(state_values[4] * 1e-2);
+    tmp[2] = (int32_t)(state_values[5] * 1e-2);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_NED, 2u, tmp, 3u);
+
+    /* Quaternion values with [-1, 1] scaled to [-32767, 32767] */
+    tmp[0] = (int32_t)(state_values[9] * (1.0 / (double)INT16_MAX));
+    tmp[1] = (int32_t)(state_values[10] * (1.0 / (double)INT16_MAX));
+    tmp[2] = (int32_t)(state_values[11] * (1.0 / (double)INT16_MAX));
+    tmp[3] = (int32_t)(state_values[12] * (1.0 / (double)INT16_MAX));
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 2u, tmp, 4u);
+
+    /* Angular velocity with +/- 2pi rad/s scaled to [-32767, 32767] */
+    tmp[0] = (int32_t)(state_values[13] * ((double)INT16_MAX / M_PI) * 0.5);
+    tmp[1] = (int32_t)(state_values[14] * ((double)INT16_MAX / M_PI) * 0.5);
+    tmp[2] = (int32_t)(state_values[15] * ((double)INT16_MAX / M_PI) * 0.5);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ, 2u, tmp,
+        3u);
+
+    /* Wind velocity in cm/s */
+    tmp[0] = (int32_t)(state_values[19] * 1e-2);
+    tmp[1] = (int32_t)(state_values[20] * 1e-2);
+    tmp[2] = (int32_t)(state_values[21] * 1e-2);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED, 2u, tmp, 3u);
+
+    /* Gyro bias with +/- pi/2 rad/s scaled to [-32767, 32767] */
+    tmp[0] = (int32_t)(state_values[22] * ((double)INT16_MAX / M_PI) * 2.0);
+    tmp[1] = (int32_t)(state_values[23] * ((double)INT16_MAX / M_PI) * 2.0);
+    tmp[2] = (int32_t)(state_values[24] * ((double)INT16_MAX / M_PI) * 2.0);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_GYRO_BIAS_XYZ, 2u, tmp, 3u);
+
+    /* Horizontal and vertical error std dev in cm */
+    tmp[0] = (int32_t)(6378000.0 * max(error[0], error[1]) * 1e-2);
+    tmp[1] = (int32_t)(error[2] * 1e-2);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_SD, 2u, tmp, 2u);
+
+    /* Velocity error std dev in cm/s */
+    tmp[0] = (int32_t)(vector3_norm_d(&error[3]) * 1e-2);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_SD, 2u, tmp, 1u);
+
+    /* Attitude error std dev with +/- 2pi rad scaled to [-32767, 32767] */
+    tmp[0] = (int32_t)(error[9] * ((double)INT16_MAX / M_PI) * 0.5);
+    tmp[1] = (int32_t)(error[10] * ((double)INT16_MAX / M_PI) * 0.5);
+    tmp[2] = (int32_t)(error[11] * ((double)INT16_MAX / M_PI) * 0.5);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_SD, 2u, tmp, 3u);
+
+    /* Wind velocity error std dev in cm/s */
+    tmp[0] = (int32_t)(vector3_norm_d(&error[18]) * 1e-2);
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_SD, 2u, tmp, 1u);
+
+    /* Static pressure in Pa */
+    /* TODO -- determine based on reference pressure/alt */
+    tmp[0] = (int32_t)static_pressure;
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_STATIC_PRESSURE, 4u, tmp, 1u);
+
+    /* Static temperature in Kelvin */
+    tmp[0] = (int32_t)static_temp;
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_ESTIMATED_STATIC_TEMP, 2u, tmp, 1u);
+
+    /* Set WMM field */
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 3u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_ESTIMATED_WMM_FIELD);
+    fcs_parameter_set_device(&param, 0);
+
+    param.data.f32[X] = (float)field[X];
+    param.data.f32[Y] = (float)field[Y];
+    param.data.f32[Z] = (float)field[Z];
+
+    fcs_log_add_parameter(estimate_log, &param);
+
+    /* AHRS mode and status */
+    tmp[0] = (int32_t)mode;
+    tmp[1] = 0;
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_AHRS_MODE, 1u, tmp, 2u);
+
+    tmp[0] = 0;
+    tmp[1] = 0;
+    _set_estimate_value_i32(
+        estimate_log, FCS_PARAMETER_AHRS_STATUS, 2u, tmp, 2u);
 }
 
 static bool _get_hal_sensor_value(const struct fcs_log_t *plog,
@@ -357,6 +454,42 @@ double *restrict variance, size_t n) {
     } else {
         return false;
     }
+}
+
+static void _set_estimate_value_i32(struct fcs_log_t *elog,
+enum fcs_parameter_type_t param_type, uint8_t value_size,
+const int32_t *restrict v, size_t n) {
+    assert(elog);
+    assert(v);
+    assert(value_size == 1u || value_size == 2u || value_size == 4u);
+
+    size_t i;
+    struct fcs_parameter_t param;
+
+    fcs_parameter_set_header(&param, FCS_VALUE_SIGNED,
+                             (uint32_t)value_size << 3u, n);
+    fcs_parameter_set_type(&param, param_type);
+    fcs_parameter_set_device(&param, 0);
+
+#define CLAMPVAL(x, mi, ma) (x >= mi ? (x <= ma ? x : ma) : mi)
+
+    if (value_size == 1u) {
+        for (i = 0; i < n; i++) {
+            param.data.i8[i] = (int8_t)CLAMPVAL(v[i], INT8_MIN, INT8_MAX);
+        }
+    } else if (value_size == 2u) {
+        for (i = 0; i < n; i++) {
+            param.data.i16[i] = (int16_t)CLAMPVAL(v[i], INT16_MIN, INT16_MAX);
+        }
+    } else if (value_size == 4u) {
+        for (i = 0; i < n; i++) {
+            param.data.i32[i] = (int32_t)CLAMPVAL(v[i], INT32_MIN, INT32_MAX);
+        }
+    }
+
+#undef CLAMPVAL
+
+    fcs_log_add_parameter(elog, &param);
 }
 
 bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {

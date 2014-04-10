@@ -46,16 +46,16 @@ really matter.
 */
 static inline double altitude_diff_from_pressure_diff(double pref, double p,
 double temp) {
-    return (pow(pref / p, 1 / 5.257) - 1.0) * (temp + 273.15) / 0.0065;
+    return (pow(pref / p, 1 / 5.257) - 1.0) * temp / 0.0065;
 }
 
 /*
 Calculate the density of air at a given pressure (`p`, in Pa) and temperature
-(`temp`, in deg C).
+(`temp`, in K).
 */
 static inline double density_from_pressure_temp(double p, double temp) {
     /* 287.058 is the gas constant for dry air, in J kg^-1 K^-1 */
-    return p / (287.058 * (temp + 273.15));
+    return p / (287.058 * temp);
 }
 
 /*
@@ -64,7 +64,7 @@ reading.
 
 `pstatic` is the static pressure in Pa (e.g. from the barometer), `pdynamic`
 is the dynamic/impact/differential pressure in Pa, and `temp` is the static
-temperature in deg C.
+temperature in K.
 */
 static inline double airspeed_from_pressure_temp(double pstatic,
 double pdynamic, double temp) {

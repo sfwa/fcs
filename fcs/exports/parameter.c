@@ -277,6 +277,10 @@ size_t out_value_length) {
         n = out_value_length;
     }
 
+#define COPYLOOP(d) for (i = 0; i < n; i++) { \
+                        out_value[i] = (double)parameter->data.d[i]; \
+                    }
+
     if (type == FCS_PARAMETER_PRESSURE_TEMP && n == 2u) {
         /* Special-cased due to a mix of signed and unsigned values */
         out_value[0] = (double)parameter->data.u16[0];
@@ -289,64 +293,44 @@ size_t out_value_length) {
     } else if (precision == 8u) {
         /* Handle 1-byte values */
         if (datatype == FCS_VALUE_UNSIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.u8[i];
-            }
+            COPYLOOP(u8)
         } else if (datatype == FCS_VALUE_SIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.i8[i];
-            }
+            COPYLOOP(i8)
         } else if (datatype == FCS_VALUE_FLOAT) {
             assert(false);
         }
     } else if (precision == 16u) {
         /* Handle 2-byte values */
         if (datatype == FCS_VALUE_UNSIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.u16[i];
-            }
+            COPYLOOP(u16)
         } else if (datatype == FCS_VALUE_SIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.i16[i];
-            }
+            COPYLOOP(i16)
         } else if (datatype == FCS_VALUE_FLOAT) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.f16[i];
-            }
+            COPYLOOP(f16)
         }
     } else if (precision == 32u) {
         /* Handle 4-byte values */
         if (datatype == FCS_VALUE_UNSIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.u32[i];
-            }
+            COPYLOOP(u32)
         } else if (datatype == FCS_VALUE_SIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.i32[i];
-            }
+            COPYLOOP(i32)
         } else if (datatype == FCS_VALUE_FLOAT) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.f32[i];
-            }
+            COPYLOOP(f32)
         }
     } else if (precision == 64u) {
         /* Handle 4-byte values */
         if (datatype == FCS_VALUE_UNSIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.u64[i];
-            }
+            COPYLOOP(u64)
         } else if (datatype == FCS_VALUE_SIGNED) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.i64[i];
-            }
+            COPYLOOP(i64)
         } else if (datatype == FCS_VALUE_FLOAT) {
-            for (i = 0; i < n; i++) {
-                out_value[i] = (double)parameter->data.f64[i];
-            }
+            COPYLOOP(f64)
         }
     } else {
         assert(false);
     }
+
+#undef COPYLOOP
 
     return n;
 }
