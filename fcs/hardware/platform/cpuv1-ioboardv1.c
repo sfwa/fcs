@@ -41,30 +41,77 @@ SOFTWARE.
 #include "../../drivers/stream.h"
 #include "../../stats/stats.h"
 #include "../../TRICAL/TRICAL.h"
-#include "../../ahrs/measurement.h"
 #include "../../ahrs/ahrs.h"
 #include "../../control/control.h"
 #include "../../exports/exports.h"
+#include "../../exports/parameter.h"
+#include "../../exports/calibration.h"
+
+
+/*
+Check a vector for NaN values; return true if any are found, and false
+otherwise
+*/
+inline static bool _vec_hasnan_f(const float *vec, size_t n) {
+    for (; n; n--) {
+        if (isnan(vec[n])) {
+            return true;
+        }
+    }
+    return false;
+}
 
 
 #define ACCEL_SENSITIVITY 4096.0f /* LSB/g @ ±8g FS */
 #define GYRO_SENSITIVITY 65.5f /* LSB/(deg/s) @ 500deg/s FS */
 #define MAG_SENSITIVITY 1090.0f /* LSB/G @ ±2G FS */
 
+#define FCS_IOBOARD_COUNT 2
 #define FCS_IOBOARD_RESET_TIMEOUT 50
 #define FCS_IOBOARD_PACKET_TIMEOUT 5
 
-static uint16_t pwm_state[2][FCS_CONTROL_CHANNELS];
-static float pwm_neutral[FCS_CONTROL_CHANNELS];
+static struct fcs_calibration_map_t board_calibration;
+static TRICAL_instance_t board_accel_trical_instances[FCS_IOBOARD_COUNT];
+static TRICAL_instance_t board_mag_trical_instances[FCS_IOBOARD_COUNT];
+static double board_mag_trical_update_attitude[FCS_IOBOARD_COUNT];
+static int16_t board_timeout[FCS_IOBOARD_COUNT];
+static double board_reference_pressure, board_reference_alt;
+
 
 /* Prototypes of internal functions */
-bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
-struct fcs_measurement_log_t *out_measurements);
-bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes,
-enum fcs_stream_device_t dev, uint8_t board_id,
-struct fcs_measurement_log_t *out_measurements);
-size_t _fcs_format_control_packet(uint8_t *buf, uint8_t tick,
-const uint16_t *restrict control_values, uint8_t gpout);
+bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, size_t board_id,
+struct fcs_log_t *out_measurements);
+static void _update_pitot_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, size_t i);
+static void _update_barometer_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, double reference_pressure, size_t i);
+static void _update_magnetometer_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance,
+const double *attitude, double *last_update_attitude, const double *wmm_field,
+double wmm_field_norm, size_t i);
+static void _update_accelerometer_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i);
+static void _apply_accelerometer_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap);
+static void _apply_gyroscope_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap);
+static void _apply_magnetometer_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
+double wmm_field_norm);
+static void _apply_pitot_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
+double aero_static_pressure, double aero_static_temp);
+static void _apply_barometer_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
+double reference_pressure, double aero_static_temp, double reference_alt);
+static void _set_gps_position(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap);
+static void _set_gps_velocity(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap);
+static void _set_hal_sensor_value_f32(struct fcs_log_t *plog,
+enum fcs_parameter_type_t param_type, const double *restrict value,
+const double *restrict variance, size_t n);
+
 
 void fcs_board_init_platform(void) {
     /*
@@ -90,14 +137,12 @@ void fcs_board_init_platform(void) {
 #endif
 
     /* Set up default sensor calibration */
-    struct fcs_calibration_t *restrict map =
-        fcs_global_ahrs_state.calibration.sensor_calibration;
-
     struct fcs_calibration_t accel_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_ACCELEROMETER,
-        .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                FCS_CALIBRATION_BIAS_SCALE_3X3,
+        .device = 0,
+        .type = FCS_PARAMETER_ACCELEROMETER_XYZ,
+        .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
+                            FCS_CALIBRATION_BIAS_SCALE_3X3,
         .error = 0.98f, /* about 0.1g */
         .params = {
             0.0f, 0.0f, 0.0f,
@@ -107,13 +152,14 @@ void fcs_board_init_platform(void) {
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = 1.0f / ACCEL_SENSITIVITY * 32767.0f
+        .scale_factor = 1.0f / ACCEL_SENSITIVITY
     };
     struct fcs_calibration_t gyro_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_GYROSCOPE,
-        .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                FCS_CALIBRATION_BIAS_SCALE_3X3,
+        .device = 0,
+        .type = FCS_PARAMETER_GYROSCOPE_XYZ,
+        .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
+                            FCS_CALIBRATION_BIAS_SCALE_3X3,
         .error = 0.0349f, /* approx 2 degrees */
         .params = {
             0.0f, 0.0f, 0.0f,
@@ -123,13 +169,14 @@ void fcs_board_init_platform(void) {
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = (float)(M_PI/180.0) / GYRO_SENSITIVITY * 32767.0f
+        .scale_factor = (float)(M_PI/180.0) / GYRO_SENSITIVITY
     };
     struct fcs_calibration_t mag_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_MAGNETOMETER,
-        .type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
-                FCS_CALIBRATION_BIAS_SCALE_3X3,
+        .device = 0,
+        .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
+        .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
+                            FCS_CALIBRATION_BIAS_SCALE_3X3,
         .error = 0.1f, /* = 0.1 Gauss */
         .params = {
             0.0f, 0.0f, 0.0f,
@@ -139,19 +186,21 @@ void fcs_board_init_platform(void) {
         },
         .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
         .offset = { 0.0f, 0.0f, 0.0f },
-        .scale_factor = 1.0f / MAG_SENSITIVITY * 2047.0f
+        .scale_factor = 1.0f / MAG_SENSITIVITY
     };
     struct fcs_calibration_t gps_position_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_GPS_POSITION,
-        .type = FCS_CALIBRATION_NONE,
+        .device = 0,
+        .type = FCS_PARAMETER_GPS_POSITION_LLA,
+        .calibration_type = FCS_CALIBRATION_NONE,
         .error = 3.1623e-7f,
         .scale_factor = 1.0f
     };
     struct fcs_calibration_t gps_velocity_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_GPS_VELOCITY,
-        .type = FCS_CALIBRATION_BIAS_SCALE_3X3,
+        .device = 0,
+        .type = FCS_PARAMETER_GPS_VELOCITY_NED,
+        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_3X3,
         .error = 3.0f,
         .params = {
             0.0f, 0.0f, 0.0f,
@@ -159,12 +208,13 @@ void fcs_board_init_platform(void) {
             0.0f, 0.0f, 0.0f,
             0.0f, 0.0f, 0.0f
         },
-        .scale_factor = 1e-3f * 32767.0f
+        .scale_factor = 1e-3f
     };
     struct fcs_calibration_t pitot_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_PITOT,
-        .type = FCS_CALIBRATION_BIAS_SCALE_1D,
+        .device = 0,
+        .type = FCS_PARAMETER_PITOT,
+        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
         .error = 3.0f,
         /*
         Scale pitot output voltage from -2000.0 to 2000.0Pa, with 0.2533 being
@@ -175,20 +225,22 @@ void fcs_board_init_platform(void) {
     };
     struct fcs_calibration_t barometer_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_PRESSURE_TEMP,
-        .type = FCS_CALIBRATION_BIAS_SCALE_1D,
+        .device = 0,
+        .type = FCS_PARAMETER_PRESSURE_TEMP,
+        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
         .error = 1.0f,
         /*
         0.02 is the sensor scale factor for conversion to mbar; multiply by
         100 for Pa.
         */
         .params = { 0.0, 1.0f },
-        .scale_factor = 0.02f * 65535.0f * 100.0f
+        .scale_factor = 0.02f * 100.0f
     };
     struct fcs_calibration_t iv_calibration = {
         .header = sizeof(struct fcs_calibration_t) - 1u,
-        .sensor = FCS_MEASUREMENT_TYPE_IV,
-        .type = FCS_CALIBRATION_BIAS_SCALE_2D,
+        .device = 0,
+        .type = FCS_PARAMETER_IV,
+        .calibration_type = FCS_CALIBRATION_BIAS_SCALE_2D,
         .error = 1.0f,
         /*
         To convert from 16-bit unsigned ints to input voltage (ie. voltage
@@ -205,46 +257,174 @@ void fcs_board_init_platform(void) {
         sensor voltage scale factor of 15.7 to get an input voltage of 9.86V.
         */
         .params = { 0.0, 15.70f, 0.0, 54.64f },
-        .scale_factor = 10.0f
+        .scale_factor = 10.0f / 65535.0f
     };
 
-    /*
-    FIXME: Should update the calibration sensor ID for each of these so they
-    match the calibration slot for I/O board 1.
-    */
-    uint8_t sensor_id_bits, i;
-    for (i = 0; i < 2u; i++) {
-        sensor_id_bits = (uint8_t)(i << FCS_MEASUREMENT_SENSOR_ID_OFFSET);
+    uint8_t i;
+    for (i = 0; i < FCS_IOBOARD_COUNT; i++) {
+        accel_calibration.device = i;
+        gyro_calibration.device = i;
+        mag_calibration.device = i;
+        gps_position_calibration.device = i;
+        gps_velocity_calibration.device = i;
+        pitot_calibration.device = i;
+        barometer_calibration.device = i;
+        iv_calibration.device = i;
 
-        memcpy(&map[accel_calibration.sensor | sensor_id_bits],
-               &accel_calibration, sizeof(accel_calibration));
-        memcpy(&map[gyro_calibration.sensor | sensor_id_bits],
-               &gyro_calibration, sizeof(gyro_calibration));
-        memcpy(&map[mag_calibration.sensor | sensor_id_bits],
-               &mag_calibration, sizeof(mag_calibration));
-        memcpy(&map[gps_position_calibration.sensor | sensor_id_bits],
-               &gps_position_calibration, sizeof(gps_position_calibration));
-        memcpy(&map[gps_velocity_calibration.sensor | sensor_id_bits],
-               &gps_velocity_calibration, sizeof(gps_velocity_calibration));
-        memcpy(&map[pitot_calibration.sensor | sensor_id_bits],
-               &pitot_calibration, sizeof(pitot_calibration));
-        memcpy(&map[barometer_calibration.sensor | sensor_id_bits],
-               &barometer_calibration, sizeof(barometer_calibration));
-        memcpy(&map[iv_calibration.sensor | sensor_id_bits],
-                       &iv_calibration, sizeof(iv_calibration));
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &accel_calibration);
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &gyro_calibration);
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &mag_calibration);
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &gps_position_calibration);
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &gps_velocity_calibration);
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &pitot_calibration);
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &barometer_calibration);
+        fcs_calibration_map_register_calibration(
+            &board_calibration, &iv_calibration);
     }
+
+    /*
+    Update the TRICAL instance parameters.
+    */
+    for (i = 0; i < FCS_IOBOARD_COUNT; i++) {
+        TRICAL_init(&board_mag_trical_instances[i]);
+        /*
+        Set the norm to 1.0, because the sensor calibration scale factor is
+        set such that TRICAL will always work with (theoretically) unit
+        vectors.
+        */
+        TRICAL_norm_set(&board_mag_trical_instances[i], 1.0f);
+        TRICAL_noise_set(&board_mag_trical_instances[i], 1e-3f);
+
+        TRICAL_init(&board_accel_trical_instances[i]);
+        TRICAL_norm_set(&board_accel_trical_instances[i], 1.0f);
+        TRICAL_noise_set(&board_accel_trical_instances[i], 1.0f);
+    }
+
+    /* Update reference values */
+    board_reference_pressure = STANDARD_PRESSURE;
+    board_reference_alt = 0.0;
 }
 
 void fcs_board_tick(void) {
-    static int16_t ioboard_timeout[2];
-    uint16_t pwm_out[4];
+    uint8_t out_buf[FCS_LOG_SERIALIZED_LENGTH];
+    size_t out_buf_len, write_len, i;
+    struct fcs_log_t *measurement_log, *hal_log, *estimate_log, *control_log;
+    struct fcs_log_t out_log;
+    double attitude[4], wmm_field[3], wmm_field_norm, wmm_field_norm_inv;
+    double static_pressure, static_temp;
+    struct fcs_parameter_t param;
+    enum fcs_mode_t ahrs_mode;
+    bool got_result;
 
-    uint8_t i;
-    for (i = 0; i < 2; i++){
+    /*
+    Read attitude, WMM field, static pressure, static temp and AHRS mode from
+    old estimate log
+    */
+    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, 'r');
+    assert(estimate_log);
+
+    got_result = fcs_parameter_find_by_type_and_device(
+        estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 0, &param);
+    if (got_result) {
+        fcs_parameter_get_values_d(&param, attitude, 4u);
+    } else {
+        attitude[X] = attitude[Y] = attitude[Z] = 0.0;
+        attitude[W] = 1.0;
+    }
+
+    got_result = fcs_parameter_find_by_type_and_device(
+        estimate_log, FCS_PARAMETER_ESTIMATED_WMM_FIELD, 0, &param);
+    if (got_result) {
+        fcs_parameter_get_values_d(&param, wmm_field, 3u);
+        wmm_field_norm = vector3_norm_d(wmm_field);
+        wmm_field_norm_inv = 1.0 / wmm_field_norm;
+        wmm_field[X] *= wmm_field_norm_inv;
+        wmm_field[Y] *= wmm_field_norm_inv;
+        wmm_field[Z] *= wmm_field_norm_inv;
+    } else {
+        wmm_field[X] = 1.0;
+        wmm_field[Y] = wmm_field[Z] = 0.0;
+        wmm_field_norm = 1.0;
+    }
+
+    got_result = fcs_parameter_find_by_type_and_device(
+        estimate_log, FCS_PARAMETER_ESTIMATED_STATIC_PRESSURE, 0, &param);
+    if (got_result) {
+        fcs_parameter_get_values_d(&param, &static_pressure, 1u);
+    } else {
+        static_pressure = board_reference_pressure;
+    }
+
+    got_result = fcs_parameter_find_by_type_and_device(
+        estimate_log, FCS_PARAMETER_ESTIMATED_STATIC_TEMP, 0, &param);
+    if (got_result) {
+        fcs_parameter_get_values_d(&param, &static_temp, 1u);
+    } else {
+        static_temp = STANDARD_TEMP;
+    }
+
+    got_result = fcs_parameter_find_by_type_and_device(
+        estimate_log, FCS_PARAMETER_AHRS_MODE, 0, &param);
+    if (got_result) {
+        ahrs_mode = (enum fcs_mode_t)param.data.u8[0];
+    } else {
+        ahrs_mode = FCS_MODE_INITIALIZING;
+    }
+
+    /* Read the latest measurements from the I/O boards */
+    measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT, 'w');
+    assert(measurement_log);
+
+    for (i = 0; i < FCS_IOBOARD_COUNT; i++){
         if (_fcs_read_ioboard_packet(
                 (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), i,
-                &fcs_global_ahrs_state.measurements)) {
-            ioboard_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
+                measurement_log)) {
+            board_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
+
+            /* Get reference pressure and altitude */
+            got_result = fcs_parameter_find_by_type_and_device(
+                measurement_log, FCS_PARAMETER_DERIVED_REFERENCE_PRESSURE,
+                (uint8_t)i, &param);
+            if (got_result) {
+                fcs_parameter_get_values_d(&param, &board_reference_pressure,
+                                           1u);
+            }
+
+            got_result = fcs_parameter_find_by_type_and_device(
+                measurement_log, FCS_PARAMETER_DERIVED_REFERENCE_ALT,
+                (uint8_t)i, &param);
+            if (got_result) {
+                fcs_parameter_get_values_d(&param, &board_reference_alt, 1u);
+            }
+
+            /* Continuously update the magnetometer calibration */
+            _update_magnetometer_calibration(
+                measurement_log, &board_calibration,
+                &board_mag_trical_instances[i], attitude,
+                &board_mag_trical_update_attitude[i], wmm_field,
+                wmm_field_norm, i);
+
+            /*
+            Run TRICAL on the current accelerometer results when in
+            calibration mode, and call the other sensor calibration handlers.
+            */
+            if (ahrs_mode == FCS_MODE_CALIBRATING) {
+                _update_pitot_calibration(
+                    measurement_log, &board_calibration, i);
+                _update_barometer_calibration(
+                    measurement_log, &board_calibration,
+                    board_reference_pressure, i);
+                _update_accelerometer_calibration(
+                    measurement_log, &board_calibration,
+                    &board_accel_trical_instances[i], i);
+            }
         }
 
         /*
@@ -263,102 +443,73 @@ void fcs_board_tick(void) {
         If the board has timed out, start the reset for stream 0. Otherwise,
         just decrement the timeout counter.
         */
-        if (ioboard_timeout[i] <= 0) {
-            ioboard_timeout[i] = FCS_IOBOARD_RESET_TIMEOUT;
+        if (board_timeout[i] <= 0) {
+            board_timeout[i] = FCS_IOBOARD_RESET_TIMEOUT;
             fcs_global_counters.ioboard_resets[i]++;
 
             enum fcs_stream_result_t result;
             result = fcs_stream_open(
                 (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i));
             assert(result == FCS_STREAM_OK);
-        } else if (ioboard_timeout[i] > INT16_MIN) {
-            ioboard_timeout[i]--;
+        } else if (board_timeout[i] > INT16_MIN) {
+            board_timeout[i]--;
         }
     }
 
-    /*
-    Work out the nominal current control position, taking into account the
-    control response time configured in control_rates. Log the result.
+    hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, 'w');
+    assert(hal_log);
 
-    We don't need to worry about mutexes for this -- all reads on these data
-    types are atomic, so there's no risk of reading a corrupted value. It's
-    possible that not all control values will be part of the same control
-    output frame, but that's not going to make a difference to anything.
-    */
-    struct fcs_measurement_t control_log;
-    struct fcs_control_output_t control;
-    float val;
+    /* Add calibrated virtual sensor values to the HAL log */
+    _apply_accelerometer_calibration(measurement_log, hal_log,
+                                     &board_calibration);
+    _apply_gyroscope_calibration(measurement_log, hal_log,
+                                 &board_calibration);
+    _apply_magnetometer_calibration(measurement_log, hal_log,
+                                    &board_calibration, wmm_field_norm);
+    _apply_pitot_calibration(measurement_log, hal_log, &board_calibration,
+                             static_pressure, static_temp);
+    _apply_barometer_calibration(measurement_log, hal_log, &board_calibration,
+                                 board_reference_pressure, static_temp,
+                                 board_reference_alt);
+    _set_gps_position(measurement_log, hal_log, &board_calibration);
+    _set_gps_velocity(measurement_log, hal_log, &board_calibration);
 
-    fcs_exports_recv_control(&control);
-
-    /* Throttle */
-    pwm_out[0] = (uint16_t)(control.values[0] * UINT16_MAX);
-
-    /* Left elevon */
-    val = control.values[1] + (pwm_neutral[1] - 0.5f);
-    if (val > 1.0f) {
-        val = 1.0f;
-    } else if (val < 0.0f) {
-        val = 0.0f;
-    }
-    pwm_out[1] = (uint16_t)(val * UINT16_MAX);
-
-    /* Right elevon */
-    val = 1.0f - control.values[2] + (pwm_neutral[2] - 0.5f);
-    if (val > 1.0f) {
-        val = 1.0f;
-    } else if (val < 0.0f) {
-        val = 0.0f;
-    }
-    pwm_out[2] = (uint16_t)(val * UINT16_MAX);
-
-    pwm_out[3] = 0;
-
-    /* Log to sensor ID 1, because sensor ID 0 is the RC PWM input. */
-    memcpy(&control_log.data, pwm_out, sizeof(pwm_out));
-    fcs_measurement_set_header(&control_log, 16u, 4u);
-    fcs_measurement_set_sensor(&control_log, 1u,
-                               FCS_MEASUREMENT_TYPE_CONTROL_POS);
-    fcs_measurement_log_add(&fcs_global_ahrs_state.measurements,
-                            &control_log);
+    hal_log = fcs_exports_log_close(hal_log);
+    assert(!hal_log);
 
     /*
-    Write current control values to I/O boards -- the CPLD replicates the I/O
-    board output stream so we only need to write to one.
+    Merge the AHRS estimate log and the NMPC control log and send them to the
+    I/O boards.
     */
-    size_t control_len;
-    uint8_t control_buf[16];
-    control_len = _fcs_format_control_packet(
-        control_buf,
-        (uint8_t)(fcs_global_ahrs_state.solution_time & 0xFFu),
-        pwm_out,
-        fcs_global_control_state.gpio_state
-    );
-    assert(control_len < 16u);
-    fcs_stream_write(FCS_STREAM_UART_INT0, control_buf, control_len);
+    control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, 'r');
+    assert(control_log);
+
+    /*
+    Copy control log then merge estimate log so that if there's not enough
+    space for whatever reason, the control output still gets through.
+    */
+    memcpy(&out_log, control_log, sizeof(struct fcs_log_t));
+    (void)fcs_log_merge(&out_log, estimate_log);
+
+    control_log = fcs_exports_log_close(control_log);
+    assert(!control_log);
+
+    measurement_log = fcs_exports_log_close(measurement_log);
+    assert(!measurement_log);
+
+    estimate_log = fcs_exports_log_close(estimate_log);
+    assert(!estimate_log);
+
+    out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
+    /* FIXME: limitation of current stream driver */
+    assert(out_buf_len < 255u);
+
+    write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, out_buf_len);
+    assert(out_buf_len == write_len);
 
     /* Increment transmit counters */
     fcs_global_counters.ioboard_packet_tx[0]++;
     fcs_global_counters.ioboard_packet_tx[1]++;
-
-    /*
-    TODO: check DSP GPIO for the FCS_CONTROL signal from the failsafe device;
-    if that's enabled then we're under autonomous control, so
-    fcs_global_control_state.mode should be set to FCS_CONTROL_MODE_AUTO.
-
-    Otherwise, it should be set to FCS_CONTROL_MODE_MANUAL.
-    */
-
-    /*
-    Write the log values to internal stream 1 -- the CPLD will route this to
-    the CPU UART
-    */
-
-    comms_buf_len = fcs_measurement_log_serialize(
-        comms_buf, sizeof(comms_buf), &fcs_global_ahrs_state.measurements);
-    write_len = fcs_stream_write(FCS_STREAM_UART_INT1, comms_buf,
-                                 comms_buf_len);
-    assert(comms_buf_len == write_len);
 }
 
 /*
@@ -366,12 +517,13 @@ Read, deserialize and validate a full I/O board packet from `dev`. Since we
 get two of these every tick there's no point doing this incrementally; we just
 need to make sure we can deal with partial/corrupted packets.
 */
-bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, uint8_t board_id,
-struct fcs_measurement_log_t *out_measurements) {
+bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, size_t board_id,
+struct fcs_log_t *out_measurements) {
     assert(out_measurements);
 
     /* Read the latest I/O board packet from the UART streams */
-    uint8_t buf[64];
+    uint8_t buf[256];
+    struct fcs_log_t plog;
     size_t nbytes, i, packet_start = 0, packet_end = 0;
     enum {
         UNKNOWN,
@@ -381,8 +533,8 @@ struct fcs_measurement_log_t *out_measurements) {
     } state = UNKNOWN;
     bool result = false;
 
-    nbytes = fcs_stream_read(dev, buf, 64u);
-    while (!result && nbytes >= sizeof(struct sensor_packet_t) + 2u) {
+    nbytes = fcs_stream_read(dev, buf, 255u);
+    while (!result && nbytes) {
         state = UNKNOWN;
         packet_start = packet_end = 0;
         for (i = 0; i < nbytes && state != ENDED_PACKET; i++) {
@@ -411,9 +563,12 @@ struct fcs_measurement_log_t *out_measurements) {
         }
 
         if (state == ENDED_PACKET) {
-            result = _fcs_decode_packet(&buf[packet_start + 1u],
-                                        packet_end - packet_start,
-                                        dev, board_id, out_measurements);
+            result = fcs_log_deserialize(&plog, &buf[packet_start],
+                                         packet_end - packet_start);
+            if (result) {
+                fcs_log_set_parameter_device_id(&plog, (uint8_t)board_id);
+                fcs_log_merge(out_measurements, &plog);
+            }
 
             /* Consume all bytes until the end of the packet */
             fcs_stream_consume(dev, packet_end + 1u);
@@ -437,179 +592,454 @@ struct fcs_measurement_log_t *out_measurements) {
         }
 
         if (!result) {
-            nbytes = fcs_stream_read(dev, buf, 64u);
+            nbytes = fcs_stream_read(dev, buf, 255u);
         }
     }
 
     return result;
 }
 
-/* Decode an input packet from `buf` */
-bool _fcs_decode_packet(const uint8_t *buf, size_t nbytes,
-enum fcs_stream_device_t dev, uint8_t board_id,
-struct fcs_measurement_log_t *out_measurements) {
-    uint8_t checksum;
-    size_t i;
-    struct sensor_packet_t packet;
-    struct fcs_cobsr_decode_result result;
+static void _update_pitot_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, size_t i) {
+    struct fcs_calibration_t *calibration;
+    struct fcs_parameter_t parameter;
+    double pitot_value;
 
-    /* Decode the message into the packet buffer */
-    result = fcs_cobsr_decode((uint8_t*)&packet, sizeof(packet), buf,
-                              nbytes - 1u);
-
-    /* Confirm decode was successful */
-    if (result.status != FCS_COBSR_DECODE_OK) {
-        goto invalid;
+    if (!fcs_parameter_find_by_type_and_device(
+            plog, FCS_PARAMETER_PITOT, (uint8_t)i, &parameter)) {
+        return;
     }
 
-    /* Confirm packet size is what we expect */
-    if (result.out_len != sizeof(packet)) {
-        goto invalid;
+    /* Get the parameter value */
+    fcs_parameter_get_values_d(&parameter, &pitot_value, 1u);
+
+    /* Find the calibration parameters */
+    calibration = fcs_parameter_get_calibration(cmap, &parameter);
+
+    /*
+    Update bias based on current sensor value, assuming the true
+    reading should be 0. This is just a weighted moving average, with
+    convergence taking a few seconds.
+    */
+    calibration->params[0] +=
+        0.001 * ((pitot_value * calibration->scale_factor) -
+                 calibration->params[0]);
+}
+
+static void _update_barometer_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, double reference_pressure, size_t i) {
+    struct fcs_calibration_t *calibration;
+    struct fcs_parameter_t parameter;
+    double barometer_value;
+
+    if (!fcs_parameter_find_by_type_and_device(
+            plog, FCS_PARAMETER_PRESSURE_TEMP, (uint8_t)i, &parameter)) {
+        return;
     }
 
-    /* Validate the packet checksum */
-    checksum = fcs_crc8(
-        (uint8_t*)&packet.tick, (size_t)result.out_len - 1u, 0x0);
+    /* Get the parameter value */
+    fcs_parameter_get_values_d(&parameter, &barometer_value, 1u);
 
-    if (checksum != packet.crc) {
-        goto invalid;
-    }
+    /* Find the calibration parameters */
+    calibration = fcs_parameter_get_calibration(cmap, &parameter);
 
-    /* Copy sensor readings to the system measurement log */
-    struct fcs_measurement_t measurement;
+    /*
+    Update bias based on current sensor value, assuming the true
+    reading should be the same as the current reference pressure
+    (valid since we're looking for height above our starting
+    position).
 
-    if (packet.sensor_update_flags & UPDATED_ACCEL) {
-        fcs_measurement_set_header(&measurement, 16u, 3u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_ACCELEROMETER);
+    The GCS sensor will generally be elevated by a metre or two, but
+    this code will simply treat that as a sensor bias and compensate
+    automatically.
+    */
+    calibration->params[0] +=
+        0.001 * ((barometer_value * calibration->scale_factor) -
+                 reference_pressure - calibration->params[0]);
+}
 
-        measurement.data.i16[0] = swap_int16(packet.accel.y);
-        measurement.data.i16[1] = swap_int16(packet.accel.x);
-        measurement.data.i16[2] = -swap_int16(packet.accel.z);
-        fcs_measurement_log_add(out_measurements, &measurement);
-    }
+static void _update_magnetometer_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance,
+const double *attitude, double *last_update_attitude, const double *wmm_field,
+double wmm_field_norm, size_t i) {
+    /*
+    Handle magnetometer calibration update based on new readings -- we do this
+    regardless of calibration mode
+    */
+    struct fcs_calibration_t *calibration;
+    struct fcs_parameter_t parameter;
+    double mag_value[3], expected_field[3], scale_factor, delta_angle;
+    float mag_value_f[3], expected_field_f[3];
 
-    if (packet.sensor_update_flags & UPDATED_GYRO) {
-        fcs_measurement_set_header(&measurement, 16u, 3u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_GYROSCOPE);
-
-        measurement.data.i16[0] = swap_int16(packet.gyro.y);
-        measurement.data.i16[1] = swap_int16(packet.gyro.x);
-        measurement.data.i16[2] = -swap_int16(packet.gyro.z);
-        fcs_measurement_log_add(out_measurements, &measurement);
-    }
-
-    if (packet.sensor_update_flags & UPDATED_BAROMETER) {
-        fcs_measurement_set_header(&measurement, 16u, 2u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_PRESSURE_TEMP);
-
-        measurement.data.u16[0] = swap_uint16(packet.pressure);
-        measurement.data.u16[1] = swap_uint16(packet.barometer_temp);
-        fcs_measurement_log_add(out_measurements, &measurement);
-    }
-
-    if (packet.sensor_update_flags & UPDATED_ADC_GPIO) {
-        /* Update the pitot */
-        fcs_measurement_set_header(&measurement, 16u, 1u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_PITOT);
-
-        measurement.data.i16[0] = swap_int16(packet.pitot);
-        fcs_measurement_log_add(out_measurements, &measurement);
-
-        /* Update current/voltage */
-        fcs_measurement_set_header(&measurement, 16u, 2u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_IV);
-
-        measurement.data.i16[0] = swap_int16(packet.i);
-        measurement.data.i16[1] = swap_int16(packet.v);
-        fcs_measurement_log_add(out_measurements, &measurement);
-
-
-        /* Update ultransonic rangefinder */
-        fcs_measurement_set_header(&measurement, 16u, 1u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_RANGEFINDER);
-
-        measurement.data.i16[0] = swap_int16(packet.range);
-        fcs_measurement_log_add(out_measurements, &measurement);
-    }
-
-    if (packet.sensor_update_flags & UPDATED_MAG) {
-        fcs_measurement_set_header(&measurement, 12u, 3u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_MAGNETOMETER);
-
-        measurement.data.i16[0] = swap_int16(packet.mag.x);
-        measurement.data.i16[1] = -swap_int16(packet.mag.y);
-        measurement.data.i16[2] = -swap_int16(packet.mag.z);
-        fcs_measurement_log_add(out_measurements, &measurement);
-    }
-
-    if (packet.sensor_update_flags & UPDATED_GPS_POS) {
-        fcs_measurement_set_header(&measurement, 32u, 3u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_GPS_POSITION);
-
-        measurement.data.i32[0] = swap_int32(packet.gps.position.lat);
-        measurement.data.i32[1] = swap_int32(packet.gps.position.lng);
-        measurement.data.i32[2] = swap_int32(packet.gps.position.alt);
-        fcs_measurement_log_add(out_measurements, &measurement);
-
-        fcs_measurement_set_header(&measurement, 16u, 3u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_GPS_VELOCITY);
-
-        measurement.data.i16[0] = swap_int16(packet.gps.velocity.n);
-        measurement.data.i16[1] = swap_int16(packet.gps.velocity.e);
-        measurement.data.i16[2] = swap_int16(packet.gps.velocity.d);
-        fcs_measurement_log_add(out_measurements, &measurement);
-    }
-
-    if (packet.sensor_update_flags & UPDATED_GPS_INFO) {
-        fcs_measurement_set_header(&measurement, 8u, 3u);
-        fcs_measurement_set_sensor(&measurement, board_id,
-                                   FCS_MEASUREMENT_TYPE_GPS_INFO);
-
-        measurement.data.u8[0] =
-            packet.gps_info.fix_mode_num_satellites >> 4u;
-        measurement.data.u8[1] =
-            packet.gps_info.fix_mode_num_satellites & 0xFu;
-        measurement.data.u8[2] = packet.gps_info.pos_err;
-        fcs_measurement_log_add(out_measurements, &measurement);
+    if (!fcs_parameter_find_by_type_and_device(
+            plog, FCS_PARAMETER_MAGNETOMETER_XYZ, (uint8_t)i, &parameter)) {
+        return;
     }
 
     /*
-    Update the current PWM state for the appropriate channel, then save all
-    PWM values in the measurement control log.
+    If the current attitude is too close to the attitude at which this
+    TRICAL instance was last updated, skip calibration this time
     */
-    pwm_state[board_id][(packet.gpin_state & 0xF0u) >> 4u] =
-        swap_uint16(packet.pwm_in);
-	for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
-	    measurement.data.u16[i] = pwm_state[board_id][i];
+    delta_angle = quaternion_quaternion_angle_d(attitude,
+                                                last_update_attitude);
+    if (delta_angle < 3.0 * M_PI / 180.0) {
+        return;
+    }
 
-        /* Set neutral value during calibration */
-        if (fcs_global_ahrs_state.mode == FCS_MODE_CALIBRATING) {
-            pwm_neutral[i] += (float)pwm_state[board_id][i] *
-                          (1.0f / 65535.0f);
-            pwm_neutral[i] *= 0.5;
-        }
-	}
-	fcs_measurement_set_header(&measurement, 16u, 4u);
-	fcs_measurement_set_sensor(&measurement, 0,
-	                           FCS_MEASUREMENT_TYPE_CONTROL_POS);
-	fcs_measurement_log_add(out_measurements, &measurement);
+    /*
+    Rotate the WMM field by the current attitude to get the expected field
+    direction for these readings
+    */
+    quaternion_vector3_multiply_d(expected_field, attitude, wmm_field);
+    vector_f_from_d(expected_field_f, expected_field, 3u);
 
-    fcs_global_counters.ioboard_packet_rx[dev]++;
-    return true;
+    /* Get the parameter value */
+    fcs_parameter_get_values_d(&parameter, mag_value, 3u);
 
-invalid:
-    fcs_global_counters.ioboard_packet_rx_err[dev]++;
-    return false;
+    /* Find the calibration parameters */
+    calibration = fcs_parameter_get_calibration(cmap, &parameter);
+
+    /*
+    Update TRICAL instance parameters with the latest results. Scale
+    the magnetometer reading such that the expected magnitude is the
+    unit vector, by dividing by the current WMM field strength in
+    Gauss.
+
+    Copy the current sensor calibration to the TRICAL instance state
+    so that any external changes to the calibration are captured.
+    */
+    vector_copy_f(instance->state, calibration->params, 9u);
+
+    scale_factor = calibration->scale_factor / wmm_field_norm;
+    vector3_scale_d(mag_value, scale_factor);
+    vector_f_from_d(mag_value_f, mag_value, 3u);
+
+    TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
+
+    if (_vec_hasnan_f(instance->state, 12u)) {
+        /* TRICAL has blown up -- reset this instance. */
+        TRICAL_reset(instance);
+        fcs_global_counters.trical_resets[i + 2u]++;
+    }
+
+    /*
+    Copy the TRICAL calibration estimate to the magnetometer
+    calibration
+    */
+    vector_copy_f(calibration->params, instance->state, 9u);
+
+    /*
+    Record the attitude at which this TRICAL instance was last updated
+    so that we can space out calibration updates
+    */
+    vector_copy_d(last_update_attitude, attitude, 4u);
 }
 
+static void _update_accelerometer_calibration(const struct fcs_log_t *plog,
+struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
+    struct fcs_calibration_t *calibration;
+    struct fcs_parameter_t parameter;
+    double accel_value[3];
+    float accel_value_f[3], g_field[] = { 0.0, 0.0, -1.0 };
 
-#endif
+    if (!fcs_parameter_find_by_type_and_device(
+            plog, FCS_PARAMETER_ACCELEROMETER_XYZ, (uint8_t)i, &parameter)) {
+        return;
+    }
+
+    /* Get the accelerometer value */
+    fcs_parameter_get_values_d(&parameter, accel_value, 3u);
+
+    /* Find the calibration parameters */
+    calibration = fcs_parameter_get_calibration(cmap, &parameter);
+
+    /*
+    Copy the current sensor calibration to the TRICAL instance
+    state so that any external changes to the calibration are
+    captured.
+    */
+    vector_copy_f(instance->state, calibration->params, 9u);
+
+    vector3_scale_d(accel_value, calibration->scale_factor);
+    vector_f_from_d(accel_value_f, accel_value, 3u);
+
+    /*
+    If the vehicle is level, we can assume that bias accounts for
+    essentially the entire deviation from a reading of (0, 0, -1).
+
+    Strictly that's not quite true, as the Z-axis may have scale
+    error, but it'll get us pretty close.
+
+    Since we're level, we can also set the expected field
+    direction to straight down.
+    */
+    if (instance->state[0] == 0.0 || instance->state[1] == 0.0 ||
+            instance->state[2] == 0.0) {
+        /*
+        TODO: average this out over a few ticks to avoid sensitivity
+        to noise on startup
+        */
+        vector_copy_f(instance->state, accel_value_f, 3u);
+        instance->state[2] += 1.0f;
+    }
+
+    TRICAL_estimate_update(instance, accel_value_f, g_field);
+
+    if (_vec_hasnan_f(instance->state, 12u)) {
+        /* TRICAL has blown up -- reset this instance. */
+        TRICAL_reset(instance);
+        fcs_global_counters.trical_resets[i + 2u]++;
+    }
+
+    /*
+    Copy the TRICAL calibration estimate to the accelerometer
+    calibration
+    */
+    vector_copy_f(calibration->params, instance->state, 9u);
+}
+
+static void _apply_accelerometer_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
+    double v[4], variance[3], offset[4], err;
+    struct fcs_parameter_t param;
+
+    if (!fcs_log_get_calibrated_value(plog, cmap,
+                                      FCS_PARAMETER_ACCELEROMETER_XYZ, v,
+                                      &err, offset, 1.0)) {
+        return;
+    }
+
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 3u);
+    fcs_parameter_set_type(&param,
+                           FCS_PARAMETER_HAL_ACCELEROMETER_OFFSET_XYZ);
+    fcs_parameter_set_device(&param, 0);
+
+    param.data.f32[X] = (float)offset[X];
+    param.data.f32[Y] = (float)offset[Y];
+    param.data.f32[Z] = (float)offset[Z];
+
+    fcs_log_add_parameter(hlog, &param);
+
+    /* Accelerometer output is in g, convert to m/s^2 */
+    vector3_scale_d(v, G_ACCEL);
+
+    /*
+    Add a relative error term to the covariance to account for scale
+    factor error when the accelerometer reading differs from the bias
+    calibration point (0, 0, -1).
+
+    This isn't the right way to do it as the UKF assumes zero-mean error,
+    but in practice it's OK.
+    */
+    vector3_scale_d(v, 0.1);
+    variance[X] = err + absval(v[X]);
+    variance[X] *= variance[X];
+
+    variance[Y] = err + absval(v[Y]);
+    variance[Y] *= variance[Y];
+
+    variance[Z] = err + absval(v[Z] + G_ACCEL * 0.1);
+    variance[Z] *= variance[Z];
+
+    _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_ACCELEROMETER_XYZ, v,
+                              variance, 3u);
+}
+
+static void _apply_gyroscope_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
+    double v[4], variance[3], err;
+
+    if (!fcs_log_get_calibrated_value(plog, cmap, FCS_PARAMETER_GYROSCOPE_XYZ,
+                                      v, &err, NULL, 1.0)) {
+        return;
+    }
+
+    /*
+    Add a relative error term, as above. Remove this if gyro scale factor
+    error is included in the process model.
+    */
+    vector3_scale_d(v, 0.03);
+    variance[X] = err + absval(v[X]);
+    variance[X] *= variance[X];
+
+    variance[Y] = err + absval(v[Y]);
+    variance[Y] *= variance[Y];
+
+    variance[Z] = err + absval(v[Z]);
+    variance[Z] *= variance[Z];
+
+    _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_GYROSCOPE_XYZ, v,
+                              variance, 3u);
+}
+
+static void _apply_magnetometer_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
+double wmm_field_norm) {
+    double v[4], variance[3], err;
+    double field_norm_inv = 1.0 / wmm_field_norm;
+
+    /*
+    We need to pre-scale the sensor reading by the current WMM field magnitude
+    to work with the calibration params.
+    */
+    if (!fcs_log_get_calibrated_value(plog, cmap,
+                                      FCS_PARAMETER_MAGNETOMETER_XYZ, v, &err,
+                                      NULL, field_norm_inv)) {
+        return;
+    }
+
+    /*
+    The calibration scales the magnetometer value to unity expectation.
+    Scale error by the same amount, so the units of error are Gauss.
+    */
+    err *= field_norm_inv;
+    vector_set_d(variance, err * err, 3);
+
+    _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_MAGNETOMETER_XYZ, v,
+                              variance, 3u);
+}
+
+static void _apply_pitot_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
+double static_pressure, double static_temp) {
+    double v[4], err, tas;
+
+    if (!fcs_log_get_calibrated_value(plog, cmap, FCS_PARAMETER_PITOT, v,
+                                      &err, NULL, 1.0)) {
+        return;
+    }
+
+    tas = airspeed_from_pressure_temp(static_pressure, v[0], static_temp);
+
+    /* Allow for 2% scale factor error */
+    err += absval(v[0]) * 0.02;
+    err *= err;
+
+    _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_AIRSPEED, &tas, &err,
+                              1u);
+}
+
+static void _apply_barometer_calibration(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
+double reference_pressure, double static_temp, double reference_alt) {
+    double v[4], err, alt;
+
+    if (!fcs_log_get_calibrated_value(plog, cmap, FCS_PARAMETER_PRESSURE_TEMP,
+                                      v, &err, NULL, 1.0)) {
+        return;
+    }
+
+    /*
+    Calculate pressure differential between measured pressure and GCS
+    pressure, then convert that to metres by dividing by 0.12.
+
+    Add the GCS altitude above the ellipsoid to the result, so the final
+    value we pass to the UKF is our altitude above ellipsoid referenced
+    to current GCS pressure.
+    */
+    alt = altitude_diff_from_pressure_diff(reference_pressure, v[0],
+                                           static_temp) + reference_alt;
+
+    /* Allow for 3% scale factor error in altitude */
+    err += absval(alt) * 0.03;
+    err *= err;
+
+    _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_PRESSURE_ALTITUDE, &alt,
+                              &err, 1u);
+}
+
+static void _set_gps_position(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
+    double v[4], err;
+    struct fcs_parameter_t param;
+
+    if (!fcs_log_get_calibrated_value(plog, cmap,
+                                      FCS_PARAMETER_GPS_POSITION_LLA, v, &err,
+                                      NULL, 1.0)) {
+        return;
+    }
+
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 64u, 2u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_HAL_POSITION_LAT_LON);
+    fcs_parameter_set_device(&param, 0);
+
+    param.data.f64[0] = v[0];
+    param.data.f64[1] = v[1];
+
+    fcs_log_add_parameter(hlog, &param);
+
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 3u);
+    fcs_parameter_set_type(&param,
+                           FCS_PARAMETER_HAL_POSITION_LAT_LON_VARIANCE);
+    fcs_parameter_set_device(&param, 0);
+
+    param.data.f32[0] = (float)(err * err);
+    param.data.f32[1] = (float)(err * err);
+
+    fcs_log_add_parameter(hlog, &param);
+
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 1u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_HAL_POSITION_ALT);
+    fcs_parameter_set_device(&param, 0);
+
+    param.data.f32[0] = (float)v[2];
+
+    fcs_log_add_parameter(hlog, &param);
+
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 1u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_HAL_POSITION_ALT_VARIANCE);
+    fcs_parameter_set_device(&param, 0);
+
+    param.data.f32[0] = 225.0f;
+
+    fcs_log_add_parameter(hlog, &param);
+}
+
+static void _set_gps_velocity(const struct fcs_log_t *plog,
+struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
+    double v[4], variance[3], err;
+
+    if (!fcs_log_get_calibrated_value(plog, cmap,
+                                      FCS_PARAMETER_GPS_VELOCITY_NED, v, &err,
+                                      NULL, 1.0)) {
+        return;
+    }
+
+    variance[X] = variance[Y] = err * err;
+    variance[Z] = 25.0;
+
+    _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_VELOCITY_NED, v,
+                              variance, 3u);
+}
+
+static void _set_hal_sensor_value_f32(struct fcs_log_t *plog,
+enum fcs_parameter_type_t param_type, const double *restrict value,
+const double *restrict variance, size_t n) {
+    assert(plog);
+    assert(value);
+
+    size_t i;
+    struct fcs_parameter_t param;
+
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, n);
+    fcs_parameter_set_type(&param, param_type);
+    fcs_parameter_set_device(&param, 0);
+
+    for (i = 0; i < n; i++) {
+        param.data.f32[i] = (float)value[i];
+    }
+
+    fcs_log_add_parameter(plog, &param);
+
+    if (variance) {
+        fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, n);
+        fcs_parameter_set_type(&param, param_type + 1u);
+        fcs_parameter_set_device(&param, 0);
+
+        for (i = 0; i < n; i++) {
+            param.data.f32[i] = (float)variance[i];
+        }
+
+        fcs_log_add_parameter(plog, &param);
+    }
+}

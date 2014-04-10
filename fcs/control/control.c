@@ -31,12 +31,8 @@ SOFTWARE.
 
 #include "../util/util.h"
 #include "../util/3dmath.h"
-#include "../ukf/cukf.h"
 #include "../nmpc/cnmpc.h"
 #include "../stats/stats.h"
-#include "../TRICAL/TRICAL.h"
-#include "../ahrs/measurement.h"
-#include "../ahrs/ahrs.h"
 #include "control.h"
 #include "../exports/exports.h"
 #include "trajectory.h"
@@ -57,33 +53,29 @@ inline uint32_t cycle_count(void) {
 }
 #endif
 
+
+static struct fcs_control_state_t control_state;
+static struct fcs_nav_state_t nav_state;
+static uint32_t control_infeasibility_timer;
+static uint32_t control_tick;
+
+
 inline static bool is_path_valid() {
-    return fcs_global_nav_state.reference_path_id[0] !=
-                FCS_CONTROL_INVALID_PATH_ID;
+    return nav_state.reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID;
 }
 
 inline static bool is_navigating() {
-    return is_path_valid() &&
-           fcs_global_control_state.mode == FCS_CONTROL_MODE_AUTO;
+    return is_path_valid() && control_state.mode == FCS_CONTROL_MODE_AUTO;
 }
 
 inline static bool is_stabilising() {
-    return fcs_global_nav_state.reference_path_id[0] ==
-                FCS_CONTROL_STABILISE_PATH_ID;
+    return nav_state.reference_path_id[0] == FCS_CONTROL_STABILISE_PATH_ID;
 }
 
 inline static bool is_position_error_ok(float err) {
     return is_path_valid() &&
            (is_stabilising() || absval(err) < FCS_CONTROL_POSITION_TOLERANCE);
 }
-
-
-struct fcs_control_state_t fcs_global_control_state;
-struct fcs_nav_state_t fcs_global_nav_state;
-
-static uint32_t control_infeasibility_timer;
-static uint32_t control_tick;
-
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
@@ -97,30 +89,30 @@ void fcs_control_init(void) {
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
     /* Clear GPIO outs */
-    fcs_global_control_state.gpio_state = 0;
+    control_state.gpio_state = 0;
 
     /*
     Configure throttle control: 0-12000 RPM, cruise at 9000, rate change at
     9000 RPM/sec
     */
-    fcs_global_control_state.controls[0].setpoint = 0.6f;
-    fcs_global_control_state.controls[0].rate = 0.5f;
+    control_state.controls[0].setpoint = 0.6f;
+    control_state.controls[0].rate = 0.5f;
 
     /*
     Configure left elevon: neutral setpoint, +/- 36 deg travel, 60 deg/s rate
     */
-    fcs_global_control_state.controls[1].setpoint = 0.5f;
-    fcs_global_control_state.controls[1].rate = 2.0f;
+    control_state.controls[1].setpoint = 0.5f;
+    control_state.controls[1].rate = 2.0f;
 
     /*
     Configure right elevon: neutral setpoint, +/- 36 deg travel, 60 deg/s rate
     */
-    fcs_global_control_state.controls[2].setpoint = 0.5f;
-    fcs_global_control_state.controls[2].rate = 2.0f;
+    control_state.controls[2].setpoint = 0.5f;
+    control_state.controls[2].rate = 2.0f;
 
     /* Set final (unused) control channel */
-    fcs_global_control_state.controls[3].setpoint = 0.0f;
-    fcs_global_control_state.controls[3].rate = 1.0f;
+    control_state.controls[3].setpoint = 0.0f;
+    control_state.controls[3].rate = 1.0f;
 
     /*
     Set up NMPC parameters -- state and control weights as well as control
@@ -136,56 +128,52 @@ void fcs_control_init(void) {
     nmpc_init(true);
 
     /* Fill the horizon with zeros -- it'll be re-calculated next tick. */
-    memset(fcs_global_nav_state.reference_trajectory, 0,
-           sizeof(fcs_global_nav_state.reference_trajectory));
+    memset(nav_state.reference_trajectory, 0,
+           sizeof(nav_state.reference_trajectory));
 
     /*
     Set the reference path to invalid, so it gets recalculated once the AHRS
     is ready.
     */
-    memset(fcs_global_nav_state.reference_path_id, 0xFFu,
-           sizeof(fcs_global_nav_state.reference_path_id));
+    memset(nav_state.reference_path_id, 0xFFu,
+           sizeof(nav_state.reference_path_id));
 
     /* Configure the holding path */
-    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].start_waypoint_id =
+    nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].start_waypoint_id =
         FCS_CONTROL_HOLD_WAYPOINT_ID;
-    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].end_waypoint_id =
+    nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].end_waypoint_id =
         FCS_CONTROL_HOLD_WAYPOINT_ID;
-    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].type =
-        FCS_PATH_FIGURE_EIGHT;
-    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].flags = 0;
-    fcs_global_nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].next_path_id =
+    nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].type = FCS_PATH_FIGURE_EIGHT;
+    nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].flags = 0;
+    nav_state.paths[FCS_CONTROL_HOLD_PATH_ID].next_path_id =
         FCS_CONTROL_HOLD_PATH_ID;
 
     control_infeasibility_timer = 0;
     control_tick = 0;
 
-    fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
+    control_state.mode = FCS_CONTROL_MODE_MANUAL;
 }
 
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
-    struct fcs_nav_state_t *nav = &fcs_global_nav_state;
     float controls[NMPC_CONTROL_DIM], alt_diff;
-    struct fcs_waypoint_update_t waypoint_update;
-    struct fcs_path_update_t path_update;
     size_t i;
     uint32_t start_t = cycle_count();
     bool control_timeout = false;
 
-    assert(fcs_global_control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
+    assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
 
 #ifdef __TI_COMPILER_VERSION__
     /* FIXME -- move this to the board definition file instead */
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
     if (gpio->BANK_REGISTERS[0].IN_DATA & 0x40u) {
-        fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
+        control_state.mode = FCS_CONTROL_MODE_AUTO;
     } else {
-        fcs_global_control_state.mode = FCS_CONTROL_MODE_MANUAL;
+        control_state.mode = FCS_CONTROL_MODE_MANUAL;
     }
 #else
-    fcs_global_control_state.mode = FCS_CONTROL_MODE_AUTO;
+    control_state.mode = FCS_CONTROL_MODE_AUTO;
 #endif
 
     /*
@@ -201,35 +189,35 @@ void fcs_control_tick(void) {
         control_tick++;
     }
 
-    /* Handle path and waypoint updates */
+    /*
+    TODO: Handle path and waypoint updates
     fcs_exports_recv_waypoint_update(&waypoint_update);
-    if (waypoint_update.nav_state_version > nav->version) {
+    if (waypoint_update.nav_state_version > nav_state.version) {
         assert(waypoint_update.waypoint_id < FCS_CONTROL_MAX_WAYPOINTS);
 
-        /* Process the waypoint update */
-        nav->waypoints[waypoint_update.waypoint_id] = waypoint_update.waypoint;
-        nav->version = waypoint_update.nav_state_version;
+        nav_state.waypoints[waypoint_update.waypoint_id] =
+            waypoint_update.waypoint;
+        nav_state.version = waypoint_update.nav_state_version;
     }
 
     fcs_exports_recv_path_update(&path_update);
-    if (path_update.nav_state_version > nav->version) {
+    if (path_update.nav_state_version > nav_state.version) {
         assert(path_update.path_id < FCS_CONTROL_MAX_PATHS);
 
-        /* Process the path update */
-        nav->paths[path_update.path_id] = path_update.path;
-        nav->version = path_update.nav_state_version;
+        nav_state.paths[path_update.path_id] = path_update.path;
+        nav_state.version = path_update.nav_state_version;
     }
+    */
 
     /*
     Read the relevant parts of the AHRS output and convert them to a format
     usable by the control system.
 
-    Don't access fcs_global_ahrs_state directly, since the cache coherence of
-    that structure is not guaranteed.
+    TODO: read from estimate log
     */
-    fcs_exports_recv_state(&state_estimate);
 
-    alt_diff = absval(state_estimate.alt - nav->reference_trajectory[0].alt);
+    alt_diff = absval(state_estimate.alt -
+                      nav_state.reference_trajectory[0].alt);
 
     /*
     Four options here:
@@ -254,31 +242,31 @@ void fcs_control_tick(void) {
     three elements of `state`, since all positions are given in NED relative
     to the first point in the reference trajectory.
     */
-    if (fcs_global_control_state.mode == FCS_CONTROL_MODE_MANUAL) {
+    if (control_state.mode == FCS_CONTROL_MODE_MANUAL) {
         /*
         While in manual mode, continuously try to enter a holding pattern
         */
-        fcs_trajectory_start_hold(nav, &state_estimate);
-        fcs_trajectory_recalculate(nav, &state_estimate);
-        fcs_trajectory_timestep(nav, &state_estimate);
+        fcs_trajectory_start_hold(&nav_state, &state_estimate);
+        fcs_trajectory_recalculate(&nav_state, &state_estimate);
+        fcs_trajectory_timestep(&nav_state, &state_estimate);
     } else if (!control_timeout && is_navigating() &&
                is_position_error_ok(alt_diff)) {
-        fcs_trajectory_timestep(nav, &state_estimate);
+        fcs_trajectory_timestep(&nav_state, &state_estimate);
     } else if (is_path_valid()) {
         /*
         If we're not already stabilising, construct a path sequence that gets
         the vehicle back to the next point in the reference trajectory.
         */
-        fcs_trajectory_start_recover(nav, &state_estimate);
-        fcs_trajectory_recalculate(nav, &state_estimate);
-        fcs_trajectory_timestep(nav, &state_estimate);
+        fcs_trajectory_start_recover(&nav_state, &state_estimate);
+        fcs_trajectory_recalculate(&nav_state, &state_estimate);
+        fcs_trajectory_timestep(&nav_state, &state_estimate);
     } else {
         /*
         Path uninitialized; enter a holding pattern.
         */
-        fcs_trajectory_start_hold(nav, &state_estimate);
-        fcs_trajectory_recalculate(nav, &state_estimate);
-        fcs_trajectory_timestep(nav, &state_estimate);
+        fcs_trajectory_start_hold(&nav_state, &state_estimate);
+        fcs_trajectory_recalculate(&nav_state, &state_estimate);
+        fcs_trajectory_timestep(&nav_state, &state_estimate);
     }
 
     /* Get the control values and update the global state. */
@@ -290,11 +278,9 @@ void fcs_control_tick(void) {
     }
 
     for (i = 0; i < NMPC_CONTROL_DIM; i++) {
-        fcs_global_control_state.controls[i].setpoint = controls[i];
+        /* TODO: write to control log */
     }
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
-
-    fcs_exports_send_control();
 }

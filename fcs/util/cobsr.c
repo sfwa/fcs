@@ -52,7 +52,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     uint8_t *           dst_code_write_ptr  = dst_buf_ptr;
     uint8_t *           dst_write_ptr       = dst_code_write_ptr + 1u;
     uint8_t             src_byte            = 0;
-    size_t              search_len          = 1u;
+    uint8_t             search_len          = 1u;
 
     /* Iterate over the source bytes */
     for (;;) {
@@ -81,7 +81,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
             if (search_len == 0xFFu) {
                 /* We have a long string of non-zero bytes, so we need
                  * to write out a length code of 0xFF. */
-                *dst_code_write_ptr = search_len;
+                *dst_code_write_ptr = 0xFFu;
                 dst_code_write_ptr = dst_write_ptr++;
                 search_len = 1u;
             }
@@ -105,6 +105,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     } else {
         if (src_byte < search_len) {
             /* Encoding same as plain COBS */
+            assert(search_len <= 0xFFu);
             *dst_code_write_ptr = search_len;
         } else {
             /* Special COBS/R encoding: length code is final byte,

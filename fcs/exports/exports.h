@@ -23,81 +23,19 @@ SOFTWARE.
 #ifndef EXPORTS_H_
 #define EXPORTS_H_
 
-struct fcs_state_estimate_t {
-    double lat;
-    double lon;
-    float alt;
-    float velocity[3];
-    float attitude[4];
-    float angular_velocity[3];
-    float wind_velocity[3];
-    uint8_t mode;
-    /* Pad so the structure fills two whole L1 cache lines (128 bytes) */
-    uint8_t reserved[55];
-};
+#include "log.h"
 
-struct fcs_control_output_t {
-    uint64_t nmpc_errors;
-    uint64_t nmpc_resets;
-
-    float values[4];
-    float rates[4];
-
-    float objective_val;
-    uint32_t cycles;
-
-    double reference_lat;
-    double reference_lon;
-    float reference_alt;
-    float reference_airspeed;
-    float reference_yaw;
-    float reference_pitch;
-    float reference_roll;
-
-    uint32_t nav_state_version;
-    uint16_t path_id;
-
-    uint8_t gpio;
-    uint8_t mode;
-
-    /* Pad so the structure fills two whole L1 cache lines (128 bytes) */
-    uint8_t reserved[32];
-};
-
-struct fcs_waypoint_update_t {
-    uint32_t nav_state_version;
-    uint16_t waypoint_id;
-
-    struct fcs_waypoint_t waypoint;
-
-    /* Pad the structure to an L1 cache line */
-    uint8_t reserved[128u - sizeof(struct fcs_waypoint_t) - 6u];
-};
-
-struct fcs_path_update_t {
-    uint32_t nav_state_version;
-    uint16_t path_id;
-
-    struct fcs_path_t path;
-
-    /* Pad the structure to an L1 cache line */
-    uint8_t reserved[128u - sizeof(struct fcs_path_t) - 6u];
+enum fcs_log_open_mode_t {
+    FCS_MODE_READ = 'r',
+    FCS_MODE_WRITE = 'w',
+    FCS_MODE_APPEND = 'a',
+    FCS_MODE_CLOSED = 'c'
 };
 
 void fcs_exports_init(void);
 
-void fcs_exports_send_state(void);
-void fcs_exports_send_control(void);
-
-void fcs_exports_recv_state(struct fcs_state_estimate_t *state);
-void fcs_exports_recv_control(struct fcs_control_output_t *control);
-
-void fcs_exports_send_waypoint_update(uint32_t nav_state_version,
-uint16_t waypoint_id, const struct fcs_waypoint_t *waypoint);
-void fcs_exports_send_path_update(uint32_t nav_state_version,
-uint16_t path_id, const struct fcs_path_t *path);
-
-void fcs_exports_recv_waypoint_update(struct fcs_waypoint_update_t *update);
-void fcs_exports_recv_path_update(struct fcs_path_update_t *update);
+struct fcs_log_t *fcs_exports_log_open(enum fcs_log_type_t type,
+enum fcs_log_open_mode_t mode);
+struct fcs_log_t *fcs_exports_log_close(struct fcs_log_t *log);
 
 #endif

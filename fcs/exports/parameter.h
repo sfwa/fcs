@@ -52,8 +52,10 @@ enum fcs_parameter_type_t {
     FCS_PARAMETER_HAL_AIRSPEED_VARIANCE,
     FCS_PARAMETER_HAL_PRESSURE_ALTITUDE,
     FCS_PARAMETER_HAL_PRESSURE_ALTITUDE_VARIANCE,
-    FCS_PARAMETER_HAL_POSITION_LLA,
-    FCS_PARAMETER_HAL_POSITION_LLA_VARIANCE,
+    FCS_PARAMETER_HAL_POSITION_LAT_LON,
+    FCS_PARAMETER_HAL_POSITION_LAT_LON_VARIANCE,
+    FCS_PARAMETER_HAL_POSITION_ALT,
+    FCS_PARAMETER_HAL_POSITION_ALT_VARIANCE,
     FCS_PARAMETER_HAL_VELOCITY_NED,
     FCS_PARAMETER_HAL_VELOCITY_NED_VARIANCE,
     /* Derived parameters */
@@ -75,6 +77,7 @@ enum fcs_parameter_type_t {
     FCS_PARAMETER_ESTIMATED_STATIC_PRESSURE,
     FCS_PARAMETER_ESTIMATED_STATIC_TEMP,
     FCS_PARAMETER_ESTIMATED_DYNAMIC_PRESSURE,
+    FCS_PARAMETER_ESTIMATED_WMM_FIELD,
     /* NMPC output */
     FCS_PARAMETER_CONTROL_SETPOINT,
     /* Status */
@@ -88,6 +91,13 @@ enum fcs_parameter_type_t {
     FCS_PARAMETER_KEY_VALUE,
     /* Sentinel */
     FCS_PARAMETER_LAST
+};
+
+enum fcs_value_type_t {
+    FCS_VALUE_UNSIGNED,
+    FCS_VALUE_SIGNED,
+    FCS_VALUE_FLOAT,
+    FCS_VALUE_RESERVED
 };
 
 /*
@@ -107,8 +117,9 @@ enum fcs_parameter_type_t {
 */
 
 struct fcs_parameter_t {
-    uint8_t header; /* 7 = mode, 6:4 = data precision in nibbles;
-                       3:0 = length of data in bytes */
+    uint8_t header; /* 7 = mode; 6:5 = value type (0 = unsigned, 1 = signed,
+                       2 = float, 3 = reserved); 4:3 = log2(bytes per value);
+                       2:0 = number of values */
     uint8_t device; /* device ID */
     uint8_t type;   /* data type */
     union { /* The data type is implicit based on parameter type */
@@ -120,13 +131,17 @@ struct fcs_parameter_t {
         int32_t i32[4];
         float16_t f16[4];
         float f32[4];
+        uint64_t u64[2];
+        int64_t i64[2];
         double f64[2];
     } __attribute__ ((packed)) data;
 } __attribute__ ((packed));
 
-#define FCS_PARAMETER_PRECISION_BITS_MAX 32u
-#define FCS_PARAMETER_HEADER_PRECISION_BITS_MASK 0x38u
-#define FCS_PARAMETER_HEADER_PRECISION_BITS_OFFSET 3u
+#define FCS_PARAMETER_PRECISION_MAX 4u
+#define FCS_PARAMETER_HEADER_TYPE_MASK 0x60u
+#define FCS_PARAMETER_HEADER_TYPE_OFFSET 5u
+#define FCS_PARAMETER_HEADER_PRECISION_MASK 0x18u
+#define FCS_PARAMETER_HEADER_PRECISION_OFFSET 3u
 #define FCS_PARAMETER_HEADER_NUM_VALUES_MASK 0x07u
 #define FCS_PARAMETER_HEADER_NUM_VALUES_OFFSET 0
 #define FCS_PARAMETER_HEADER_DATA_LENGTH_MASK 0x3Fu
@@ -153,9 +168,12 @@ const struct fcs_parameter_t *restrict parameter);
 size_t fcs_parameter_get_length(
 const struct fcs_parameter_t *restrict parameter);
 
+enum fcs_value_type_t fcs_parameter_get_value_type(
+const struct fcs_parameter_t *restrict parameter);
+
 void fcs_parameter_set_header(
-struct fcs_parameter_t *restrict parameter, size_t precision_bits,
-size_t num_values);
+struct fcs_parameter_t *restrict parameter, enum fcs_value_type_t type,
+size_t precision_bits, size_t num_values);
 
 void fcs_parameter_set_device(
 struct fcs_parameter_t *restrict parameter, uint8_t device_id);
@@ -176,22 +194,6 @@ Returns the number of values in the parameter.
 */
 size_t fcs_parameter_get_values_d(
 const struct fcs_parameter_t *restrict parameter, double *restrict out_value,
-size_t out_value_length);
-
-/*
-Convert the values associated with a parameter into an array of uint32s.
-Returns the number of values in the parameter.
-*/
-size_t fcs_parameter_get_values_u32(
-const struct fcs_parameter_t *restrict parameter,
-uint32_t *restrict out_value, size_t out_value_length);
-
-/*
-Convert the values associated with a parameter into an array of int32s.
-Returns the number of values in the parameter.
-*/
-size_t fcs_parameter_get_values_s32(
-const struct fcs_parameter_t *restrict parameter, int32_t *restrict out_value,
 size_t out_value_length);
 
 /*

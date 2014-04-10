@@ -24,6 +24,17 @@ SOFTWARE.
 
 #define WGS84_A 6378137.0
 
+struct fcs_state_estimate_t {
+    double lat;
+    double lon;
+    float alt;
+    float velocity[3];
+    float attitude[4];
+    float angular_velocity[3];
+    float wind_velocity[3];
+    uint8_t mode;
+};
+
 float fcs_trajectory_interpolate_linear(struct fcs_waypoint_t *new_point,
 const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,

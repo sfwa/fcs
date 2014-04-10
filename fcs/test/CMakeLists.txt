@@ -54,27 +54,19 @@ INCLUDE_DIRECTORIES(${googletest_dir}/include ../)
 ADD_EXECUTABLE(unittest
     ../stats/stats.c
     ../util/cobsr.c
-    ../util/crc8.c
-    ../util/crc16sbp.c
     ../util/crc32.c
-    ../util/util.c
     test_util.cpp
-    ../comms/comms.c
-    ../comms/command.c
-    ../comms/gcs.c
-    ../comms/state.c
-    ../comms/status.c
-    ../comms/path.c
-    ../comms/waypoint.c
-    test_comms.cpp
     ../drivers/stream.c
-    ../drivers/peripheral.c
     test_stream.cpp
     ../ahrs/wmm.c
     test_wmm.cpp
-    ../ahrs/measurement.c
     ../ahrs/ahrs.c
     test_ahrs.cpp
+    ../exports/log.c
+    ../exports/calibration.c
+    ../exports/exports.c
+    ../exports/parameter.c
+    test_exports.cpp
     ../control/control.c
     ../control/dubins.c
     ../control/figure-eight.c
@@ -82,10 +74,7 @@ ADD_EXECUTABLE(unittest
     ../control/trajectory.c
     test_control.cpp
     ../hardware/platform/cpuv1-ioboardv1.c
-    ../hardware/platform/log-replay.c
-    ../hardware/platform/control-hitl.c
-    test_hardware.cpp
-    ../exports/exports.c)
+    test_hardware.cpp)
 
 # Create dependency of test on googletest, ukf, TRICAL, and nmpc
 ADD_DEPENDENCIES(unittest googletest)
@@ -125,24 +114,10 @@ ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS unittest)
 ADD_LIBRARY(fcs SHARED
     ../stats/stats.c
     ../util/cobsr.c
-    ../util/crc8.c
-    ../util/crc16sbp.c
     ../util/crc32.c
-    ../util/util.c
     ../control/control.c
     ../drivers/stream.c
-    ../drivers/peripheral.c
-    ../comms/comms.c
-    ../comms/command.c
-    ../comms/gcs.c
-    ../comms/state.c
-    ../comms/status.c
-    ../comms/path.c
-    ../comms/waypoint.c
     ../hardware/platform/cpuv1-ioboardv1.c
-    ../hardware/platform/log-replay.c
-    ../hardware/platform/control-hitl.c
-    ../ahrs/measurement.c
     ../ahrs/wmm.c
     ../ahrs/ahrs.c
     ../control/control.c
@@ -150,7 +125,10 @@ ADD_LIBRARY(fcs SHARED
     ../control/dubins.c
     ../control/figure-eight.c
     ../control/linear.c
-    ../exports/exports.c)
+    ../exports/log.c
+    ../exports/calibration.c
+    ../exports/exports.c
+    ../exports/parameter.c)
 
 ADD_DEPENDENCIES(fcs ukf)
 ADD_DEPENDENCIES(fcs TRICAL)

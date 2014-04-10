@@ -99,26 +99,18 @@ int main(void) {
              start_t = frame * cycles_per_tick;
     frame++;
 
-    uint16_t tick = 0;
-
     while (TSCL - start_t < cycles_per_tick);
 
     while (1) {
-        if (core == FCS_CORE_AHRS) {
-            fcs_measurement_log_init(&fcs_global_ahrs_state.measurements,
-                                     tick++);
+        if (core == FCS_CORE_PLATFORM) {
+            fcs_board_tick();
         }
-
-        fcs_board_start_tick(core);
-
         if (core == FCS_CORE_AHRS) {
             fcs_ahrs_tick();
         }
         if (core == FCS_CORE_CONTROL) {
             fcs_control_tick();
         }
-
-        fcs_board_end_tick(core);
 
         /* Wait until next frame start time */
         start_t = frame * cycles_per_tick;

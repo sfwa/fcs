@@ -35,23 +35,11 @@ SOFTWARE.
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
 #endif
 
-#include "../util/util.h"
-#include "../util/3dmath.h"
-#include "../ukf/cukf.h"
-#include "../nmpc/cnmpc.h"
-#include "../stats/stats.h"
-#include "../TRICAL/TRICAL.h"
-#include "../ahrs/measurement.h"
-#include "../ahrs/ahrs.h"
-#include "../control/control.h"
 #include "exports.h"
 
 #ifdef __TI_COMPILER_VERSION__
-#define FCS_SEMAPHORE_STATE 1u
-#define FCS_SEMAPHORE_CONTROL 2u
-#define FCS_SEMAPHORE_PATH 3u
-#define FCS_SEMAPHORE_WAYPOINT 4u
-#define FCS_SEMAPHORE_TIMEOUT 1000u
+#define FCS_SEMAPHORE_ID_EXPORTS 1u
+#define FCS_SEMAPHORE_TIMEOUT 2000u
 
 #define L1DWIBAR (*((volatile uint32_t*)0x01844030))
 #define L1DWIWC (*((volatile uint32_t*)0x01844034))
@@ -62,302 +50,107 @@ SOFTWARE.
 #endif
 
 
-#pragma DATA_SECTION(fcs_export_state, ".shared")
-volatile static struct fcs_state_estimate_t fcs_export_state;
-
-#pragma DATA_SECTION(fcs_export_control, ".shared")
-volatile static struct fcs_control_output_t fcs_export_control;
-
-#pragma DATA_SECTION(fcs_export_waypoint_update, ".shared");
-volatile static struct fcs_waypoint_update_t fcs_export_waypoint_update;
-
-#pragma DATA_SECTION(fcs_export_path_update, ".shared");
-volatile static struct fcs_path_update_t fcs_export_path_update;
-
-
 void fcs_exports_init(void) {
 #ifdef __TI_COMPILER_VERSION__
     /* Release the state and control semaphores */
     volatile CSL_SemRegs *const semaphore =
             (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    semaphore->SEM[FCS_SEMAPHORE_STATE] = 1u;
-    semaphore->SEM[FCS_SEMAPHORE_CONTROL] = 1u;
+    semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS] = 1u;
 #endif
 }
 
-void fcs_exports_send_state(void) {
-#ifdef __TI_COMPILER_VERSION__
-    /* Acquire the global state semaphore; exit if that's not possible */
-    volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_STATE];
-    if (sem_val != 1u) {
-        return;
-    }
-#endif
+#pragma DATA_SECTION(fcs_export_logs, ".shared")
+volatile static struct fcs_log_t exports_shared_logs[FCS_LOG_TYPE_LAST - 1u];
 
-    fcs_export_state.lat = fcs_global_ahrs_state.lat;
-    fcs_export_state.lon = fcs_global_ahrs_state.lon;
-    fcs_export_state.alt = (float)fcs_global_ahrs_state.alt;
-    fcs_export_state.velocity[0] = (float)fcs_global_ahrs_state.velocity[0];
-    fcs_export_state.velocity[1] = (float)fcs_global_ahrs_state.velocity[1];
-    fcs_export_state.velocity[2] = (float)fcs_global_ahrs_state.velocity[2];
-    fcs_export_state.attitude[0] = (float)fcs_global_ahrs_state.attitude[0];
-    fcs_export_state.attitude[1] = (float)fcs_global_ahrs_state.attitude[1];
-    fcs_export_state.attitude[2] = (float)fcs_global_ahrs_state.attitude[2];
-    fcs_export_state.attitude[3] = (float)fcs_global_ahrs_state.attitude[3];
-    fcs_export_state.angular_velocity[0] =
-        (float)fcs_global_ahrs_state.angular_velocity[0];
-    fcs_export_state.angular_velocity[1] =
-        (float)fcs_global_ahrs_state.angular_velocity[1];
-    fcs_export_state.angular_velocity[2] =
-        (float)fcs_global_ahrs_state.angular_velocity[2];
-    fcs_export_state.wind_velocity[0] =
-        (float)fcs_global_ahrs_state.wind_velocity[0];
-    fcs_export_state.wind_velocity[1] =
-        (float)fcs_global_ahrs_state.wind_velocity[1];
-    fcs_export_state.wind_velocity[2] =
-        (float)fcs_global_ahrs_state.wind_velocity[2];
-    fcs_export_state.mode = (uint8_t)fcs_global_ahrs_state.mode;
+static struct fcs_log_t exports_local_logs[FCS_LOG_TYPE_LAST - 1u];
+static enum fcs_log_open_mode_t exports_local_states[FCS_LOG_TYPE_LAST - 1u];
 
-#ifdef __TI_COMPILER_VERSION__
-    /* Write back L1 */
-    L1DWBAR = (uint32_t)&fcs_export_state;
-    L1DWWC = sizeof(fcs_export_state) / 4u;
-    while (L1DWWC & 0xFFFFu);
-#endif
+struct fcs_log_t *fcs_exports_log_open(enum fcs_log_type_t type,
+enum fcs_log_open_mode_t mode) {
+    assert(FCS_LOG_TYPE_INVALID < type && type < FCS_LOG_TYPE_LAST);
+    assert(mode == FCS_MODE_READ || mode == FCS_MODE_WRITE ||
+           mode == FCS_MODE_APPEND);
+    assert(exports_local_states[type] == FCS_MODE_CLOSED);
 
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_STATE] = 1u;
-#endif
-}
-
-void fcs_exports_send_control(void) {
 #ifdef __TI_COMPILER_VERSION__
     /* Wait until we can acquire the semaphore */
     volatile CSL_SemRegs *const semaphore =
             (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
     uint32_t sem_val = 0, i = 0;
     while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
-        sem_val = semaphore->SEM[FCS_SEMAPHORE_CONTROL];
-        i++;
-    }
-#else
-    uint32_t i;
-#endif
-
-    for (i = 0; i < FCS_CONTROL_CHANNELS; i++) {
-        fcs_export_control.values[i] =
-            fcs_global_control_state.controls[i].setpoint;
-        fcs_export_control.rates[i] =
-            fcs_global_control_state.controls[i].rate;
-    }
-    fcs_export_control.gpio = fcs_global_control_state.gpio_state;
-    fcs_export_control.mode = (uint8_t)fcs_global_control_state.mode;
-
-    fcs_export_control.objective_val =
-        fcs_global_counters.nmpc_objective_value;
-    fcs_export_control.cycles =
-    	fcs_global_counters.nmpc_last_cycle_count;
-    fcs_export_control.nmpc_errors =
-        fcs_global_counters.nmpc_errors;
-    fcs_export_control.nmpc_resets =
-        fcs_global_counters.nmpc_resets;
-    fcs_export_control.nav_state_version = fcs_global_nav_state.version;
-
-    /* Copy the current reference point into the packet as well */
-    fcs_export_control.reference_lat =
-        fcs_global_nav_state.reference_trajectory[0].lat;
-    fcs_export_control.reference_lon =
-        fcs_global_nav_state.reference_trajectory[0].lon;
-    fcs_export_control.reference_alt =
-        fcs_global_nav_state.reference_trajectory[0].alt;
-    fcs_export_control.reference_airspeed =
-        fcs_global_nav_state.reference_trajectory[0].airspeed;
-    fcs_export_control.reference_yaw =
-        fcs_global_nav_state.reference_trajectory[0].yaw;
-    fcs_export_control.reference_pitch =
-        fcs_global_nav_state.reference_trajectory[0].pitch;
-    fcs_export_control.reference_roll =
-        fcs_global_nav_state.reference_trajectory[0].roll;
-
-    fcs_export_control.path_id = fcs_global_nav_state.reference_path_id[0];
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Write back L1 */
-    L1DWBAR = (uint32_t)&fcs_export_control;
-    L1DWWC = sizeof(fcs_export_control) / 4u;
-    while (L1DWWC & 0xFFFFu);
-#endif
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_CONTROL] = 1u;
-#endif
-}
-
-void fcs_exports_recv_state(struct fcs_state_estimate_t *state) {
-#ifdef __TI_COMPILER_VERSION__
-    /* Wait until we can acquire the semaphore */
-    volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = 0, i = 0;
-    while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
-        sem_val = semaphore->SEM[FCS_SEMAPHORE_STATE];
+        sem_val = semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS];
         i++;
     }
 #endif
 
 #ifdef __TI_COMPILER_VERSION__
     /* Invalidate L1 */
-    L1DIBAR = (uint32_t)&fcs_export_state;
-    L1DIWC = sizeof(fcs_export_state) / 4u;
+    L1DIBAR = (uint32_t)&exports_shared_logs[type];
+    L1DIWC = sizeof(struct fcs_log_t) / 4u;
     while (L1DIWC & 0xFFFFu);
 #endif
 
-    *state = fcs_export_state;
+    if (mode == FCS_MODE_WRITE) {
+        /* Set up a new log -- TODO: track frame ID */
+        fcs_log_init(&exports_local_logs[type], type, 0);
+    } else {
+        exports_local_logs[type] = exports_shared_logs[type];
+    }
 
 #ifdef __TI_COMPILER_VERSION__
     /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_STATE] = 1u;
+    semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS] = 1u;
 #endif
+
+    return &exports_local_logs[type];
 }
 
-void fcs_exports_recv_control(struct fcs_control_output_t *control) {
-#ifdef __TI_COMPILER_VERSION__
-    /* Acquire the global control semaphore; exit if that's not possible */
-    volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_CONTROL];
-    if (sem_val != 1u) {
-        return;
+struct fcs_log_t *fcs_exports_log_close(struct fcs_log_t *l) {
+    assert(l);
+
+    enum fcs_log_type_t type;
+    size_t idx;
+    for (idx = 0; idx < FCS_LOG_TYPE_LAST; idx++) {
+        if (l == &exports_local_logs[(enum fcs_log_type_t)idx]) {
+            break;
+        }
     }
-#endif
 
+    assert(0 < idx && idx < FCS_LOG_TYPE_LAST);
+    type = (enum fcs_log_type_t)idx;
+
+    assert(exports_local_states[type] == FCS_MODE_READ ||
+           exports_local_states[type] == FCS_MODE_WRITE ||
+           exports_local_states[type] == FCS_MODE_APPEND);
+
+    if (exports_local_states[type] == FCS_MODE_WRITE ||
+            exports_local_states[type] == FCS_MODE_APPEND) {
 #ifdef __TI_COMPILER_VERSION__
-    /* Invalidate L1 */
-    L1DIBAR = (uint32_t)&fcs_export_control;
-    L1DIWC = sizeof(fcs_export_control) / 4u;
-    while (L1DIWC & 0xFFFFu);
-#endif
-
-    *control = fcs_export_control;
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_CONTROL] = 1u;
-#endif
-}
-
-void fcs_exports_send_waypoint_update(uint32_t nav_state_version,
-uint16_t waypoint_id, const struct fcs_waypoint_t *waypoint) {
-#ifdef __TI_COMPILER_VERSION__
-    /* Acquire the global control semaphore; exit if that's not possible */
-    volatile CSL_SemRegs *const semaphore =
+        /* Acquire the global state semaphore; exit if that's not possible */
+        volatile CSL_SemRegs *const semaphore =
             (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_WAYPOINT];
-    if (sem_val != 1u) {
-        return;
+        uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS];
+        if (sem_val != 1u) {
+            return l;
+        }
+#endif
+
+        exports_shared_logs[type] = exports_local_logs[type];
+
+#ifdef __TI_COMPILER_VERSION__
+        /* Write back L1 */
+        L1DWBAR = (uint32_t)&exports_shared_logs[type];
+        L1DWWC = sizeof(struct fcs_log_t) / 4u;
+        while (L1DWWC & 0xFFFFu);
+#endif
+
+#ifdef __TI_COMPILER_VERSION__
+        /* Release the semaphore */
+        semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS] = 1u;
+#endif
     }
-#endif
 
-#ifdef __TI_COMPILER_VERSION__
-    /* Invalidate L1 */
-    L1DIBAR = (uint32_t)&fcs_export_waypoint_update;
-    L1DIWC = sizeof(fcs_export_waypoint_update) / 4u;
-    while (L1DIWC & 0xFFFFu);
-#endif
+    exports_local_states[idx] = FCS_MODE_CLOSED;
 
-    fcs_export_waypoint_update.nav_state_version = nav_state_version;
-    fcs_export_waypoint_update.waypoint_id = waypoint_id;
-    fcs_export_waypoint_update.waypoint = *waypoint;
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_WAYPOINT] = 1u;
-#endif
-}
-
-void fcs_exports_send_path_update(uint32_t nav_state_version,
-uint16_t path_id, const struct fcs_path_t *path) {
-#ifdef __TI_COMPILER_VERSION__
-    /* Acquire the global control semaphore; exit if that's not possible */
-    volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_PATH];
-    if (sem_val != 1u) {
-        return;
-    }
-#endif
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Invalidate L1 */
-    L1DIBAR = (uint32_t)&fcs_export_path_update;
-    L1DIWC = sizeof(fcs_export_path_update) / 4u;
-    while (L1DIWC & 0xFFFFu);
-#endif
-
-    fcs_export_path_update.nav_state_version = nav_state_version;
-    fcs_export_path_update.path_id = path_id;
-    fcs_export_path_update.path = *path;
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_PATH] = 1u;
-#endif
-}
-
-void fcs_exports_recv_waypoint_update(struct fcs_waypoint_update_t *update){
-#ifdef __TI_COMPILER_VERSION__
-    /* Wait until we can acquire the semaphore */
-    volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = 0, i = 0;
-    while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
-        sem_val = semaphore->SEM[FCS_SEMAPHORE_WAYPOINT];
-        i++;
-    }
-#endif
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Invalidate L1 */
-    L1DIBAR = (uint32_t)&fcs_export_waypoint_update;
-    L1DIWC = sizeof(fcs_export_waypoint_update) / 4u;
-    while (L1DIWC & 0xFFFFu);
-#endif
-
-    *update = fcs_export_waypoint_update;
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_WAYPOINT] = 1u;
-#endif
-}
-
-void fcs_exports_recv_path_update(struct fcs_path_update_t *update) {
-#ifdef __TI_COMPILER_VERSION__
-    /* Wait until we can acquire the semaphore */
-    volatile CSL_SemRegs *const semaphore =
-            (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-    uint32_t sem_val = 0, i = 0;
-    while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
-        sem_val = semaphore->SEM[FCS_SEMAPHORE_PATH];
-        i++;
-    }
-#endif
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Invalidate L1 */
-    L1DIBAR = (uint32_t)&fcs_export_path_update;
-    L1DIWC = sizeof(fcs_export_path_update) / 4u;
-    while (L1DIWC & 0xFFFFu);
-#endif
-
-    *update = fcs_export_path_update;
-
-#ifdef __TI_COMPILER_VERSION__
-    /* Release the semaphore */
-    semaphore->SEM[FCS_SEMAPHORE_PATH] = 1u;
-#endif
+    return NULL;
 }

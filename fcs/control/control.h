@@ -23,6 +23,8 @@ SOFTWARE.
 #ifndef _FCS_CONTROL_H
 #define _FCS_CONTROL_H
 
+#include "../nmpc/cnmpc.h"
+
 #define FCS_CONTROL_CHANNELS 4u
 #define FCS_CONTROL_MAX_WAYPOINTS 1000u
 #define FCS_CONTROL_MAX_PATHS 500u
@@ -150,9 +152,6 @@ struct fcs_nav_state_t {
     struct fcs_waypoint_t reference_trajectory[OCP_HORIZON_LENGTH + 1u];
     uint16_t reference_path_id[OCP_HORIZON_LENGTH + 1u];
 };
-
-extern struct fcs_control_state_t fcs_global_control_state;
-extern struct fcs_nav_state_t fcs_global_nav_state;
 
 void fcs_control_init(void);
 void fcs_control_tick(void);
