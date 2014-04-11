@@ -31,7 +31,7 @@ extern "C" {
 #include "ahrs/wmm.h"
 }
 
-TEST(WMM, Initialisation) {
+TEST(WMM, Initialization) {
     fcs_wmm_init();
 }
 

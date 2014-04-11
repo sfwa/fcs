@@ -1,0 +1,111 @@
+AHRS state:
+
+lat/lon: 3x int32 = 15
+velocity: 3x int16 = 9
+attitude: 4x int16 = 11
+angular velocity: 3x int16 = 9
+wind velocity: 3x int16 = 9
+gyro bias: 3x int16 = 9
+mode: 2x uint8 = 5
+static pressure: 1x int32 = 7
+static temp: 1x int16 = 5
+wmm field: 3x float32 = 15
+
+total = 94 bytes
+
+AHRS error:
+
+h/v pos: 2x int16 = 9
+velocity: 1x int16 = 5
+attitude: 3x int16 = 9
+wind velocity: 1x int16 = 5
+
+total = 28 bytes
+
+Control data:
+
+values: 3x uint16 = 9
+gpio: 1x uint8 = 4
+path ID: 1x uint16 = 5
+reference waypoint (packet): 24 + 6 = 30
+version: 1x uint32 = 7
+
+total = 55 bytes
+
+Status data:
+
+I/O boards x2: 2x uint16 = 7
+AHRS/UKF: 4x uint16 = 11
+NMPC: 2x uint32 = 11
+
+total = 29 bytes
+
+-> 206 bytes + COBS-R + NUL + NUL + CRC32 = 214
+
+
+Measurements:
+
+1 type
+1 reserved (0)
+2 index
+9 accel 1 x, y, z
+9 accel 2 x, y, z
+9 gyro 1 x, y, z
+9 gyro 2 x, y, z
+7 pressure/temp 1
+7 pressure/temp 2
+7 i/v 1
+7 i/v 2
+5 pitot 1
+5 pitot 2
+5 range 1
+5 range 2
+9 magnetometer 1 x, y, z
+9 magnetometer 2 x, y, z
+15 gps pos 1 lat, lon, alt
+15 gps pos 2 lat, lon, alt
+9 gps velocity 1 n, e, d
+9 gps velocity 2 n, e, d
+5 gps 1 fix mode, num SVs, error
+5 gps 2 fix mode, num SVs, error
+9 radio RSSI, noise, #packets, #errors
+11 gcs reference pressure, alt
+11 control pos
+4 bytes CRC32
+
+Total: 221 + COBS-R + NUL + NUL = 224
+
+
+Calibrated measurements:
+
+accelerometer XYZ: 3x float32 = 15
+accelerometer offset: 3x float32 = 15
+accelerometer error: 3x float32 = 15
+gyro XYZ: 3x float32 = 15
+gyro error: 3x float32 = 15
+mag XYZ: 3x float32 = 15
+mag error: 3x float32 = 15
+pitot: 1x float32 = 7
+pitot error: 1x float32 = 7
+barometer: 1x float32 = 7
+barometer error: 1x float32 = 7
+GPS lat/lon: 2x float64 = 19
+GPS alt: 1x float32 = 7
+GPS pos err: 3x float32 = 15
+GPS velocity: 3x float32 = 15
+GPS velocity err: 3x float32 = 15
+
+Total: 204 bytes
+
+Derived measurements:
+
+reference pressure: 1x float32 = 7
+reference altitude: 1x float32 = 7
+static pressure: 1x float32 = 7
+static temp: 1x float32 = 7
+dynamic pressure: 1x float32 = 7
+
+total: 35 bytes
+
+path update = 15 bytes (path = 9 bytes)
+waypoint update = 30 bytes (waypoint = 24 bytes)

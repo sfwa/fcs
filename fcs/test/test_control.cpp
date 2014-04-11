@@ -33,7 +33,7 @@ const uint16_t *restrict last_point_path_id, const float *restrict wind,
 struct fcs_nav_state_t *nav);
 }
 
-TEST(Control, Initialisation) {
+TEST(Control, Initialization) {
     fcs_control_init();
 }
 
@@ -619,188 +619,188 @@ TEST(Control, InterpolateLinearPathHeadwindS) {
     EXPECT_FLOAT_EQ(145.0 * (M_PI/180.0), result.roll);
 }
 
-TEST(Control, InterpolateFigureEightPathEW) {
-    struct fcs_waypoint_t result, last_point, start, end;
-    float t = OCP_STEP_LENGTH, result_t, wind[3] = {0.0, 0.0, 0.0};
-    size_t i;
-
-    start.lat = 0.0 * (M_PI/180.0);
-    start.lon = 0.0 * (M_PI/180.0);
-    start.alt = 10.0;
-    start.airspeed = 20.0;
-    start.yaw = 0.0;
-    start.pitch = 0.0;
-    start.roll = 0.0;
-
-    memcpy(&end, &start, sizeof(end));
-    memcpy(&last_point, &start, sizeof(last_point));
-
-    /* Initial point (centre, heading north and turning clockwise) */
-    result_t = fcs_trajectory_interpolate_figure_eight(
-        &result, &last_point, wind, &start, &end, t);
-    EXPECT_FLOAT_EQ(0.02, result_t);
-    EXPECT_DOUBLE_EQ(6.2713776065103028e-08, result.lat);
-    EXPECT_DOUBLE_EQ(2.0914444924485662e-10, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(0.006666667, result.yaw, 1e-6);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_NEAR(0.0059704725, result.roll, 1e-6);
-
-    for (i = 0; i < 78; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* North-est, heading east */
-    EXPECT_DOUBLE_EQ(4.7285368723571333e-06, result.lat);
-    EXPECT_DOUBLE_EQ(1.2747842745897894e-06, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(M_PI / 2.0, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
-
-    for (; i < 156; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* Due east, heading south */
-    EXPECT_DOUBLE_EQ(5.0012478285552483e-09, result.lat);
-    EXPECT_DOUBLE_EQ(6.2714201830121243e-06, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(M_PI, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
-
-    for (; i < 313; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* Back to the origin, heading north */
-    EXPECT_NEAR(0.0, result.lat, 1e-7);
-    EXPECT_NEAR(0.0, result.lon, 1e-7);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(2.0 * M_PI, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
-
-    for (; i < 391; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* North-west, heading west */
-    EXPECT_DOUBLE_EQ(3.1356212752037558e-06, result.lat);
-    EXPECT_DOUBLE_EQ(-3.1118573820081286e-06, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(1.5 * M_PI, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * -0.25, result.roll);
-}
-
-TEST(Control, InterpolateFigureEightPathNS) {
-    struct fcs_waypoint_t result, last_point, start, end;
-    float t = OCP_STEP_LENGTH, result_t, wind[3] = {0.0, 0.0, 0.0};
-    size_t i;
-
-    start.lat = 0.0 * (M_PI/180.0);
-    start.lon = 0.0 * (M_PI/180.0);
-    start.alt = 10.0;
-    start.airspeed = 20.0;
-    start.yaw = M_PI * 1.5;
-    start.pitch = 0.0;
-    start.roll = 0.0;
-
-    memcpy(&end, &start, sizeof(end));
-    memcpy(&last_point, &start, sizeof(last_point));
-
-    /* Initial point (centre, heading west and turning clockwise) */
-    result_t = fcs_trajectory_interpolate_figure_eight(
-        &result, &last_point, wind, &start, &end, t);
-    EXPECT_FLOAT_EQ(0.02, result_t);
-    EXPECT_DOUBLE_EQ(6.2706027183824737e-10, result.lat);
-    EXPECT_DOUBLE_EQ(-6.2709995952068201e-08, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(M_PI * 1.5 + 0.02, result.yaw, 1e-4);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
-
-    for (i = 0; i < 78; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* North-west, heading north */
-    EXPECT_DOUBLE_EQ(3.1645664184120605e-06, result.lat);
-    EXPECT_DOUBLE_EQ(-3.1355791098885189e-06, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(0.0, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
-
-    for (; i < 156; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* Due north, heading east */
-    EXPECT_DOUBLE_EQ(6.2714201830121243e-06, result.lat);
-    EXPECT_DOUBLE_EQ(-5.0017215108283092e-09, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(M_PI * 0.5, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
-
-    for (; i < 313; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* Back to the origin, heading west */
-    EXPECT_NEAR(0.0, result.lat, 1e-7);
-    EXPECT_NEAR(0.0, result.lon, 1e-7);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(1.5 * M_PI, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
-
-    for (; i < 391; i++) {
-        memcpy(&last_point, &result, sizeof(last_point));
-        result_t = fcs_trajectory_interpolate_figure_eight(
-            &result, &last_point, wind, &start, &end, t);
-        EXPECT_FLOAT_EQ(0.02, result_t);
-    }
-
-    /* South-west, heading south */
-    EXPECT_DOUBLE_EQ(-3.1118576810529175e-06, result.lat);
-    EXPECT_DOUBLE_EQ(-3.1356212752037558e-06, result.lon);
-    EXPECT_FLOAT_EQ(10.0, result.alt);
-    EXPECT_FLOAT_EQ(20.0, result.airspeed);
-    EXPECT_NEAR(M_PI, result.yaw, 1e-2);
-    EXPECT_FLOAT_EQ(0.0, result.pitch);
-    EXPECT_FLOAT_EQ(M_PI * -0.25, result.roll);
-}
+//TEST(Control, InterpolateFigureEightPathEW) {
+//    struct fcs_waypoint_t result, last_point, start, end;
+//    float t = OCP_STEP_LENGTH, result_t, wind[3] = {0.0, 0.0, 0.0};
+//    size_t i;
+//
+//    start.lat = 0.0 * (M_PI/180.0);
+//    start.lon = 0.0 * (M_PI/180.0);
+//    start.alt = 10.0;
+//    start.airspeed = 20.0;
+//    start.yaw = 0.0;
+//    start.pitch = 0.0;
+//    start.roll = 0.0;
+//
+//    memcpy(&end, &start, sizeof(end));
+//    memcpy(&last_point, &start, sizeof(last_point));
+//
+//    /* Initial point (centre, heading north and turning clockwise) */
+//    result_t = fcs_trajectory_interpolate_figure_eight(
+//        &result, &last_point, wind, &start, &end, t);
+//    EXPECT_FLOAT_EQ(0.02, result_t);
+//    EXPECT_DOUBLE_EQ(6.2713776065103028e-08, result.lat);
+//    EXPECT_DOUBLE_EQ(2.0914444924485662e-10, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(0.006666667, result.yaw, 1e-6);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_NEAR(0.0059704725, result.roll, 1e-6);
+//
+//    for (i = 0; i < 78; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* North-est, heading east */
+//    EXPECT_DOUBLE_EQ(4.7285368723571333e-06, result.lat);
+//    EXPECT_DOUBLE_EQ(1.2747842745897894e-06, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(M_PI / 2.0, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
+//
+//    for (; i < 156; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* Due east, heading south */
+//    EXPECT_DOUBLE_EQ(5.0012478285552483e-09, result.lat);
+//    EXPECT_DOUBLE_EQ(6.2714201830121243e-06, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(M_PI, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
+//
+//    for (; i < 313; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* Back to the origin, heading north */
+//    EXPECT_NEAR(0.0, result.lat, 1e-7);
+//    EXPECT_NEAR(0.0, result.lon, 1e-7);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(2.0 * M_PI, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
+//
+//    for (; i < 391; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* North-west, heading west */
+//    EXPECT_DOUBLE_EQ(3.1356212752037558e-06, result.lat);
+//    EXPECT_DOUBLE_EQ(-3.1118573820081286e-06, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(1.5 * M_PI, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * -0.25, result.roll);
+//}
+//
+//TEST(Control, InterpolateFigureEightPathNS) {
+//    struct fcs_waypoint_t result, last_point, start, end;
+//    float t = OCP_STEP_LENGTH, result_t, wind[3] = {0.0, 0.0, 0.0};
+//    size_t i;
+//
+//    start.lat = 0.0 * (M_PI/180.0);
+//    start.lon = 0.0 * (M_PI/180.0);
+//    start.alt = 10.0;
+//    start.airspeed = 20.0;
+//    start.yaw = M_PI * 1.5;
+//    start.pitch = 0.0;
+//    start.roll = 0.0;
+//
+//    memcpy(&end, &start, sizeof(end));
+//    memcpy(&last_point, &start, sizeof(last_point));
+//
+//    /* Initial point (centre, heading west and turning clockwise) */
+//    result_t = fcs_trajectory_interpolate_figure_eight(
+//        &result, &last_point, wind, &start, &end, t);
+//    EXPECT_FLOAT_EQ(0.02, result_t);
+//    EXPECT_DOUBLE_EQ(6.2706027183824737e-10, result.lat);
+//    EXPECT_DOUBLE_EQ(-6.2709995952068201e-08, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(M_PI * 1.5 + 0.02, result.yaw, 1e-4);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
+//
+//    for (i = 0; i < 78; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* North-west, heading north */
+//    EXPECT_DOUBLE_EQ(3.1645664184120605e-06, result.lat);
+//    EXPECT_DOUBLE_EQ(-3.1355791098885189e-06, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(0.0, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
+//
+//    for (; i < 156; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* Due north, heading east */
+//    EXPECT_DOUBLE_EQ(6.2714201830121243e-06, result.lat);
+//    EXPECT_DOUBLE_EQ(-5.0017215108283092e-09, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(M_PI * 0.5, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
+//
+//    for (; i < 313; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* Back to the origin, heading west */
+//    EXPECT_NEAR(0.0, result.lat, 1e-7);
+//    EXPECT_NEAR(0.0, result.lon, 1e-7);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(1.5 * M_PI, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * 0.25, result.roll);
+//
+//    for (; i < 391; i++) {
+//        memcpy(&last_point, &result, sizeof(last_point));
+//        result_t = fcs_trajectory_interpolate_figure_eight(
+//            &result, &last_point, wind, &start, &end, t);
+//        EXPECT_FLOAT_EQ(0.02, result_t);
+//    }
+//
+//    /* South-west, heading south */
+//    EXPECT_DOUBLE_EQ(-3.1118576810529175e-06, result.lat);
+//    EXPECT_DOUBLE_EQ(-3.1356212752037558e-06, result.lon);
+//    EXPECT_FLOAT_EQ(10.0, result.alt);
+//    EXPECT_FLOAT_EQ(20.0, result.airspeed);
+//    EXPECT_NEAR(M_PI, result.yaw, 1e-2);
+//    EXPECT_FLOAT_EQ(0.0, result.pitch);
+//    EXPECT_FLOAT_EQ(M_PI * -0.25, result.roll);
+//}

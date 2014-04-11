@@ -43,7 +43,7 @@ uint16_t frame_id) {
     plog->data[2] = 0;
     plog->data[3] = (frame_id >> 0u) & 0xFFu;
     plog->data[4] = (frame_id >> 8u) & 0xFFu;
-    plog->length = 5u;
+    plog->length = FCS_LOG_MIN_LENGTH;
 }
 
 /*
@@ -57,7 +57,8 @@ struct fcs_log_t *plog) {
     assert(out_buf);
     assert(out_buf_length);
     assert(plog);
-    assert(plog->length <= FCS_LOG_LENGTH);
+    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+           plog->length <= FCS_LOG_MAX_LENGTH);
     assert(plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
     assert(plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
 
@@ -94,19 +95,21 @@ bool fcs_log_deserialize(
 struct fcs_log_t *plog, const uint8_t *restrict in_buf, size_t in_buf_len) {
     assert(plog);
     assert(in_buf);
+    assert(in_buf_len);
 
     uint32_t crc, packet_crc;
     struct fcs_cobsr_decode_result result;
 
     /* Validate buffer length */
-    if (in_buf_len == 0 || in_buf_len > FCS_LOG_LENGTH + 10u) {
-        return false;
+    if (in_buf_len < 9u || in_buf_len > FCS_LOG_MAX_LENGTH + 10u) {
+        goto invalid;
     }
 
-    result = fcs_cobsr_decode(plog->data, FCS_LOG_LENGTH + 4u, &in_buf[1],
+    result = fcs_cobsr_decode(plog->data, FCS_LOG_MAX_LENGTH + 4u, &in_buf[1],
                               in_buf_len - 2u);
-    if (result.status != FCS_COBSR_DECODE_OK || result.out_len < 9u) {
-        return false;
+    if (result.status != FCS_COBSR_DECODE_OK || result.out_len < 9u ||
+            result.out_len - 4u > FCS_LOG_MAX_LENGTH) {
+        goto invalid;
     }
 
     plog->length = (size_t)result.out_len - 4u;
@@ -118,10 +121,19 @@ struct fcs_log_t *plog, const uint8_t *restrict in_buf, size_t in_buf_len) {
                  ((uint32_t)plog->data[plog->length + 3u] << 24u);
 
     if (crc != packet_crc) {
-        return false;
+        goto invalid;
     }
 
     return true;
+
+invalid:
+    /*
+    Since the log is invalid, set all data to values which will cause an
+    assertion failure as quickly as possible if the caller doesn't check our
+    return value;
+    */
+    memset(plog, 0xFF, sizeof(struct fcs_log_t));
+    return false;
 }
 
 /*
@@ -132,14 +144,18 @@ If `dst` has insufficient space available, return `false`, otherwise `true`.
 bool fcs_log_merge(struct fcs_log_t *restrict dst,
 const struct fcs_log_t *restrict src) {
     assert(dst);
+    assert(FCS_LOG_MIN_LENGTH <= dst->length &&
+           dst->length <= FCS_LOG_MAX_LENGTH);
     assert(src);
+    assert(FCS_LOG_MIN_LENGTH <= src->length &&
+           src->length <= FCS_LOG_MAX_LENGTH);
     assert(dst->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
     assert(dst->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
     assert(src->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
     assert(src->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
 
     /* Make sure there's enough room in dst */
-    if (dst->length + src->length - 5u > FCS_LOG_LENGTH) {
+    if (dst->length + src->length - 5u > FCS_LOG_MAX_LENGTH) {
         return false;
     }
 

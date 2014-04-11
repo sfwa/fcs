@@ -67,6 +67,8 @@ ADD_EXECUTABLE(unittest
     ../exports/exports.c
     ../exports/parameter.c
     test_exports.cpp
+    test_log.cpp
+    test_parameter.cpp
     ../control/control.c
     ../control/dubins.c
     ../control/figure-eight.c

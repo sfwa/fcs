@@ -25,7 +25,8 @@ SOFTWARE.
 
 typedef uint16_t float16_t;
 
-#define FCS_LOG_LENGTH 1016u
+#define FCS_LOG_MIN_LENGTH 5u
+#define FCS_LOG_MAX_LENGTH 1013u
 #define FCS_LOG_SERIALIZED_LENGTH 1024u
 
 enum fcs_log_type_t {
@@ -47,8 +48,8 @@ Binary log packet (all multi-byte values are LE):
 4 bytes CRC32
 */
 struct fcs_log_t {
-    uint8_t data[FCS_LOG_LENGTH + 4u];
-    size_t length;
+    uint8_t data[FCS_LOG_MAX_LENGTH + 4u];
+    size_t length;  /* excludes the size of the CRC32 (4 bytes) */
 };
 
 /* Initialize a log packet with a type and packet index */

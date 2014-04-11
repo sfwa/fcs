@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2013 Ben Dyer
+Copyright (C) 2014 Ben Dyer
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,25 +22,9 @@ SOFTWARE.
 
 #include "test.h"
 
-#include <cstdlib>
-#include <cmath>
-
 extern "C" {
-#include "util/util.h"
-#include "util/3dmath.h"
-#include "ukf/cukf.h"
-#include "ahrs/ahrs.h"
-#include "drivers/stream.h"
-
-/* Prototypes for private test functions */
-
-/* from drivers/stream.c */
-size_t _fcs_stream_write_to_rx_buffer(uint8_t buffer_idx, const uint8_t *val,
-size_t len);
-size_t _fcs_stream_read_from_tx_buffer(uint8_t buffer_idx, uint8_t *val,
-size_t len);
+#include "exports/parameter.h"
 }
 
-TEST(AHRS, Initialization) {
-    fcs_ahrs_init();
-}
+#include <cstdlib>
+#include <cstring>

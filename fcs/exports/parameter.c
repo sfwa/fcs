@@ -350,7 +350,7 @@ struct fcs_parameter_t *restrict parameter) {
     within the packet.
     */
     size_t length = fcs_parameter_get_length(parameter);
-    if (plog->length + length > FCS_LOG_LENGTH) {
+    if (plog->length + length > FCS_LOG_MAX_LENGTH) {
         return false;
     }
 
@@ -388,7 +388,8 @@ bool fcs_parameter_find_by_type_and_device(
 const struct fcs_log_t *restrict plog, enum fcs_parameter_type_t type,
 uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
     assert(plog);
-    assert(5u <= plog->length && plog->length <= FCS_LOG_LENGTH);
+    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+           plog->length <= FCS_LOG_MAX_LENGTH);
     assert(out_parameter);
 
     size_t i, length;
@@ -418,7 +419,8 @@ size_t fcs_parameter_find_all_by_type(const struct fcs_log_t *restrict plog,
 enum fcs_parameter_type_t type,
 struct fcs_parameter_t *restrict out_parameters, size_t max_parameters) {
     assert(plog);
-    assert(5u <= plog->length && plog->length <= FCS_LOG_LENGTH);
+    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+           plog->length <= FCS_LOG_MAX_LENGTH);
     assert(out_parameters);
 
     size_t i, length, count = 0;
