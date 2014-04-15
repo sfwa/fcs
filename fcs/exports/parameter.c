@@ -110,7 +110,7 @@ size_t precision_bits, size_t num_values) {
     assert(type < FCS_VALUE_RESERVED);
     assert(precision_bits == 8u || precision_bits == 16u ||
            precision_bits == 32u || precision_bits == 64u);
-    assert(num_values <= FCS_PARAMETER_NUM_VALUES_MAX);
+    assert(0 < num_values && num_values <= FCS_PARAMETER_NUM_VALUES_MAX);
 
     size_t length;
     length = 3u + num_values * ((precision_bits + 7u) >> 3u);
@@ -134,7 +134,7 @@ size_t precision_bits, size_t num_values) {
            ((num_values << FCS_PARAMETER_HEADER_NUM_VALUES_OFFSET) &
             FCS_PARAMETER_HEADER_NUM_VALUES_MASK) |
            ((type << FCS_PARAMETER_HEADER_TYPE_OFFSET) &
-            FCS_PARAMETER_HEADER_MODE_MASK);
+            FCS_PARAMETER_HEADER_TYPE_MASK);
 }
 
 static inline bool _validate_parameter(
@@ -145,6 +145,11 @@ const struct fcs_parameter_t *parameter) {
     } else if (!_extract_num_values(parameter->header)) {
         valid = false;
     } else if (!_extract_precision_bits(parameter->header)) {
+        valid = false;
+    } else if (_extract_value_type(parameter->header) == FCS_VALUE_RESERVED) {
+        valid = false;
+    } else if (_extract_length(parameter->header) >
+               FCS_PARAMETER_DATA_LENGTH_MAX) {
         valid = false;
     } else if (parameter->type == FCS_PARAMETER_INVALID) {
         valid = false;
@@ -194,20 +199,22 @@ const struct fcs_parameter_t *restrict parameter) {
 void fcs_parameter_set_header(
 struct fcs_parameter_t *restrict parameter, enum fcs_value_type_t type,
 size_t precision_bits, size_t num_values) {
-    assert(_validate_parameter(parameter));
+    assert(parameter);
     parameter->header = _make_parameter_header(
         type, precision_bits, num_values);
 }
 
-void fcs_parameter_set_device(
+void fcs_parameter_set_device_id(
 struct fcs_parameter_t *restrict parameter, uint8_t device) {
-    assert(_validate_parameter(parameter));
+    assert(parameter);
     parameter->device = device;
 }
 
 void fcs_parameter_set_type(
 struct fcs_parameter_t *restrict parameter, enum fcs_parameter_type_t type) {
-    assert(_validate_parameter(parameter));
+    assert(parameter);
+    assert(FCS_PARAMETER_INVALID < type && type < FCS_PARAMETER_LAST);
+
     parameter->type = (uint8_t)type;
 }
 
@@ -238,7 +245,6 @@ size_t value_length, const struct fcs_parameter_t *restrict parameter) {
 
 void fcs_parameter_set_key_value(struct fcs_parameter_t *restrict parameter,
 uint8_t key[4], uint8_t *restrict value, size_t value_length) {
-    assert(_validate_parameter(parameter));
     assert(key);
     assert(value);
     assert(value_length < FCS_PARAMETER_DATA_LENGTH_MAX - 4u);
@@ -400,7 +406,8 @@ uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
         if (plog->data[i + 1u] == device_id &&
                 plog->data[i + 2u] == (uint8_t)type) {
             memcpy(out_parameter, &plog->data[i], length);
-            return true;
+            /* Return false if the parameter is found but invalid */
+            return _validate_parameter(out_parameter);
         }
 
         i += length;
@@ -430,7 +437,10 @@ struct fcs_parameter_t *restrict out_parameters, size_t max_parameters) {
 
         if (plog->data[i + 2u] == (uint8_t)type) {
             memcpy(&out_parameters[count], &plog->data[i], length);
-            count++;
+            /* Only record the parameter if it's valid */
+            if (_validate_parameter(&out_parameters[count])) {
+                count++;
+            }
         }
 
         i += length;

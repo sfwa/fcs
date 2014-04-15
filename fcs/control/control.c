@@ -35,6 +35,7 @@ SOFTWARE.
 #include "../stats/stats.h"
 #include "control.h"
 #include "../exports/exports.h"
+#include "../exports/parameter.h"
 #include "trajectory.h"
 
 
@@ -76,6 +77,9 @@ inline static bool is_position_error_ok(float err) {
     return is_path_valid() &&
            (is_stabilising() || absval(err) < FCS_CONTROL_POSITION_TOLERANCE);
 }
+
+static void _read_estimate_log(struct fcs_state_estimate_t *estimate);
+
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
@@ -157,8 +161,9 @@ void fcs_control_init(void) {
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
+    struct fcs_log_t *control_log;
+    struct fcs_parameter_t param;
     float controls[NMPC_CONTROL_DIM], alt_diff;
-    size_t i;
     uint32_t start_t = cycle_count();
     bool control_timeout = false;
 
@@ -212,9 +217,8 @@ void fcs_control_tick(void) {
     /*
     Read the relevant parts of the AHRS output and convert them to a format
     usable by the control system.
-
-    TODO: read from estimate log
     */
+    _read_estimate_log(&state_estimate);
 
     alt_diff = absval(state_estimate.alt -
                       nav_state.reference_trajectory[0].alt);
@@ -277,10 +281,111 @@ void fcs_control_tick(void) {
     	fcs_global_counters.nmpc_errors++;
     }
 
-    for (i = 0; i < NMPC_CONTROL_DIM; i++) {
-        /* TODO: write to control log */
-    }
+    /* Write the output to the control log */
+    control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_WRITE);
+    assert(control_log);
+
+    fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 3u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_CONTROL_SETPOINT);
+    fcs_parameter_set_device_id(&param, 0);
+
+    param.data.u16[0] = (uint16_t)(controls[0] * (float)UINT16_MAX);
+    param.data.u16[1] = (uint16_t)(controls[1] * (float)UINT16_MAX);
+    param.data.u16[2] = (uint16_t)(controls[2] * (float)UINT16_MAX);
+
+    fcs_log_add_parameter(control_log, &param);
+
+    control_log = fcs_exports_log_close(control_log);
+    assert(!control_log);
 
     fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
+}
+
+/*
+Copy estimate values from the estimate log to the state estimate structure.
+See _populate_estimate_log at ahrs/ahrs.c:329.
+*/
+static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
+    assert(estimate);
+
+    struct fcs_log_t *estimate_log;
+    struct fcs_parameter_t param;
+
+    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, FCS_MODE_READ);
+    assert(estimate_log);
+
+    if (fcs_parameter_find_by_type_and_device(
+            estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_LLA, 0, &param)) {
+        estimate->lat = (double)param.data.i32[0] *
+                        (M_PI / (double)INT32_MAX);
+        estimate->lon = (double)param.data.i32[1] *
+                        (M_PI / (double)INT32_MAX);
+        estimate->alt = (float)param.data.i32[2] * 1e2f;
+    } else {
+        /* FIXME */
+        estimate->lat = 0.0;
+        estimate->lon = 0.0;
+        estimate->alt = 0.0f;
+    }
+
+    if (fcs_parameter_find_by_type_and_device(
+            estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_NED, 0, &param)) {
+        estimate->velocity[0] = (float)param.data.i32[0] * 1e2f;
+        estimate->velocity[1] = (float)param.data.i32[1] * 1e2f;
+        estimate->velocity[2] = (float)param.data.i32[2] * 1e2f;
+    } else {
+        /* FIXME */
+        estimate->velocity[0] = estimate->velocity[1] = estimate->velocity[2]
+            = 0.0f;
+    }
+
+    if (fcs_parameter_find_by_type_and_device(
+            estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 0, &param)) {
+        estimate->attitude[X] = (float)param.data.i32[X] *
+                                (1.0f / (float)INT16_MAX);
+        estimate->attitude[Y] = (float)param.data.i32[Y] *
+                                (1.0f / (float)INT16_MAX);
+        estimate->attitude[Z] = (float)param.data.i32[Z] *
+                                (1.0f / (float)INT16_MAX);
+        estimate->attitude[W] = (float)param.data.i32[W] *
+                                (1.0f / (float)INT16_MAX);
+    } else {
+        /* FIXME */
+        estimate->attitude[X] = estimate->attitude[Y] = estimate->attitude[Z]
+            = 0.0f;
+        estimate->attitude[W] = 1.0f;
+    }
+
+    if (fcs_parameter_find_by_type_and_device(
+            estimate_log, FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ, 0,
+            &param)) {
+        estimate->angular_velocity[X] = (float)param.data.i32[X] * 2.0f *
+                                        ((float)M_PI / (float)INT16_MAX);
+        estimate->angular_velocity[Y] = (float)param.data.i32[Y] * 2.0f *
+                                        ((float)M_PI / (float)INT16_MAX);
+        estimate->angular_velocity[Z] = (float)param.data.i32[Z] * 2.0f *
+                                        ((float)M_PI / (float)INT16_MAX);
+    } else {
+        /* FIXME */
+        estimate->angular_velocity[0] = estimate->angular_velocity[1] =
+            estimate->angular_velocity[2] = 0.0f;
+    }
+
+    if (fcs_parameter_find_by_type_and_device(
+            estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED, 0,
+            &param)) {
+        estimate->wind_velocity[0] = (float)param.data.i32[0] * 1e2f;
+        estimate->wind_velocity[1] = (float)param.data.i32[1] * 1e2f;
+        estimate->wind_velocity[2] = (float)param.data.i32[2] * 1e2f;
+    } else {
+        /* FIXME */
+        estimate->wind_velocity[0] = estimate->wind_velocity[1] =
+            estimate->wind_velocity[2] = 0.0f;
+    }
+
+    /* TODO: set mode mode */
+
+    estimate_log = fcs_exports_log_close(estimate_log);
+    assert(!estimate_log);
 }

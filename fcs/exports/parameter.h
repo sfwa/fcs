@@ -173,7 +173,7 @@ void fcs_parameter_set_header(
 struct fcs_parameter_t *restrict parameter, enum fcs_value_type_t type,
 size_t precision_bits, size_t num_values);
 
-void fcs_parameter_set_device(
+void fcs_parameter_set_device_id(
 struct fcs_parameter_t *restrict parameter, uint8_t device_id);
 
 void fcs_parameter_set_type(

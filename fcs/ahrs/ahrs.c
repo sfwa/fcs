@@ -348,10 +348,10 @@ double static_temp) {
         estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_NED, 2u, tmp, 3u);
 
     /* Quaternion values with [-1, 1] scaled to [-32767, 32767] */
-    tmp[0] = (int32_t)(state_values[9] * (1.0 / (double)INT16_MAX));
-    tmp[1] = (int32_t)(state_values[10] * (1.0 / (double)INT16_MAX));
-    tmp[2] = (int32_t)(state_values[11] * (1.0 / (double)INT16_MAX));
-    tmp[3] = (int32_t)(state_values[12] * (1.0 / (double)INT16_MAX));
+    tmp[0] = (int32_t)(state_values[9] * (double)INT16_MAX);
+    tmp[1] = (int32_t)(state_values[10] * (double)INT16_MAX);
+    tmp[2] = (int32_t)(state_values[11] * (double)INT16_MAX);
+    tmp[3] = (int32_t)(state_values[12] * (double)INT16_MAX);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 2u, tmp, 4u);
 
@@ -414,7 +414,7 @@ double static_temp) {
     /* Set WMM field */
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 3u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_ESTIMATED_WMM_FIELD);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
     param.data.f32[X] = (float)field[X];
     param.data.f32[Y] = (float)field[Y];
@@ -469,7 +469,7 @@ const int32_t *restrict v, size_t n) {
     fcs_parameter_set_header(&param, FCS_VALUE_SIGNED,
                              (uint32_t)value_size << 3u, n);
     fcs_parameter_set_type(&param, param_type);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
 #define CLAMPVAL(x, mi, ma) (x >= mi ? (x <= ma ? x : ma) : mi)
 

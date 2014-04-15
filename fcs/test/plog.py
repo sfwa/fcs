@@ -129,7 +129,7 @@ class DataParameter(Parameter):
 
     def serialize(self):
         # Convert bits to log(bytes).
-        precision = int(round(math.log(self.value_precision / 8)))
+        precision = int(round(math.log(self.value_precision / 8, 2)))
         # Pack the header byte with value type, precision and count
         header = (((self.value_type.value << 5) & 0x60) |
                   ((precision << 3) & 0x18) | len(self.values))
@@ -160,7 +160,7 @@ class DataParameter(Parameter):
                              (self.value_type, self.value_precision))
 
         # Serialize the value data
-        result += struct.pack("<%d%s" % (len(self.values), value_fmt),
+        result += struct.pack("<%d%s" % (len(self.values) - 1, value_fmt),
                               *self.values)
 
         return result

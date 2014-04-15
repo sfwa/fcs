@@ -795,7 +795,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 3u);
     fcs_parameter_set_type(&param,
                            FCS_PARAMETER_HAL_ACCELEROMETER_OFFSET_XYZ);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
     param.data.f32[X] = (float)offset[X];
     param.data.f32[Y] = (float)offset[Y];
@@ -944,7 +944,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
 
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 64u, 2u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_HAL_POSITION_LAT_LON);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
     param.data.f64[0] = v[0];
     param.data.f64[1] = v[1];
@@ -954,7 +954,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 3u);
     fcs_parameter_set_type(&param,
                            FCS_PARAMETER_HAL_POSITION_LAT_LON_VARIANCE);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
     param.data.f32[0] = (float)(err * err);
     param.data.f32[1] = (float)(err * err);
@@ -963,7 +963,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
 
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 1u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_HAL_POSITION_ALT);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
     param.data.f32[0] = (float)v[2];
 
@@ -971,7 +971,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
 
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 1u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_HAL_POSITION_ALT_VARIANCE);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
     param.data.f32[0] = 225.0f;
 
@@ -1006,7 +1006,7 @@ const double *restrict variance, size_t n) {
 
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, n);
     fcs_parameter_set_type(&param, param_type);
-    fcs_parameter_set_device(&param, 0);
+    fcs_parameter_set_device_id(&param, 0);
 
     for (i = 0; i < n; i++) {
         param.data.f32[i] = (float)value[i];
@@ -1017,7 +1017,7 @@ const double *restrict variance, size_t n) {
     if (variance) {
         fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, n);
         fcs_parameter_set_type(&param, param_type + 1u);
-        fcs_parameter_set_device(&param, 0);
+        fcs_parameter_set_device_id(&param, 0);
 
         for (i = 0; i < n; i++) {
             param.data.f32[i] = (float)variance[i];
