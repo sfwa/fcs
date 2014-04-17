@@ -283,7 +283,8 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     Configure the EMIF CE1 (for UART 0) or CE2 (for UART 1), via A1CR and A2CR
     respectively.
 
-    A0CR/A1CR/A2CR/A3CR: Async n Config Register
+    A0CR/A1CR/A2CR/A3CR: Async n Config Register (called A1CR..A4CR in
+                         SPRUGZ3A)
 
     Bit   Field          Value         Description
     31    SS             0             Select strobe (SS) mode.
@@ -436,8 +437,8 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     SPRUGV1 appears to be incorrect in relation to the C6657, in that the
     upper 16 bits of the GPIO control registers are marked as reserved. The
     C6657 CSL writes to them though, and TI support say (seemingly with some
-     trepidation) that the CSL is more likely to be correct than the
-     documentation.
+    trepidation) that the CSL is more likely to be correct than the
+    documentation.
 
     This is of course largely irrelevant to us as we only need GPIO0 and
     GPIO1.
