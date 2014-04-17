@@ -30,7 +30,7 @@ from cobs import cobsr
 
 
 FCS_LOG_MIN_LENGTH = 5
-FCS_LOG_MAX_LENGTH = 1016
+FCS_LOG_MAX_LENGTH = 1013
 FCS_LOG_SERIALIZED_LENGTH = 1024
 
 
@@ -110,10 +110,28 @@ class Parameter(object):
 
     @classmethod
     def deserialize(cls, data):
-        pass
+        if ord(data[0]) & 0x80:
+            return KeyValueParameter.deserialize(data)
+        else:
+            return DataParameter.deserialize(data)
 
 
 class DataParameter(Parameter):
+    VALUE_FORMAT_CHAR = {
+        (ValueType.FCS_VALUE_UNSIGNED, 8): 'B',
+        (ValueType.FCS_VALUE_UNSIGNED, 16): 'H',
+        (ValueType.FCS_VALUE_UNSIGNED, 32): 'L',
+        (ValueType.FCS_VALUE_UNSIGNED, 64): 'Q',
+        (ValueType.FCS_VALUE_SIGNED, 8): 'b',
+        (ValueType.FCS_VALUE_SIGNED, 16): 'h',
+        (ValueType.FCS_VALUE_SIGNED, 32): 'l',
+        (ValueType.FCS_VALUE_SIGNED, 64): 'q',
+        (ValueType.FCS_VALUE_FLOAT, 8): None,
+        (ValueType.FCS_VALUE_FLOAT, 16): None,
+        (ValueType.FCS_VALUE_FLOAT, 32): 'f',
+        (ValueType.FCS_VALUE_FLOAT, 64): 'd',
+    }
+
     value_type = None
     value_precision = None
     values = None
@@ -140,20 +158,8 @@ class DataParameter(Parameter):
 
         # Find the correct format character given the value type and
         # precision.
-        value_fmt = {
-            (ValueType.FCS_VALUE_UNSIGNED, 8): 'B',
-            (ValueType.FCS_VALUE_UNSIGNED, 16): 'H',
-            (ValueType.FCS_VALUE_UNSIGNED, 32): 'L',
-            (ValueType.FCS_VALUE_UNSIGNED, 64): 'Q',
-            (ValueType.FCS_VALUE_SIGNED, 8): 'b',
-            (ValueType.FCS_VALUE_SIGNED, 16): 'h',
-            (ValueType.FCS_VALUE_SIGNED, 32): 'l',
-            (ValueType.FCS_VALUE_SIGNED, 64): 'q',
-            (ValueType.FCS_VALUE_FLOAT, 8): None,
-            (ValueType.FCS_VALUE_FLOAT, 16): None,
-            (ValueType.FCS_VALUE_FLOAT, 32): 'f',
-            (ValueType.FCS_VALUE_FLOAT, 64): 'd',
-        }[self.value_type, self.value_precision]
+        value_fmt = DataParameter.VALUE_FORMAT_CHAR[
+            self.value_type, self.value_precision]
 
         if not value_fmt:
             raise ValueError("Can't serialize format %s with precision %d" %
@@ -167,7 +173,26 @@ class DataParameter(Parameter):
 
     @classmethod
     def deserialize(cls, data):
-        pass
+        header, device_id, parameter_type = struct.unpack("<BBB", data[0:3])
+        data = data[3:]
+
+        value_type = ValueType((header & 0x60) >> 5)
+        value_precision = int(1 << (((header & 0x18) >> 3))) * 8
+        value_count = (header & 0x07) + 1
+
+        value_fmt = cls.VALUE_FORMAT_CHAR[value_type, value_precision]
+        value_len = value_count * int(value_precision / 8)
+
+        values = struct.unpack("<%d%s" % (value_count, value_fmt),
+                               data[0:value_len])
+        data = data[value_len:]
+
+        param = cls(device_id=device_id,
+                    parameter_type=ParameterType(parameter_type),
+                    value_type=value_type, value_precision=value_precision,
+                    values=list(values))
+
+        return param, data
 
 
 class KeyValueParameter(Parameter):
@@ -194,7 +219,7 @@ class KeyValueParameter(Parameter):
 
     @classmethod
     def deserialize(cls, data):
-        pass
+        return None, data
 
 
 class LogType(Enum):
@@ -217,7 +242,22 @@ class ParameterLog(list):
 
     @classmethod
     def deserialize(cls, data):
-        pass
+        data = cobsr.decode(data.strip('\x00'))
+
+        log_type, _, tick = struct.unpack("<BHH", data[0:5])
+        data = data[5:]
+
+        result = cls(log_type=LogType(log_type), tick=tick)
+
+        while data:
+            param, tail = Parameter.deserialize(data)
+            if param:
+                result.append(param)
+            if data == tail:
+                break
+            data = tail
+
+        return result
 
     def serialize(self):
         header = struct.pack("<BHH", self.log_type.value, 0, self.tick)
@@ -237,7 +277,12 @@ class ParameterLog(list):
             self.log_type = LogType.FCS_LOG_TYPE_COMBINED
 
     def find_by(self, device_id=None, parameter_type=None):
-        pass
+        for param in self:
+            if param.device_id == device_id and \
+                    param.parameter_type == parameter_type:
+                return param
+
+        return None
 
     def print_c_serialization(self):
         print ''.join(('\\x%02x' % ord(c)) for c in self.serialize())

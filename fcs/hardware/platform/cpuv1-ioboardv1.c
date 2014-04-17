@@ -79,8 +79,8 @@ static double board_reference_pressure, board_reference_alt;
 
 
 /* Prototypes of internal functions */
-bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, size_t board_id,
-struct fcs_log_t *out_measurements);
+bool _fcs_read_log_packet(enum fcs_stream_device_t dev, size_t board_id,
+struct fcs_log_t *out_log);
 static void _update_pitot_calibration(const struct fcs_log_t *plog,
 struct fcs_calibration_map_t *cmap, size_t i);
 static void _update_barometer_calibration(const struct fcs_log_t *plog,
@@ -123,6 +123,9 @@ void fcs_board_init_platform(void) {
     result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 2604168u);
     assert(result == FCS_STREAM_OK);
     result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 2604168u);
+    assert(result == FCS_STREAM_OK);
+
+    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
     assert(result == FCS_STREAM_OK);
 
 #ifdef __TI_COMPILER_VERSION__
@@ -304,7 +307,7 @@ void fcs_board_tick(void) {
     double static_pressure, static_temp;
     struct fcs_parameter_t param;
     enum fcs_mode_t ahrs_mode;
-    bool got_result;
+    bool got_result, mode_ok;
 
     /*
     Read attitude, WMM field, static pressure, static temp and AHRS mode from
@@ -366,7 +369,7 @@ void fcs_board_tick(void) {
     assert(measurement_log);
 
     for (i = 0; i < FCS_IOBOARD_COUNT; i++){
-        if (_fcs_read_ioboard_packet(
+        if (_fcs_read_log_packet(
                 (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), i,
                 measurement_log)) {
             board_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
@@ -467,6 +470,36 @@ void fcs_board_tick(void) {
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, 'r');
     assert(control_log);
 
+    /* Serialize the control log only, and write it to the HITL port */
+    out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), control_log);
+    /* FIXME: limitation of current stream driver */
+    assert(out_buf_len < 255u);
+
+    write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf, out_buf_len);
+    assert(out_buf_len == write_len);
+
+    /*
+    Check the simulation port for a log packet -- if received, it replaces the
+    AHRS estimate log.
+    */
+    fcs_log_init(&out_log, FCS_LOG_TYPE_ESTIMATE, 0);
+    if (_fcs_read_log_packet(FCS_STREAM_UART_EXT1, 0, &out_log)) {
+        mode_ok = fcs_ahrs_set_mode(FCS_MODE_SIMULATING);
+        if (mode_ok) {
+            /*
+            Re-open the estimate log in write mode and replace it; it'll be
+            closed below after it's merged into the I/O board logs.
+            */
+            estimate_log = fcs_exports_log_close(estimate_log);
+            assert(!estimate_log);
+            estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE,
+                                                FCS_MODE_WRITE);
+            assert(estimate_log);
+
+            memcpy(estimate_log, &out_log, sizeof(struct fcs_log_t));
+        }
+    }
+
     /*
     Copy control log then merge estimate log so that if there's not enough
     space for whatever reason, the control output still gets through.
@@ -483,11 +516,18 @@ void fcs_board_tick(void) {
     estimate_log = fcs_exports_log_close(estimate_log);
     assert(!estimate_log);
 
+    /*
+    Serialize the merged log and write it to both internal UARTs (I/O boards
+    1 and 2).
+    */
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
     /* FIXME: limitation of current stream driver */
     assert(out_buf_len < 255u);
 
     write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, out_buf_len);
+    assert(out_buf_len == write_len);
+
+    write_len = fcs_stream_write(FCS_STREAM_UART_INT1, out_buf, out_buf_len);
     assert(out_buf_len == write_len);
 
     /* Increment transmit counters */
@@ -496,13 +536,13 @@ void fcs_board_tick(void) {
 }
 
 /*
-Read, deserialize and validate a full I/O board packet from `dev`. Since we
+Read, deserialize and validate a full log packet from `dev`. Since we
 get two of these every tick there's no point doing this incrementally; we just
 need to make sure we can deal with partial/corrupted packets.
 */
-bool _fcs_read_ioboard_packet(enum fcs_stream_device_t dev, size_t board_id,
-struct fcs_log_t *out_measurements) {
-    assert(out_measurements);
+bool _fcs_read_log_packet(enum fcs_stream_device_t dev, size_t board_id,
+struct fcs_log_t *out_log) {
+    assert(out_log);
 
     /* Read the latest I/O board packet from the UART streams */
     uint8_t buf[256];
@@ -550,7 +590,7 @@ struct fcs_log_t *out_measurements) {
                                          packet_end - packet_start);
             if (result) {
                 fcs_log_set_parameter_device_id(&plog, (uint8_t)board_id);
-                fcs_log_merge(out_measurements, &plog);
+                fcs_log_merge(out_log, &plog);
             }
 
             /* Consume all bytes until the end of the packet */

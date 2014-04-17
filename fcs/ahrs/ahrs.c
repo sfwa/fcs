@@ -78,10 +78,9 @@ static void _reset_state(void);
 static void _set_estimate_value_i32(struct fcs_log_t *elog,
 enum fcs_parameter_type_t param_type, uint8_t value_size,
 const int32_t *restrict v, size_t n);
-static void _populate_estimate_log(struct fcs_log_t *estimate_log,
-const double *restrict state_values, const double *restrict error,
-const double *restrict field, enum fcs_mode_t mode, double static_pressure,
-double static_temp);
+static void _populate_estimate_log(const double *restrict state_values,
+const double *restrict error, const double *restrict field,
+enum fcs_mode_t mode, double static_pressure, double static_temp);
 
 
 void fcs_ahrs_init(void) {
@@ -115,7 +114,7 @@ void fcs_ahrs_tick(void) {
     bool got_result, got_gps = false, got_reference_alt = false;
     struct ukf_ioboard_params_t params;
     struct fcs_parameter_t parameter;
-    struct fcs_log_t *hal_log, *control_log, *estimate_log;
+    struct fcs_log_t *hal_log, *control_log;
 
     /* Increment solution time */
     ahrs_solution_time++;
@@ -234,19 +233,18 @@ void fcs_ahrs_tick(void) {
         ukf_set_state((struct ukf_state_t*)state_values);
     }
 
-    /* Get a new WMM field estimate */
-    _update_wmm(state_values, ahrs_wmm_field);
+    /*
+    Don't update the estimate log or the WMM field when simulating, since the
+    relevant values will be provided by the simulation driver.
+    */
+    if (ahrs_mode != FCS_MODE_SIMULATING) {
+        /* Get a new WMM field estimate */
+        _update_wmm(state_values, ahrs_wmm_field);
 
-    /* Update the estimate log */
-    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, 'w');
-    assert(estimate_log);
+        _populate_estimate_log(state_values, error, ahrs_wmm_field, ahrs_mode,
+                               STANDARD_PRESSURE, STANDARD_TEMP);
+    }
 
-    _populate_estimate_log(estimate_log, state_values, error,
-                           ahrs_wmm_field, ahrs_mode, STANDARD_PRESSURE,
-                           STANDARD_TEMP);
-
-    estimate_log = fcs_exports_log_close(estimate_log);
-    assert(!estimate_log);
 
     /* Check the current mode and transition if necessary */
     if (ahrs_mode == FCS_MODE_STARTUP_VALUE) {
@@ -257,6 +255,14 @@ void fcs_ahrs_tick(void) {
         as a reference pressure from the GCS
         */
         if (got_gps && got_reference_alt) {
+            fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
+        }
+    } else if (ahrs_mode == FCS_MODE_SIMULATING) {
+        /*
+        Transition out of simulation mode if no packet has been received for
+        more than 5s.
+        */
+        if (ahrs_solution_time - ahrs_mode_start_time > 5000) {
             fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
         }
     } else if (ahrs_mode == FCS_MODE_CALIBRATING) {
@@ -271,6 +277,7 @@ void fcs_ahrs_tick(void) {
             fcs_ahrs_set_mode(FCS_MODE_ACTIVE);
         }
     }
+    /* TODO: transition from safe to armed once input throttle hits 100% */
 }
 
 static void _reset_state(void) {
@@ -326,12 +333,15 @@ static void _update_wmm(double lla[3], double field[3]) {
     }
 }
 
-static void _populate_estimate_log(struct fcs_log_t *estimate_log,
-const double *restrict state_values, const double *restrict error,
-const double *restrict field, enum fcs_mode_t mode, double static_pressure,
-double static_temp) {
+static void _populate_estimate_log(const double *restrict state_values,
+const double *restrict error, const double *restrict field,
+enum fcs_mode_t mode, double static_pressure, double static_temp) {
     struct fcs_parameter_t param;
+    struct fcs_log_t *estimate_log;
     int32_t tmp[4];
+
+    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, 'w');
+    assert(estimate_log);
 
     /* Lat/lon in (INT32_MAX/PI); alt in cm */
     tmp[0] = (int32_t)(state_values[0] * ((double)INT32_MAX / M_PI));
@@ -432,6 +442,9 @@ double static_temp) {
     tmp[1] = 0;
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_AHRS_STATUS, 2u, tmp, 2u);
+
+    estimate_log = fcs_exports_log_close(estimate_log);
+    assert(!estimate_log);
 }
 
 static bool _get_hal_sensor_value(const struct fcs_log_t *plog,
@@ -495,15 +508,24 @@ const int32_t *restrict v, size_t n) {
 bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
     enum fcs_mode_t previous_mode = ahrs_mode;
 
-    if (mode == FCS_MODE_STARTUP_VALUE) {
+    if (mode == ahrs_mode) {
+        /* Always allow re-entering the same mode */
+    } if (mode == FCS_MODE_STARTUP_VALUE) {
         /* Invalid mode requested */
         return false;
     } else if (mode == FCS_MODE_INITIALIZING &&
             previous_mode != FCS_MODE_STARTUP_VALUE) {
         /* Invalid mode transition */
         return false;
+    } else if (mode == FCS_MODE_SIMULATING &&
+            previous_mode != FCS_MODE_INITIALIZING &&
+            previous_mode != FCS_MODE_CALIBRATING &&
+            previous_mode != FCS_MODE_SAFE) {
+        /* Invalid mode transition */
+        return false;
     } else if (mode == FCS_MODE_CALIBRATING &&
             previous_mode != FCS_MODE_INITIALIZING &&
+            previous_mode != FCS_MODE_SIMULATING &&
             previous_mode != FCS_MODE_SAFE) {
         /* Invalid mode transition */
         return false;
@@ -540,6 +562,8 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
     switch (mode) {
         case FCS_MODE_INITIALIZING:
             ukf_choose_dynamics(UKF_MODEL_NONE);
+            break;
+        case FCS_MODE_SIMULATING:
             break;
         case FCS_MODE_CALIBRATING:
             /* Start up clean */

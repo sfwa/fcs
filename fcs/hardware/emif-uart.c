@@ -124,6 +124,20 @@ static uint32_t uart_baud[2] = { 115200u, 115200u };
 /* Divisor latch fractional component */
 #define XR16M752_DLD 0x2u
 
+/*
+EFR: Extended Function Register
+
+Bit   Field          Value         Description
+7     AUTO_CTS_ENABLE 0            Auto CTS flow control enable. Unused.
+6     AUTO_RTS_ENABLE 0            Auto RTS flow control enable. Unused.
+5     SPECIAL_CH_ENABLE 0          Special character detect enable. Unused.
+4     EF_ENABLE      0             Enhanced function bits enable.
+                                   0 = disabled
+                                   1 = enabled
+3:0   CONT           0             Software flow control select. Unused.
+*/
+#define XR16M752_EFR 0x2u
+
 /* These registers should be configured when LCR[7] is low. */
 
 /*
@@ -233,7 +247,6 @@ Bit   Field          Value         Description
 #define XR16M752_TCR 0x6u
 #define XR16M752_TLR 0x7u
 #define XR16M752_FIFO_RDY 0x7u
-#define XR16M752_EFR 0x2u
 
 /*
 Logical addresses for EMIF16 CE1 and CE2 data space.
@@ -376,25 +389,33 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
 
     where prescaler = 1 or 4, and oversampling_rate = 4, 8 or 16.
 
-    In this application we only need fairly low rates of 57600 for the Piksi
-    and 230400 for the CPU, so we'll use oversampling_rate = 16.
+    In this application we need the highest reliable baud rate we can get for
+    HITL integration, so we'll use oversampling_rate = 8 for a maximum speed
+    of 1843200 baud.
+
+    Bits 5:4 of DLD are 00 for 16x oversampling, 01 for 8x oversampling, and
+    10 for 4x oversampling.
     */
     assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
-    float divisor = 14745600.0f / (float)(uart_baud[uart_idx] * 16);
+    float divisor = 14745600.0f / (float)(uart_baud[uart_idx] * 8);
     uint16_t divisor_floor = (uint16_t)divisor, dld;
     dld = (uint16_t)((divisor - (float)divisor_floor) * 16.0 + 0.5);
     assert(dld < 0x10u);
 
+    dld |= 0x10u; /* 8x oversampling */
+
     /*
     Configuring the UART involves the following steps:
-    - Set LCR[7]
+    - Set LCR to 0xBF
+    - Set EFR[4]
+    - Set LCR to 0x80
     - Write DLL, DLM [and optionally DLD, if bit 4 of EFR is high]
     - Clear LCR[7] / write configured LCR
     - Write IER, FCR, [LCR,] MCR
 
     We could do this via DMA (4 PaRAM sets in a chained transfer) but since
-    each write takes < 150ns, we're looking at ~1350 cycles maximum to
+    each write takes < 150ns, we're looking at ~1800 cycles maximum to
     configure by just writing each value to the appropriate EMIF location.
 
     Obviously we couldn't re-configure the UART hundreds of times in a single
@@ -405,6 +426,10 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
         {(uint8_t*)EMIF16_UART0_BASE_ADDR, (uint8_t*)EMIF16_UART1_BASE_ADDR};
     volatile uint8_t *restrict const uart_mem = uart_regs[uart_idx];
 
+    /* Configure EFR to enable DLD by writing a 1 to bit 4. */
+    uart_mem[XR16M752_LCR] = 0xBFu; /* Magic value to access EFR. */
+    uart_mem[XR16M752_EFR] = 0x10u;
+
     /*
     Configure the divisor latch values. Ignore DLD so we don't need to write
     EFR; the input clock frequency is such that for common baud rates there
@@ -413,6 +438,7 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     uart_mem[XR16M752_LCR] = 0x80u;
     uart_mem[XR16M752_DLM] = (divisor_floor >> 8) & 0xFFu;
     uart_mem[XR16M752_DLL] = divisor_floor & 0xFFu;
+    uart_mem[XR16M752_DLD] = dld;
 
     /*
     Here, we want to configure the following:

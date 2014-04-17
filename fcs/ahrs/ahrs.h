@@ -34,10 +34,17 @@ enum fcs_mode_t {
     */
     FCS_MODE_INITIALIZING = 'I',
     /*
+    State: simulating (M)
+    Previous states: initializing, calibrating, safe
+    Entry condition: packet on HITL port
+    Control output: from NMPC
+    */
+    FCS_MODE_SIMULATING = 'M',
+    /*
     State: calibrating (C)
-    Previous states: initializing, safe
-    Entry condition: received first GPS packet ||
-        calibration command from GCS
+    Previous states: initializing, safe, simulating
+    Entry condition: received GPS packet && (mode == initializing ||
+        calibration command from GCS || no HITL packet received for 5s)
     Control output: none
     */
     FCS_MODE_CALIBRATING = 'C',
