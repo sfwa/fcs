@@ -20,12 +20,14 @@
 
 import os
 import sys
+import plog
 import copy
 import math
 import time
 import socket
 import vectors
 import datetime
+import binascii
 import collections
 from ctypes import *
 
@@ -320,13 +322,9 @@ def reset():
         raise RuntimeError("Please call init()")
 
     _fcs.fcs_board_init_platform()
-    _fcs.fcs_util_init()
-    _fcs.fcs_comms_init()
+    _fcs.fcs_exports_init()
     _fcs.fcs_ahrs_init()
     _fcs.fcs_control_init()
-
-    ahrs_state.mode = FCS_MODE_ACTIVE
-    control_state.mode = FCS_CONTROL_MODE_AUTO
 
 
 def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
@@ -338,27 +336,82 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     if not _fcs:
         raise RuntimeError("Please call init()")
 
-    global ahrs_tick, ahrs_state, nav_state, control_state
-    _fcs.fcs_measurement_log_init(ahrs_state.measurements, ahrs_tick)
-    ahrs_tick += 50
+    estimate_log = plog.ParameterLog(
+        log_type=plog.LogType.FCS_LOG_TYPE_ESTIMATE)
 
-    ahrs_state.lat = lat
-    ahrs_state.lon = lon
-    ahrs_state.alt = alt
-    ahrs_state.velocity = (c_double * 3)(*velocity)
-    ahrs_state.attitude = (c_double * 4)(*attitude)
-    ahrs_state.angular_velocity = (c_double * 3)(*angular_velocity)
-    ahrs_state.wind_velocity = (c_double * 3)(*wind_velocity)
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_POSITION_LLA,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=32,
+            values=[
+                int(lat * (2**31 - 1) / math.pi),
+                int(lon * (2**31 - 1) / math.pi),
+                int(alt * 1e2)
+            ]
+        )
+    )
 
-    _fcs.fcs_exports_send_state()
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_VELOCITY_NED,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * 1e2), velocity)
+        )
+    )
 
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_ATTITUDE_Q,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * (2**15 - 1)), attitude)
+        )
+    )
+
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * (2**15 - 1) / math.pi * 0.25), angular_velocity)
+        )
+    )
+
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * 1e2), wind_velocity)
+        )
+    )
+
+    write(3, estimate_log.serialize())
+    print binascii.b2a_hex(estimate_log.serialize())
+
+    _fcs.fcs_board_tick()
+    _fcs.fcs_ahrs_tick()
     _fcs.fcs_control_tick()
 
-    return [
-        control_state.controls[0].setpoint,
-        control_state.controls[1].setpoint,
-        control_state.controls[2].setpoint
-    ]
+    # Read out ignored streams
+    read(0, 255)
+    read(1, 255)
+    read(2, 255)
+
+    try:
+        control_log = plog.ParameterLog.deserialize(read(3, 255))
+
+        control_param = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
+        return map(lambda x: float(x) / float(2**16), control_param.values)
+    except Exception:
+        return [0.0, 0.5, 0.5]
 
 
 def write(stream_id, value):
@@ -408,14 +461,13 @@ def init(dll_path):
     Loads the FCS dynamic library at `dll_path` and sets up the ctypes
     interface. Must be called before any other functions from this module.
     """
-    global _fcs, ahrs_state, nav_state, control_state
+    global _fcs, nav_state, control_state
     # Load the library
     _fcs = cdll.LoadLibrary(dll_path)
 
     # Get a reference to the required globals
-    ahrs_state = AHRSState.in_dll(_fcs, "fcs_global_ahrs_state")
-    nav_state = NavState.in_dll(_fcs, "fcs_global_nav_state")
-    control_state = ControlState.in_dll(_fcs, "fcs_global_control_state")
+    nav_state = NavState.in_dll(_fcs, "nav_state")
+    control_state = ControlState.in_dll(_fcs, "control_state")
 
     # From ahrs/ahrs.h
     _fcs.fcs_ahrs_init.argtypes = []
@@ -423,11 +475,6 @@ def init(dll_path):
 
     _fcs.fcs_ahrs_tick.argtypes = []
     _fcs.fcs_ahrs_tick.restype = None
-
-    # From ahrs/measurement.h
-    _fcs.fcs_measurement_log_init.argtypes = [POINTER(AHRSMeasurementLog),
-                                              c_ushort]
-    _fcs.fcs_measurement_log_init.restype = None
 
     # From drivers/stream.c
     _fcs._fcs_stream_write_to_rx_buffer.argtypes = [c_ubyte, c_char_p,
@@ -453,8 +500,8 @@ def init(dll_path):
     _fcs.fcs_control_tick.restype = None
 
     # From exports/exports.h
-    _fcs.fcs_exports_send_state.argtypes = []
-    _fcs.fcs_exports_send_state.restype = None
+    _fcs.fcs_exports_init.argtypes = []
+    _fcs.fcs_exports_init.restype = None
 
     # From control/trajectory.h
     _fcs._get_next_reference_point.argtypes = [POINTER(c_float * 13), c_ulong]
@@ -795,8 +842,6 @@ if __name__ == "__main__":
 
             recv_state_from_xplane(sock)
 
-            send_control_to_xplane(sock, controls)
-
             #send_state_to_xplane(sock)
 
             sim_state_delay.append(sim_state)
@@ -807,8 +852,6 @@ if __name__ == "__main__":
                 continue
 
             sim_state_delay.popleft()
-
-            fused_state = sim_state
 
             controls = tick(
                 lat=sim_state_delay[0]["lat"], lon=sim_state_delay[0]["lon"],
@@ -840,6 +883,8 @@ if __name__ == "__main__":
                 controls[1],
                 controls[2]
             )
+
+            send_control_to_xplane(sock, controls)
 
             t += 1
 

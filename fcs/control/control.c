@@ -54,9 +54,12 @@ inline uint32_t cycle_count(void) {
 }
 #endif
 
+/* TODO: make static after debugging sitl.py */
+extern struct fcs_control_state_t control_state;
+extern struct fcs_nav_state_t nav_state;
 
-static struct fcs_control_state_t control_state;
-static struct fcs_nav_state_t nav_state;
+struct fcs_control_state_t control_state;
+struct fcs_nav_state_t nav_state;
 static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
 
@@ -321,7 +324,7 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
                         (M_PI / (double)INT32_MAX);
         estimate->lon = (double)param.data.i32[1] *
                         (M_PI / (double)INT32_MAX);
-        estimate->alt = (float)param.data.i32[2] * 1e2f;
+        estimate->alt = (float)param.data.i32[2] * 1e-2f;
     } else {
         /* FIXME */
         estimate->lat = 0.0;
@@ -331,9 +334,9 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
 
     if (fcs_parameter_find_by_type_and_device(
             estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_NED, 0, &param)) {
-        estimate->velocity[0] = (float)param.data.i32[0] * 1e2f;
-        estimate->velocity[1] = (float)param.data.i32[1] * 1e2f;
-        estimate->velocity[2] = (float)param.data.i32[2] * 1e2f;
+        estimate->velocity[0] = (float)param.data.i16[0] * 1e-2f;
+        estimate->velocity[1] = (float)param.data.i16[1] * 1e-2f;
+        estimate->velocity[2] = (float)param.data.i16[2] * 1e-2f;
     } else {
         /* FIXME */
         estimate->velocity[0] = estimate->velocity[1] = estimate->velocity[2]
@@ -342,14 +345,16 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
 
     if (fcs_parameter_find_by_type_and_device(
             estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 0, &param)) {
-        estimate->attitude[X] = (float)param.data.i32[X] *
+        estimate->attitude[X] = (float)param.data.i16[X] *
                                 (1.0f / (float)INT16_MAX);
-        estimate->attitude[Y] = (float)param.data.i32[Y] *
+        estimate->attitude[Y] = (float)param.data.i16[Y] *
                                 (1.0f / (float)INT16_MAX);
-        estimate->attitude[Z] = (float)param.data.i32[Z] *
+        estimate->attitude[Z] = (float)param.data.i16[Z] *
                                 (1.0f / (float)INT16_MAX);
-        estimate->attitude[W] = (float)param.data.i32[W] *
+        estimate->attitude[W] = (float)param.data.i16[W] *
                                 (1.0f / (float)INT16_MAX);
+
+        quaternion_normalize_f(estimate->attitude, estimate->attitude, true);
     } else {
         /* FIXME */
         estimate->attitude[X] = estimate->attitude[Y] = estimate->attitude[Z]
@@ -360,11 +365,11 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
     if (fcs_parameter_find_by_type_and_device(
             estimate_log, FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ, 0,
             &param)) {
-        estimate->angular_velocity[X] = (float)param.data.i32[X] * 2.0f *
+        estimate->angular_velocity[X] = (float)param.data.i16[X] * 4.0f *
                                         ((float)M_PI / (float)INT16_MAX);
-        estimate->angular_velocity[Y] = (float)param.data.i32[Y] * 2.0f *
+        estimate->angular_velocity[Y] = (float)param.data.i16[Y] * 4.0f *
                                         ((float)M_PI / (float)INT16_MAX);
-        estimate->angular_velocity[Z] = (float)param.data.i32[Z] * 2.0f *
+        estimate->angular_velocity[Z] = (float)param.data.i16[Z] * 4.0f *
                                         ((float)M_PI / (float)INT16_MAX);
     } else {
         /* FIXME */
@@ -375,17 +380,29 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
     if (fcs_parameter_find_by_type_and_device(
             estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED, 0,
             &param)) {
-        estimate->wind_velocity[0] = (float)param.data.i32[0] * 1e2f;
-        estimate->wind_velocity[1] = (float)param.data.i32[1] * 1e2f;
-        estimate->wind_velocity[2] = (float)param.data.i32[2] * 1e2f;
+        estimate->wind_velocity[0] = (float)param.data.i16[0] * 1e-2f;
+        estimate->wind_velocity[1] = (float)param.data.i16[1] * 1e-2f;
+        estimate->wind_velocity[2] = (float)param.data.i16[2] * 1e-2f;
     } else {
         /* FIXME */
         estimate->wind_velocity[0] = estimate->wind_velocity[1] =
             estimate->wind_velocity[2] = 0.0f;
     }
 
-    /* TODO: set mode mode */
+    /* TODO: set mode */
 
     estimate_log = fcs_exports_log_close(estimate_log);
     assert(!estimate_log);
+
+/*
+    printf("estimate: %13.9f %13.9f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f"
+           " %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f\n",
+           estimate->lat, estimate->lon, estimate->alt, estimate->velocity[0],
+           estimate->velocity[1], estimate->velocity[2],
+           estimate->attitude[0], estimate->attitude[1],
+           estimate->attitude[2], estimate->attitude[3],
+           estimate->angular_velocity[0], estimate->angular_velocity[1],
+           estimate->angular_velocity[2], estimate->wind_velocity[0],
+           estimate->wind_velocity[1], estimate->wind_velocity[2]);
+*/
 }

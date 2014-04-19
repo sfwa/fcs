@@ -346,14 +346,14 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     /* Lat/lon in (INT32_MAX/PI); alt in cm */
     tmp[0] = (int32_t)(state_values[0] * ((double)INT32_MAX / M_PI));
     tmp[1] = (int32_t)(state_values[1] * ((double)INT32_MAX / M_PI));
-    tmp[2] = (int32_t)(state_values[2] * 1e-2);
+    tmp[2] = (int32_t)(state_values[2] * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_LLA, 4u, tmp, 3u);
 
     /* Velocity in cm/s */
-    tmp[0] = (int32_t)(state_values[3] * 1e-2);
-    tmp[1] = (int32_t)(state_values[4] * 1e-2);
-    tmp[2] = (int32_t)(state_values[5] * 1e-2);
+    tmp[0] = (int32_t)(state_values[3] * 1e2);
+    tmp[1] = (int32_t)(state_values[4] * 1e2);
+    tmp[2] = (int32_t)(state_values[5] * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_NED, 2u, tmp, 3u);
 
@@ -365,18 +365,18 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 2u, tmp, 4u);
 
-    /* Angular velocity with +/- 2pi rad/s scaled to [-32767, 32767] */
-    tmp[0] = (int32_t)(state_values[13] * ((double)INT16_MAX / M_PI) * 0.5);
-    tmp[1] = (int32_t)(state_values[14] * ((double)INT16_MAX / M_PI) * 0.5);
-    tmp[2] = (int32_t)(state_values[15] * ((double)INT16_MAX / M_PI) * 0.5);
+    /* Angular velocity with +/- 4pi rad/s scaled to [-32767, 32767] */
+    tmp[0] = (int32_t)(state_values[13] * ((double)INT16_MAX / M_PI) * 0.25);
+    tmp[1] = (int32_t)(state_values[14] * ((double)INT16_MAX / M_PI) * 0.25);
+    tmp[2] = (int32_t)(state_values[15] * ((double)INT16_MAX / M_PI) * 0.25);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ, 2u, tmp,
         3u);
 
     /* Wind velocity in cm/s */
-    tmp[0] = (int32_t)(state_values[19] * 1e-2);
-    tmp[1] = (int32_t)(state_values[20] * 1e-2);
-    tmp[2] = (int32_t)(state_values[21] * 1e-2);
+    tmp[0] = (int32_t)(state_values[19] * 1e2);
+    tmp[1] = (int32_t)(state_values[20] * 1e2);
+    tmp[2] = (int32_t)(state_values[21] * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED, 2u, tmp, 3u);
 
@@ -388,13 +388,13 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
         estimate_log, FCS_PARAMETER_ESTIMATED_GYRO_BIAS_XYZ, 2u, tmp, 3u);
 
     /* Horizontal and vertical error std dev in cm */
-    tmp[0] = (int32_t)(6378000.0 * max(error[0], error[1]) * 1e-2);
-    tmp[1] = (int32_t)(error[2] * 1e-2);
+    tmp[0] = (int32_t)(6378000.0 * max(error[0], error[1]) * 1e2);
+    tmp[1] = (int32_t)(error[2] * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_SD, 2u, tmp, 2u);
 
     /* Velocity error std dev in cm/s */
-    tmp[0] = (int32_t)(vector3_norm_d(&error[3]) * 1e-2);
+    tmp[0] = (int32_t)(vector3_norm_d(&error[3]) * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_SD, 2u, tmp, 1u);
 
@@ -406,7 +406,7 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
         estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_SD, 2u, tmp, 3u);
 
     /* Wind velocity error std dev in cm/s */
-    tmp[0] = (int32_t)(vector3_norm_d(&error[18]) * 1e-2);
+    tmp[0] = (int32_t)(vector3_norm_d(&error[18]) * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_SD, 2u, tmp, 1u);
 
@@ -510,7 +510,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
 
     if (mode == ahrs_mode) {
         /* Always allow re-entering the same mode */
-    } if (mode == FCS_MODE_STARTUP_VALUE) {
+    } else if (mode == FCS_MODE_STARTUP_VALUE) {
         /* Invalid mode requested */
         return false;
     } else if (mode == FCS_MODE_INITIALIZING &&

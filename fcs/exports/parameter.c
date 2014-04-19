@@ -374,11 +374,17 @@ uint8_t device_id) {
     assert(plog);
     assert(plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
     assert(plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
+    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+           plog->length <= FCS_LOG_MAX_LENGTH);
 
     size_t i, length = 0;
 
     for (i = 5u; i < plog->length; i += length) {
         length = _extract_length(plog->data[i]);
+        if (!length) {
+            return;
+        }
+
         plog->data[i + offsetof(struct fcs_parameter_t, device)] = device_id;
     }
 }
@@ -402,6 +408,9 @@ uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
 
     for (i = 5u; i < plog->length;) {
         length = _extract_length(plog->data[i]);
+        if (!length) {
+            return false;
+        }
 
         if (plog->data[i + 1u] == device_id &&
                 plog->data[i + 2u] == (uint8_t)type) {
@@ -434,6 +443,9 @@ struct fcs_parameter_t *restrict out_parameters, size_t max_parameters) {
 
     for (i = 5u; i < plog->length && count < max_parameters;) {
         length = _extract_length(plog->data[i]);
+        if (!length) {
+            return false;
+        }
 
         if (plog->data[i + 2u] == (uint8_t)type) {
             memcpy(&out_parameters[count], &plog->data[i], length);

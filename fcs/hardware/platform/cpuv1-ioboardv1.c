@@ -587,7 +587,7 @@ struct fcs_log_t *out_log) {
 
         if (state == ENDED_PACKET) {
             result = fcs_log_deserialize(&plog, &buf[packet_start],
-                                         packet_end - packet_start);
+                                         packet_end - packet_start + 1u);
             if (result) {
                 fcs_log_set_parameter_device_id(&plog, (uint8_t)board_id);
                 fcs_log_merge(out_log, &plog);

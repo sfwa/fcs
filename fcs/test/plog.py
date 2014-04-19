@@ -150,7 +150,7 @@ class DataParameter(Parameter):
         precision = int(round(math.log(self.value_precision / 8, 2)))
         # Pack the header byte with value type, precision and count
         header = (((self.value_type.value << 5) & 0x60) |
-                  ((precision << 3) & 0x18) | len(self.values))
+                  ((precision << 3) & 0x18) | (len(self.values) - 1))
 
         # Format the parameter header
         result = struct.pack("<BBB", header, self.device_id,
@@ -166,8 +166,13 @@ class DataParameter(Parameter):
                              (self.value_type, self.value_precision))
 
         # Serialize the value data
-        result += struct.pack("<%d%s" % (len(self.values) - 1, value_fmt),
-                              *self.values)
+        try:
+            result += struct.pack("<%d%s" % (len(self.values), value_fmt),
+                                  *self.values)
+        except Exception:
+            print "Couldn't serialize %s: %s" % (repr(self.parameter_type),
+                                                 repr(self.values))
+            raise
 
         return result
 
@@ -191,6 +196,8 @@ class DataParameter(Parameter):
                     parameter_type=ParameterType(parameter_type),
                     value_type=value_type, value_precision=value_precision,
                     values=list(values))
+
+        print repr(param.__dict__), repr(data)
 
         return param, data
 
@@ -249,7 +256,7 @@ class ParameterLog(list):
 
         result = cls(log_type=LogType(log_type), tick=tick)
 
-        while data:
+        while len(data) > 4:
             param, tail = Parameter.deserialize(data)
             if param:
                 result.append(param)
@@ -268,7 +275,7 @@ class ParameterLog(list):
 
         crc = struct.pack("<L" , binascii.crc32(header + data) & 0xFFFFFFFF)
 
-        return cobsr.encode(header + data + crc)
+        return "\x00" + cobsr.encode(header + data + crc) + "\x00"
 
     def merge(self, src):
         self.extend(src)

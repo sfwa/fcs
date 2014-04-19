@@ -49,8 +49,23 @@ SOFTWARE.
 #define L1DWWC (*((volatile uint32_t*)0x01844044))
 #endif
 
+#pragma DATA_SECTION(fcs_export_logs, ".shared")
+volatile static struct fcs_log_t exports_shared_logs[FCS_LOG_TYPE_LAST - 1u];
+
+static struct fcs_log_t exports_local_logs[FCS_LOG_TYPE_LAST - 1u];
+static enum fcs_log_open_mode_t exports_local_states[FCS_LOG_TYPE_LAST - 1u];
+
 
 void fcs_exports_init(void) {
+    size_t i;
+    struct fcs_log_t l;
+
+    for (i = 1; i < FCS_LOG_TYPE_LAST - 1u; i++) {
+        exports_local_states[i] = FCS_MODE_CLOSED;
+        fcs_log_init(&l, (enum fcs_log_type_t)i, 0);
+        exports_shared_logs[i] = l;
+    }
+
 #ifdef __TI_COMPILER_VERSION__
     /* Release the state and control semaphores */
     volatile CSL_SemRegs *const semaphore =
@@ -59,14 +74,10 @@ void fcs_exports_init(void) {
 #endif
 }
 
-#pragma DATA_SECTION(fcs_export_logs, ".shared")
-volatile static struct fcs_log_t exports_shared_logs[FCS_LOG_TYPE_LAST - 1u];
-
-static struct fcs_log_t exports_local_logs[FCS_LOG_TYPE_LAST - 1u];
-static enum fcs_log_open_mode_t exports_local_states[FCS_LOG_TYPE_LAST - 1u];
-
 struct fcs_log_t *fcs_exports_log_open(enum fcs_log_type_t type,
 enum fcs_log_open_mode_t mode) {
+    /* printf("fcs_exports_log_open(%d, %c)\n", (int)type, (char)mode); */
+
     assert(FCS_LOG_TYPE_INVALID < type && type < FCS_LOG_TYPE_LAST);
     assert(mode == FCS_MODE_READ || mode == FCS_MODE_WRITE ||
            mode == FCS_MODE_APPEND);
@@ -102,6 +113,8 @@ enum fcs_log_open_mode_t mode) {
     semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS] = 1u;
 #endif
 
+    exports_local_states[type] = mode;
+
     return &exports_local_logs[type];
 }
 
@@ -110,11 +123,13 @@ struct fcs_log_t *fcs_exports_log_close(struct fcs_log_t *l) {
 
     enum fcs_log_type_t type;
     size_t idx;
-    for (idx = 0; idx < FCS_LOG_TYPE_LAST; idx++) {
+    for (idx = 1; idx < FCS_LOG_TYPE_LAST; idx++) {
         if (l == &exports_local_logs[(enum fcs_log_type_t)idx]) {
             break;
         }
     }
+
+    /* printf("fcs_exports_log_close(%u)\n", (int)idx); */
 
     assert(0 < idx && idx < FCS_LOG_TYPE_LAST);
     type = (enum fcs_log_type_t)idx;
