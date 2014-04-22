@@ -155,5 +155,6 @@ struct fcs_nav_state_t {
 
 void fcs_control_init(void);
 void fcs_control_tick(void);
+void fcs_control_reset(void);
 
 #endif

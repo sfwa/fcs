@@ -470,17 +470,10 @@ void fcs_board_tick(void) {
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, 'r');
     assert(control_log);
 
-    /* Serialize the control log only, and write it to the HITL port */
-    out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), control_log);
-    /* FIXME: limitation of current stream driver */
-    assert(out_buf_len < 255u);
-
-    write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf, out_buf_len);
-    assert(out_buf_len == write_len);
-
     /*
     Check the simulation port for a log packet -- if received, it replaces the
-    AHRS estimate log.
+    AHRS estimate log. Send a control log packet for each estimate log packet
+    we receive.
     */
     fcs_log_init(&out_log, FCS_LOG_TYPE_ESTIMATE, 0);
     if (_fcs_read_log_packet(FCS_STREAM_UART_EXT1, 0, &out_log)) {
@@ -498,6 +491,15 @@ void fcs_board_tick(void) {
 
             memcpy(estimate_log, &out_log, sizeof(struct fcs_log_t));
         }
+
+        /* Serialize the control log only, and write it to the HITL port */
+        out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
+                                        control_log);
+        assert(out_buf_len < 255u);
+
+        write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf,
+                                     out_buf_len);
+        assert(out_buf_len == write_len);
     }
 
     /*

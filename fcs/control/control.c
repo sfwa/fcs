@@ -305,6 +305,12 @@ void fcs_control_tick(void) {
     fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
 }
 
+void fcs_control_reset(void) {
+    struct fcs_state_estimate_t state_estimate;
+    _read_estimate_log(&state_estimate);
+    fcs_trajectory_recalculate(&nav_state, &state_estimate);
+}
+
 /*
 Copy estimate values from the estimate log to the state estimate structure.
 See _populate_estimate_log at ahrs/ahrs.c:329.

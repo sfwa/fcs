@@ -394,7 +394,7 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     )
 
     write(3, estimate_log.serialize())
-    print binascii.b2a_hex(estimate_log.serialize())
+    #print binascii.b2a_hex(estimate_log.serialize())
 
     _fcs.fcs_board_tick()
     _fcs.fcs_ahrs_tick()
@@ -499,6 +499,9 @@ def init(dll_path):
     _fcs.fcs_control_tick.argtypes = []
     _fcs.fcs_control_tick.restype = None
 
+    _fcs.fcs_control_reset.argtypes = []
+    _fcs.fcs_control_reset.restype = None
+
     # From exports/exports.h
     _fcs.fcs_exports_init.argtypes = []
     _fcs.fcs_exports_init.restype = None
@@ -506,10 +509,6 @@ def init(dll_path):
     # From control/trajectory.h
     _fcs._get_next_reference_point.argtypes = [POINTER(c_float * 13), c_ulong]
     _fcs._get_next_reference_point.restype = None
-
-    _fcs.fcs_trajectory_recalculate.argtypes = [POINTER(NavState),
-                                                POINTER(AHRSStateEstimate)]
-    _fcs.fcs_trajectory_recalculate.restype = None
 
     reset()
 
@@ -733,6 +732,161 @@ def send_control_to_xplane(s, controls):
     s.sendall(update)
 
 
+TURN_RADIUS = 60.0
+WGS84_A = 6378137.0
+
+
+def ll_pt_ned_offset(a, origin):
+    return (
+        (a[0] - origin[0]) * WGS84_A,
+        (a[1] - origin[1]) * WGS84_A * math.cos(origin[0]),
+        0.0
+    )
+
+
+def ned_pt_ll(a, origin):
+    return (
+        origin[0] + a[0] / WGS84_A,
+        origin[1] + a[1] / (WGS84_A * math.cos(origin[0])),
+        0.0
+    )
+
+
+def ll_pt_pt_distance(a, b):
+    x = ll_pt_ned_offset(a, b)
+    return math.sqrt(x[0]**2 + x[1]**2)
+
+
+def ll_pt_line_distance(a, line):
+    # Convert a and line vector to NED based on line[0] being the origin
+    a_ned = ll_pt_ned_offset(a, line[0])
+    l_ned = ll_pt_ned_offset(line[1], line[0])
+    return abs(l_ned[1] * a_ned[0] - l_ned[0] * a_ned[1]) / math.sqrt(l_ned[0]**2 + l_ned[1]**2)
+
+
+def ll_pt_line_direction(a, line):
+    a_ned = ll_pt_ned_offset(a, line[0])
+    l_ned = ll_pt_ned_offset(line[1], line[0])
+    direction = l_ned[1] * a_ned[0] - l_ned[0] * a_ned[1]
+    return 1.0 if direction > 0.0 else -1.0
+
+
+def generate_search_pattern(area):
+    # Find the length and point indices of the longest side by checking each
+    # in turn
+    longest_side = None
+    longest_side_length = 0.0
+    for i in range(len(area)):
+        side_length = ll_pt_pt_distance(area[i], area[(i + 1) % len(area)])
+        if side_length > longest_side_length:
+            longest_side = [i, (i + 1) % len(area)]
+            longest_side_length = side_length
+
+    # Find the distance of the furthest point from the longest side, which
+    # will become the baseline
+    furthest_point = None
+    furthest_point_distance = 0.0
+    for i in range(len(area)):
+        point_distance = ll_pt_line_distance(area[i], (area[longest_side[0]],
+                                                       area[longest_side[1]]))
+        if point_distance > furthest_point_distance:
+            furthest_point = i
+            furthest_point_distance = point_distance
+
+    # Convert area to NED relative to first point
+    ned_area = [ll_pt_ned_offset(a, area[0]) for a in area]
+
+    # Find the orientation of the search pattern (heading of initial path)
+    heading = math.atan2(
+        ned_area[longest_side[0]][1] - ned_area[longest_side[1]][1],
+        ned_area[longest_side[0]][0] - ned_area[longest_side[1]][0]
+    )
+
+    # Determine the number of passes to be made (2 passes per cycle, so the
+    # number must be even).
+    pass_distance = TURN_RADIUS * 2.0
+    pass_direction = ll_pt_line_direction(
+        area[furthest_point], (area[longest_side[0]], area[longest_side[1]]))
+
+    n_passes = int(math.ceil(furthest_point_distance / pass_distance))
+
+    pass_offset = (
+        math.cos(heading + math.pi * 0.5 * pass_direction) * pass_distance,
+        math.sin(heading + math.pi * 0.5 * pass_direction) * pass_distance
+    )
+
+    pattern_points = []
+
+    # Generate points/paths for the first sweep, at 120m intervals
+    for i in range(n_passes):
+        if i % 2 == 1:  # odd, 0-1
+            pattern_points += [
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i),
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i)),
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i),
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i))
+            ]
+        else:  # event, 1-0
+            pattern_points += [
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i),
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i)),
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i),
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i))
+            ]
+
+    # Generate points/paths for the second sweep, at 120m intervals with a 60m offset
+    for i in range(n_passes - 1, -1, -1):
+        if i % 2 == 0:  # even, 0-1
+            pattern_points += [
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.5),
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.5)),
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.5),
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.5))
+            ]
+        else:  # odd, 1-0
+            pattern_points += [
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.5),
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.5)),
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.5),
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.5))
+            ]
+
+    pattern_points = [ned_pt_ll(a, area[0]) for a in pattern_points]
+
+    return pattern_points, heading
+
+
+MB = [
+    (math.radians(-26.569564), math.radians(151.837373), 500.0),
+    (math.radians(-26.569956), math.radians(151.839405), 500.0),
+    (math.radians(-26.576823), math.radians(151.841142), 500.0),
+    (math.radians(-26.576990), math.radians(151.840045), 500.0),
+    (math.radians(-26.581227), math.radians(151.841062), 500.0),
+    (math.radians(-26.582060), math.radians(151.842503), 500.0),
+    (math.radians(-26.579179), math.radians(151.849329), 500.0),
+    (math.radians(-26.590009), math.radians(151.850974), 500.0),
+    (math.radians(-26.609574), math.radians(151.863100), 500.0),
+    (math.radians(-26.638958), math.radians(151.858839), 500.0),
+    (math.radians(-26.644972), math.radians(151.847224), 500.0),
+    (math.radians(-26.643572), math.radians(151.830350), 500.0)
+]
+SA = [
+    (math.radians(-26.617445), math.radians(151.843184), 140.0),
+    (math.radians(-26.619171), math.radians(151.855573), 140.0),
+    (math.radians(-26.637843), math.radians(151.851597), 140.0),
+    (math.radians(-26.638828), math.radians(151.849121), 140.0),
+    (math.radians(-26.637393), math.radians(151.839386), 140.0)
+]
+EL = [
+    (math.radians(-26.607212), math.radians(151.845389), 140.0),
+    (math.radians(-26.617498), math.radians(151.843567), 140.0),
+    (math.radians(-26.618365), math.radians(151.849788), 140.0),
+    (math.radians(-26.608092), math.radians(151.851646), 140.0)
+]
+HOME = (math.radians(-26.584781), math.radians(151.842325), 50.0)
+HOLD = (math.radians(-26.607212), math.radians(151.845389))
+
+
 if __name__ == "__main__":
     init(sys.argv[1])
     if len(sys.argv) > 2:
@@ -740,18 +894,18 @@ if __name__ == "__main__":
     else:
         max_t = -1
 
-    # Straight path to begin with
-    nav_state.waypoints[0].lat = math.radians(START_LAT)
-    nav_state.waypoints[0].lon = math.radians(START_LON)
-    nav_state.waypoints[0].alt = START_ALT
+    # Curve from HOME to EL01
+    nav_state.waypoints[0].lat = HOME[0]
+    nav_state.waypoints[0].lon = HOME[1]
+    nav_state.waypoints[0].alt = HOME[2]
     nav_state.waypoints[0].airspeed = 20.0
     nav_state.waypoints[0].yaw = 0.0
     nav_state.waypoints[0].pitch = 0.0
     nav_state.waypoints[0].roll = 0.0
 
-    nav_state.waypoints[1].lat = math.radians(START_LAT + 0.003)
-    nav_state.waypoints[1].lon = math.radians(START_LON)
-    nav_state.waypoints[1].alt = START_ALT
+    nav_state.waypoints[1].lat = EL[0][0]
+    nav_state.waypoints[1].lon = EL[0][1]
+    nav_state.waypoints[1].alt = EL[0][2]
     nav_state.waypoints[1].airspeed = 20.0
     nav_state.waypoints[1].yaw = 0.0
     nav_state.waypoints[1].pitch = 0.0
@@ -759,15 +913,15 @@ if __name__ == "__main__":
 
     nav_state.paths[0].start_waypoint_id = 0
     nav_state.paths[0].end_waypoint_id = 1
-    nav_state.paths[0].type = FCS_PATH_LINE
+    nav_state.paths[0].type = FCS_PATH_DUBINS_CURVE
     nav_state.paths[0].next_path_id = 1
 
-    # Now a curve
-    nav_state.waypoints[2].lat = math.radians(START_LAT + 0.003)
-    nav_state.waypoints[2].lon = math.radians(START_LON + 0.003)
-    nav_state.waypoints[2].alt = START_ALT
+    # Another curve to EL02
+    nav_state.waypoints[2].lat = EL[1][0]
+    nav_state.waypoints[2].lon = EL[1][1]
+    nav_state.waypoints[2].alt = EL[1][2]
     nav_state.waypoints[2].airspeed = 20.0
-    nav_state.waypoints[2].yaw = math.pi
+    nav_state.waypoints[2].yaw = 0.0
     nav_state.waypoints[2].pitch = 0.0
     nav_state.waypoints[2].roll = 0.0
 
@@ -776,48 +930,64 @@ if __name__ == "__main__":
     nav_state.paths[1].type = FCS_PATH_DUBINS_CURVE
     nav_state.paths[1].next_path_id = 2
 
-    # And straight again
-    nav_state.waypoints[3].lat = math.radians(START_LAT)
-    nav_state.waypoints[3].lon = math.radians(START_LON + 0.003)
-    nav_state.waypoints[3].alt = START_ALT
-    nav_state.waypoints[3].airspeed = 20.0
-    nav_state.waypoints[3].yaw = math.pi
-    nav_state.waypoints[3].pitch = 0.0
-    nav_state.waypoints[3].roll = 0.0
+    pattern_points, heading = generate_search_pattern(SA)
+    for i in range(len(pattern_points)):
+        nav_state.waypoints[3 + i].lat = pattern_points[i][0]
+        nav_state.waypoints[3 + i].lon = pattern_points[i][1]
+        nav_state.waypoints[3 + i].alt = SA[0][2]
+        nav_state.waypoints[3 + i].airspeed = 20.0
+        if int(i / 2) % 2 == 0:
+            nav_state.waypoints[3 + i].yaw = heading
+        else:
+            nav_state.waypoints[3 + i].yaw = heading + math.pi
+        nav_state.waypoints[3 + i].pitch = 0.0
+        nav_state.waypoints[3 + i].roll = 0.0
 
-    nav_state.paths[2].start_waypoint_id = 2
-    nav_state.paths[2].end_waypoint_id = 3
-    nav_state.paths[2].type = FCS_PATH_LINE
-    nav_state.paths[2].next_path_id = 3
+        #print "[%.9f, %.9f]," % (math.degrees(nav_state.waypoints[3 + i].lon), math.degrees(nav_state.waypoints[3 + i].lat))
 
-    # And diagonally back to waypoint 1
-    nav_state.paths[3].start_waypoint_id = 3
-    nav_state.paths[3].end_waypoint_id = 1
-    nav_state.paths[3].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[3].next_path_id = 4
+        if i % 2 == 0:
+            nav_state.paths[2 + i].start_waypoint_id = 3 + i
+            nav_state.paths[2 + i].end_waypoint_id = 3 + i + 1
+            nav_state.paths[2 + i].type = FCS_PATH_LINE
+            nav_state.paths[2 + i].next_path_id = 2 + i + 1
+        else:
+            nav_state.paths[2 + i].start_waypoint_id = 3 + i
+            nav_state.paths[2 + i].end_waypoint_id = 3 + i + 1
+            nav_state.paths[2 + i].type = FCS_PATH_DUBINS_CURVE
+            nav_state.paths[2 + i].next_path_id = 2 + i + 1
 
-    # Left turn
-    nav_state.waypoints[4].lat = math.radians(START_LAT + 0.003)
-    nav_state.waypoints[4].lon = math.radians(START_LON - 0.003)
-    nav_state.waypoints[4].alt = START_ALT
-    nav_state.waypoints[4].airspeed = 20.0
-    nav_state.waypoints[4].yaw = math.pi / 2
-    nav_state.waypoints[4].pitch = 0.0
-    nav_state.waypoints[4].roll = 0.0
+    # Exit pattern to EL03
+    nav_state.waypoints[3 + len(pattern_points)].lat = EL[2][0]
+    nav_state.waypoints[3 + len(pattern_points)].lon = EL[2][1]
+    nav_state.waypoints[3 + len(pattern_points)].alt = EL[2][2]
+    nav_state.waypoints[3 + len(pattern_points)].airspeed = 20.0
+    nav_state.waypoints[3 + len(pattern_points)].yaw = 0.0
+    nav_state.waypoints[3 + len(pattern_points)].pitch = 0.0
+    nav_state.waypoints[3 + len(pattern_points)].roll = 0.0
 
-    nav_state.paths[4].start_waypoint_id = 1
-    nav_state.paths[4].end_waypoint_id = 4
-    nav_state.paths[4].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[4].next_path_id = 5
+    # Curve from EL03 to EL04
+    nav_state.waypoints[4 + len(pattern_points)].lat = EL[3][0]
+    nav_state.waypoints[4 + len(pattern_points)].lon = EL[3][1]
+    nav_state.waypoints[4 + len(pattern_points)].alt = EL[3][2]
+    nav_state.waypoints[4 + len(pattern_points)].airspeed = 20.0
+    nav_state.waypoints[4 + len(pattern_points)].yaw = 0.0
+    nav_state.waypoints[4 + len(pattern_points)].pitch = 0.0
+    nav_state.waypoints[4 + len(pattern_points)].roll = 0.0
 
-    # And back to the origin for a repeat of the whole course
-    nav_state.paths[5].start_waypoint_id = 4
-    nav_state.paths[5].end_waypoint_id = 0
-    nav_state.paths[5].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[5].next_path_id = 0
+    nav_state.paths[3 + len(pattern_points)].start_waypoint_id = 3 + len(pattern_points)
+    nav_state.paths[3 + len(pattern_points)].end_waypoint_id = 4 + len(pattern_points)
+    nav_state.paths[3 + len(pattern_points)].type = FCS_PATH_DUBINS_CURVE
+    nav_state.paths[3 + len(pattern_points)].next_path_id = 2
+
+    # Curve to home and hold
+    nav_state.paths[4 + len(pattern_points)].start_waypoint_id = 4 + len(pattern_points)
+    nav_state.paths[4 + len(pattern_points)].end_waypoint_id = 0
+    nav_state.paths[4 + len(pattern_points)].type = FCS_PATH_DUBINS_CURVE
+    nav_state.paths[4 + len(pattern_points)].next_path_id = 0xFFFF
 
     # Register the path with the FCS
-    #nav_state.reference_path_id[0] = 0
+    nav_state.reference_path_id[0] = 0
+    _fcs.fcs_control_reset()
 
     sock = connect_to_xplane()
     reset_xplane_state(sock)
@@ -836,6 +1006,7 @@ if __name__ == "__main__":
 
     controls = [0.0, 0.5, 0.5]
     t = 0
+    dist_air = 0.0
     try:
         while True:
             iter_start = time.time()
@@ -887,6 +1058,18 @@ if __name__ == "__main__":
             send_control_to_xplane(sock, controls)
 
             t += 1
+            dist_air += sim_ref["airspeed"] * 0.02
+            dist_gnd += math.sqrt(
+                sim_ref["velocity"][0]**2 + sim_ref["velocity"][1]**2 +
+                sim_ref["velocity"][2]**2) * 0.02
+
+            if nav_state.reference_path_id[0] == 499:
+                print "COMPLETED"
+                print "Time taken: %.0f min %.0f sec" % (
+                    int(t * 0.02) / 60, (t * 0.02) % 60.0)
+                print "Air distance: %.1f km" % (dist_air * 0.001)
+                print "Ground distance: %.1f km" % (dist_gnd * 0.001)
+                raise StopIteration()
 
             #if t % 500 == 499:
             #    nav_state.reference_path_id[0] = 0xFFFF
