@@ -22,6 +22,7 @@
 # Dependencies: enum34, cobs
 
 
+import sys
 import math
 import struct
 import binascii
@@ -197,8 +198,6 @@ class DataParameter(Parameter):
                     value_type=value_type, value_precision=value_precision,
                     values=list(values))
 
-        print repr(param.__dict__), repr(data)
-
         return param, data
 
 
@@ -297,3 +296,31 @@ class ParameterLog(list):
     def print_c_data(self):
         print ''.join(('\\x%02x' % ord(c)) for c in
                       cobsr.decode(self.serialize())[:-4])
+
+
+if __name__ == "__main__":
+    in_packet = False
+    got_data = False
+    data = ''
+    while True:
+        c = sys.stdin.read(1)
+        if not c:
+            break
+        elif c == '\x00' and not in_packet:
+            in_packet = True
+            got_data = False
+        elif c == '\x00' and not got_data:
+            in_packet = True
+            got_data = False
+        elif c == '\x00' and got_data and in_packet:
+            try:
+                print repr(ParameterLog.deserialize(data))
+            except Exception:
+                print "Invalid packet: %s" % binascii.b2a_hex(data)
+            data = ''
+            in_packet = False
+            got_data = False
+        else:
+            data += c
+            got_data = True
+

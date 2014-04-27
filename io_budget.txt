@@ -66,14 +66,14 @@ Measurements:
 15 gps pos 2 lat, lon, alt
 9 gps velocity 1 n, e, d
 9 gps velocity 2 n, e, d
-5 gps 1 fix mode, num SVs, error
-5 gps 2 fix mode, num SVs, error
+6 gps 1 fix mode, num SVs, error
+6 gps 2 fix mode, num SVs, error
 9 radio RSSI, noise, #packets, #errors
 11 gcs reference pressure, alt
 11 control pos
 4 bytes CRC32
 
-Total: 221 + COBS-R + NUL + NUL = 224
+Total: 223 + COBS-R + NUL + NUL = 226
 
 
 Calibrated measurements:

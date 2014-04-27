@@ -89,9 +89,9 @@ nav_state = None
 ahrs_tick = 0
 
 
-START_LAT = -37.81358378
-START_LON = 144.9
-START_ALT = 200
+START_LAT = -26.584781
+START_LON = 151.842325
+START_ALT = 460
 
 
 sim_state = {
@@ -554,10 +554,10 @@ def connect_to_xplane():
     return sock
 
 
-def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
+def reset_xplane_state(s, yaw=18.0, pitch=0.0, roll=0.0, velocity=None):
     disable_xplane_sim(s)
 
-    s.sendall("world-set %f %f %f\n" % (-37.8136, START_LON, START_ALT))
+    s.sendall("world-set %f %f %f\n" % (START_LAT, START_LON, START_ALT))
     s.sendall("sub sim/operation/failures/rel_engfir0")
     time.sleep(1.0)
 
@@ -566,7 +566,7 @@ def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
     s.sendall("unsub sim/operation/failures/rel_engfir0")
 
     if not velocity:
-        velocity = [20.0, 0.0, 0.0]
+        velocity = [-20.0, 0.0, 0.0]
 
     # Set the simulation's initial state
     update = ""
@@ -607,10 +607,10 @@ def enable_xplane_sim(s):
 
     update = ""
 
-    yaw = math.radians(284.6)
-    pitch = math.radians(13.4)
-    roll = math.radians(1.1)
-    velocity = [15.52, 0.51, 0.74]
+    yaw = math.radians(180)
+    pitch = math.radians(0)
+    roll = math.radians(0)
+    velocity = [-20.0, 0.0, 0.0]
 
     xplane_q = [0, 0, 0, 1]
     psi = yaw / 2.0
@@ -804,7 +804,7 @@ def generate_search_pattern(area):
 
     # Determine the number of passes to be made (2 passes per cycle, so the
     # number must be even).
-    pass_distance = TURN_RADIUS * 2.0
+    pass_distance = TURN_RADIUS * 2.0 + 10.0
     pass_direction = ll_pt_line_direction(
         area[furthest_point], (area[longest_side[0]], area[longest_side[1]]))
 
@@ -857,33 +857,33 @@ def generate_search_pattern(area):
 
 
 MB = [
-    (math.radians(-26.569564), math.radians(151.837373), 500.0),
-    (math.radians(-26.569956), math.radians(151.839405), 500.0),
-    (math.radians(-26.576823), math.radians(151.841142), 500.0),
-    (math.radians(-26.576990), math.radians(151.840045), 500.0),
-    (math.radians(-26.581227), math.radians(151.841062), 500.0),
-    (math.radians(-26.582060), math.radians(151.842503), 500.0),
-    (math.radians(-26.579179), math.radians(151.849329), 500.0),
-    (math.radians(-26.590009), math.radians(151.850974), 500.0),
-    (math.radians(-26.609574), math.radians(151.863100), 500.0),
-    (math.radians(-26.638958), math.radians(151.858839), 500.0),
-    (math.radians(-26.644972), math.radians(151.847224), 500.0),
-    (math.radians(-26.643572), math.radians(151.830350), 500.0)
+    (math.radians(-26.569564), math.radians(151.837373), 933.0),
+    (math.radians(-26.569956), math.radians(151.839405), 933.0),
+    (math.radians(-26.576823), math.radians(151.841142), 933.0),
+    (math.radians(-26.576990), math.radians(151.840045), 933.0),
+    (math.radians(-26.581227), math.radians(151.841062), 933.0),
+    (math.radians(-26.582060), math.radians(151.842503), 933.0),
+    (math.radians(-26.579179), math.radians(151.849329), 933.0),
+    (math.radians(-26.590009), math.radians(151.850974), 933.0),
+    (math.radians(-26.609574), math.radians(151.863100), 933.0),
+    (math.radians(-26.638958), math.radians(151.858839), 933.0),
+    (math.radians(-26.644972), math.radians(151.847224), 933.0),
+    (math.radians(-26.643572), math.radians(151.830350), 933.0)
 ]
 SA = [
-    (math.radians(-26.617445), math.radians(151.843184), 140.0),
-    (math.radians(-26.619171), math.radians(151.855573), 140.0),
-    (math.radians(-26.637843), math.radians(151.851597), 140.0),
-    (math.radians(-26.638828), math.radians(151.849121), 140.0),
-    (math.radians(-26.637393), math.radians(151.839386), 140.0)
+    (math.radians(-26.617445), math.radians(151.843184), 573.0),
+    (math.radians(-26.619171), math.radians(151.855573), 573.0),
+    (math.radians(-26.637843), math.radians(151.851597), 573.0),
+    (math.radians(-26.638828), math.radians(151.849121), 573.0),
+    (math.radians(-26.637393), math.radians(151.839386), 573.0)
 ]
 EL = [
-    (math.radians(-26.607212), math.radians(151.845389), 140.0),
-    (math.radians(-26.617498), math.radians(151.843567), 140.0),
-    (math.radians(-26.618365), math.radians(151.849788), 140.0),
-    (math.radians(-26.608092), math.radians(151.851646), 140.0)
+    (math.radians(-26.607212), math.radians(151.845389), 573.0),
+    (math.radians(-26.617498), math.radians(151.843567), 573.0),
+    (math.radians(-26.618365), math.radians(151.849788), 573.0),
+    (math.radians(-26.608092), math.radians(151.851646), 573.0)
 ]
-HOME = (math.radians(-26.584781), math.radians(151.842325), 50.0)
+HOME = (math.radians(-26.584781), math.radians(151.842325), 460.0)
 HOLD = (math.radians(-26.607212), math.radians(151.845389))
 
 
@@ -898,30 +898,30 @@ if __name__ == "__main__":
     nav_state.waypoints[0].lat = HOME[0]
     nav_state.waypoints[0].lon = HOME[1]
     nav_state.waypoints[0].alt = HOME[2]
-    nav_state.waypoints[0].airspeed = 20.0
-    nav_state.waypoints[0].yaw = 0.0
+    nav_state.waypoints[0].airspeed = 22.0
+    nav_state.waypoints[0].yaw = math.radians(180.0)
     nav_state.waypoints[0].pitch = 0.0
     nav_state.waypoints[0].roll = 0.0
 
     nav_state.waypoints[1].lat = EL[0][0]
     nav_state.waypoints[1].lon = EL[0][1]
     nav_state.waypoints[1].alt = EL[0][2]
-    nav_state.waypoints[1].airspeed = 20.0
-    nav_state.waypoints[1].yaw = 0.0
+    nav_state.waypoints[1].airspeed = 22.0
+    nav_state.waypoints[1].yaw = math.radians(180.0)
     nav_state.waypoints[1].pitch = 0.0
     nav_state.waypoints[1].roll = 0.0
 
     nav_state.paths[0].start_waypoint_id = 0
     nav_state.paths[0].end_waypoint_id = 1
-    nav_state.paths[0].type = FCS_PATH_DUBINS_CURVE
+    nav_state.paths[0].type = FCS_PATH_LINE
     nav_state.paths[0].next_path_id = 1
 
     # Another curve to EL02
     nav_state.waypoints[2].lat = EL[1][0]
     nav_state.waypoints[2].lon = EL[1][1]
     nav_state.waypoints[2].alt = EL[1][2]
-    nav_state.waypoints[2].airspeed = 20.0
-    nav_state.waypoints[2].yaw = 0.0
+    nav_state.waypoints[2].airspeed = 22.0
+    nav_state.waypoints[2].yaw = math.radians(180.0)
     nav_state.waypoints[2].pitch = 0.0
     nav_state.waypoints[2].roll = 0.0
 
@@ -930,12 +930,17 @@ if __name__ == "__main__":
     nav_state.paths[1].type = FCS_PATH_DUBINS_CURVE
     nav_state.paths[1].next_path_id = 2
 
+    nav_state.paths[2].start_waypoint_id = 2
+    nav_state.paths[2].end_waypoint_id = 3
+    nav_state.paths[2].type = FCS_PATH_DUBINS_CURVE
+    nav_state.paths[2].next_path_id = 3
+
     pattern_points, heading = generate_search_pattern(SA)
     for i in range(len(pattern_points)):
         nav_state.waypoints[3 + i].lat = pattern_points[i][0]
         nav_state.waypoints[3 + i].lon = pattern_points[i][1]
         nav_state.waypoints[3 + i].alt = SA[0][2]
-        nav_state.waypoints[3 + i].airspeed = 20.0
+        nav_state.waypoints[3 + i].airspeed = 22.0
         if int(i / 2) % 2 == 0:
             nav_state.waypoints[3 + i].yaw = heading
         else:
@@ -946,21 +951,21 @@ if __name__ == "__main__":
         #print "[%.9f, %.9f]," % (math.degrees(nav_state.waypoints[3 + i].lon), math.degrees(nav_state.waypoints[3 + i].lat))
 
         if i % 2 == 0:
-            nav_state.paths[2 + i].start_waypoint_id = 3 + i
-            nav_state.paths[2 + i].end_waypoint_id = 3 + i + 1
-            nav_state.paths[2 + i].type = FCS_PATH_LINE
-            nav_state.paths[2 + i].next_path_id = 2 + i + 1
+            nav_state.paths[3 + i].start_waypoint_id = 3 + i
+            nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
+            nav_state.paths[3 + i].type = FCS_PATH_LINE
+            nav_state.paths[3 + i].next_path_id = 3 + i + 1
         else:
-            nav_state.paths[2 + i].start_waypoint_id = 3 + i
-            nav_state.paths[2 + i].end_waypoint_id = 3 + i + 1
-            nav_state.paths[2 + i].type = FCS_PATH_DUBINS_CURVE
-            nav_state.paths[2 + i].next_path_id = 2 + i + 1
+            nav_state.paths[3 + i].start_waypoint_id = 3 + i
+            nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
+            nav_state.paths[3 + i].type = FCS_PATH_DUBINS_CURVE
+            nav_state.paths[3 + i].next_path_id = 3 + i + 1
 
     # Exit pattern to EL03
     nav_state.waypoints[3 + len(pattern_points)].lat = EL[2][0]
     nav_state.waypoints[3 + len(pattern_points)].lon = EL[2][1]
     nav_state.waypoints[3 + len(pattern_points)].alt = EL[2][2]
-    nav_state.waypoints[3 + len(pattern_points)].airspeed = 20.0
+    nav_state.waypoints[3 + len(pattern_points)].airspeed = 22.0
     nav_state.waypoints[3 + len(pattern_points)].yaw = 0.0
     nav_state.waypoints[3 + len(pattern_points)].pitch = 0.0
     nav_state.waypoints[3 + len(pattern_points)].roll = 0.0
@@ -969,7 +974,7 @@ if __name__ == "__main__":
     nav_state.waypoints[4 + len(pattern_points)].lat = EL[3][0]
     nav_state.waypoints[4 + len(pattern_points)].lon = EL[3][1]
     nav_state.waypoints[4 + len(pattern_points)].alt = EL[3][2]
-    nav_state.waypoints[4 + len(pattern_points)].airspeed = 20.0
+    nav_state.waypoints[4 + len(pattern_points)].airspeed = 22.0
     nav_state.waypoints[4 + len(pattern_points)].yaw = 0.0
     nav_state.waypoints[4 + len(pattern_points)].pitch = 0.0
     nav_state.waypoints[4 + len(pattern_points)].roll = 0.0
@@ -977,7 +982,7 @@ if __name__ == "__main__":
     nav_state.paths[3 + len(pattern_points)].start_waypoint_id = 3 + len(pattern_points)
     nav_state.paths[3 + len(pattern_points)].end_waypoint_id = 4 + len(pattern_points)
     nav_state.paths[3 + len(pattern_points)].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[3 + len(pattern_points)].next_path_id = 2
+    nav_state.paths[3 + len(pattern_points)].next_path_id = 4 + len(pattern_points)
 
     # Curve to home and hold
     nav_state.paths[4 + len(pattern_points)].start_waypoint_id = 4 + len(pattern_points)
@@ -1006,7 +1011,7 @@ if __name__ == "__main__":
 
     controls = [0.0, 0.5, 0.5]
     t = 0
-    dist_air = 0.0
+    dist_air = dist_gnd = 0.0
     try:
         while True:
             iter_start = time.time()
@@ -1060,8 +1065,8 @@ if __name__ == "__main__":
             t += 1
             dist_air += sim_ref["airspeed"] * 0.02
             dist_gnd += math.sqrt(
-                sim_ref["velocity"][0]**2 + sim_ref["velocity"][1]**2 +
-                sim_ref["velocity"][2]**2) * 0.02
+                sim_state["velocity"][0]**2 + sim_state["velocity"][1]**2 +
+                sim_state["velocity"][2]**2) * 0.02
 
             if nav_state.reference_path_id[0] == 499:
                 print "COMPLETED"

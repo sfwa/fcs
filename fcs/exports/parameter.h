@@ -98,22 +98,6 @@ enum fcs_value_type_t {
     FCS_VALUE_RESERVED
 };
 
-/*
-- accel: 3x int16 (x, y, z)
-- gyro: 3x int16 (x, y, z)
-- mag: 3x int16 (x, y, z)
-- pitot: 1x int16 (v)
-- pressure/temp: 2x int16 (pressure, temp)
-- rangefinder: 1x int16 (range)
-- current/voltage: 2x int16 (i, v)
-- gps position: 3x int32 (lat, lon, alt)
-- gps velocity: 3x int16 (n, e, d)
-- gps info: 3x uint8 (fix mode, num SVs, dop)
-- message: text
-- control position: 4x int16 (0, 1, 2, 3)
-- radio: 4x int8 (RSSI, noise, # packets rx, # errors rx)
-*/
-
 struct fcs_parameter_t {
     uint8_t header; /* 7 = mode; 6:5 = value type (0 = unsigned, 1 = signed,
                        2 = float, 3 = reserved); 4:3 = log2(bytes per value);

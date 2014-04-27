@@ -422,7 +422,7 @@ const float *restrict wind) {
     reference[11] = tmp2[1];
     reference[12] = tmp2[2];
     /* FIXME: reference points should be specified in the control config. */
-    reference[NMPC_STATE_DIM + 0] = 0.3f;
+    reference[NMPC_STATE_DIM + 0] = 0.5f;
     reference[NMPC_STATE_DIM + 1u] = 0.48f;
     reference[NMPC_STATE_DIM + 2u] = 0.48f;
 }
@@ -529,7 +529,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     waypoint->lat = state_estimate->lat;
     waypoint->lon = state_estimate->lon;
     waypoint->alt = alt;
-    waypoint->airspeed = airspeed > FCS_CONTROL_DEFAULT_AIRSPEED ?
+    waypoint->airspeed = airspeed < FCS_CONTROL_DEFAULT_AIRSPEED ?
         FCS_CONTROL_DEFAULT_AIRSPEED : airspeed;
     waypoint->yaw = (float)atan2(-airflow[1], -airflow[0]);
     waypoint->pitch = 4.0f * ((float)M_PI / 180.0f);
@@ -548,7 +548,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
     out_waypoint->alt = alt;
-    out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+    out_waypoint->airspeed = waypoint->airspeed;
     out_waypoint->yaw = stabilise_heading;
     out_waypoint->pitch = 4.0f * ((float)M_PI / 180.0f);
     out_waypoint->roll = 0.0f;

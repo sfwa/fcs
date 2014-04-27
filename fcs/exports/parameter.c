@@ -28,7 +28,6 @@ SOFTWARE.
 #include <math.h>
 
 #include "parameter.h"
-#include "../util/3dmath.h"
 
 
 /* Internal API for making and reading fields of various types */
