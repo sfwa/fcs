@@ -24,6 +24,7 @@
 
 import sys
 import math
+import json
 import struct
 import binascii
 from enum import Enum
@@ -47,6 +48,7 @@ class ParameterType(Enum):
     FCS_PARAMETER_GPS_INFO,
     FCS_PARAMETER_CONTROL_POS,
     FCS_PARAMETER_CONTROL_MODE,
+    FCS_PARAMETER_GP_IN,
     FCS_PARAMETER_RADIO,
     FCS_PARAMETER_HAL_ACCELEROMETER_XYZ,
     FCS_PARAMETER_HAL_ACCELEROMETER_VARIANCE,
@@ -88,7 +90,7 @@ class ParameterType(Enum):
     FCS_PARAMETER_NAV_PATH,
     FCS_PARAMETER_AHRS_STATUS,
     FCS_PARAMETER_CONTROL_STATUS,
-    FCS_PARAMETER_KEY_VALUE) = range(1, 54)
+    FCS_PARAMETER_KEY_VALUE) = range(1, 55)
 
 
 class ValueType(Enum):
@@ -145,6 +147,16 @@ class DataParameter(Parameter):
         self.value_type = value_type
         self.value_precision = value_precision
         self.values = values or []
+
+    def __repr__(self):
+        return json.dumps({
+            "class": "DataParameter",
+            "deviceId": self.device_id,
+            "parameterType": self.parameter_type.name,
+            "valueType": self.value_type.name,
+            "valuePrecision": self.value_precision,
+            "values": list(self.values)
+        })
 
     def serialize(self):
         # Convert bits to log(bytes).
@@ -245,6 +257,13 @@ class ParameterLog(list):
 
         self.log_type = log_type or LogType.FCS_LOG_TYPE_COMBINED
         self.tick = tick
+
+    def __repr__(self):
+        return json.dumps({
+            "logType": self.log_type.name,
+            "tick": self.tick,
+            "parameters": [json.loads(repr(p)) for p in self]
+        })
 
     @classmethod
     def deserialize(cls, data):

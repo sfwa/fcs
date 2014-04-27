@@ -39,6 +39,7 @@ enum fcs_parameter_type_t {
     FCS_PARAMETER_GPS_INFO,
     FCS_PARAMETER_CONTROL_POS,
     FCS_PARAMETER_CONTROL_MODE,
+    FCS_PARAMETER_GP_IN,
     FCS_PARAMETER_RADIO,
     /* Calibration/sensor merge output */
     FCS_PARAMETER_HAL_ACCELEROMETER_XYZ,
