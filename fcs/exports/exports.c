@@ -49,7 +49,7 @@ SOFTWARE.
 #define L1DWWC (*((volatile uint32_t*)0x01844044))
 #endif
 
-#pragma DATA_SECTION(fcs_export_logs, ".shared")
+#pragma DATA_SECTION(exports_shared_logs, ".shared")
 volatile static struct fcs_log_t exports_shared_logs[FCS_LOG_TYPE_LAST - 1u];
 
 static struct fcs_log_t exports_local_logs[FCS_LOG_TYPE_LAST - 1u];

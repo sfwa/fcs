@@ -313,7 +313,7 @@ void fcs_board_tick(void) {
     Read attitude, WMM field, static pressure, static temp and AHRS mode from
     old estimate log
     */
-    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, 'r');
+    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, FCS_MODE_READ);
     assert(estimate_log);
 
     got_result = fcs_parameter_find_by_type_and_device(
@@ -365,7 +365,8 @@ void fcs_board_tick(void) {
     }
 
     /* Read the latest measurements from the I/O boards */
-    measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT, 'w');
+    measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT,
+    		                               FCS_MODE_WRITE);
     assert(measurement_log);
 
     for (i = 0; i < FCS_IOBOARD_COUNT; i++){
@@ -442,7 +443,7 @@ void fcs_board_tick(void) {
         }
     }
 
-    hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, 'w');
+    hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, FCS_MODE_WRITE);
     assert(hal_log);
 
     /* Add calibrated virtual sensor values to the HAL log */
@@ -467,7 +468,7 @@ void fcs_board_tick(void) {
     Merge the AHRS estimate log and the NMPC control log and send them to the
     I/O boards.
     */
-    control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, 'r');
+    control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_READ);
     assert(control_log);
 
     /*
@@ -1058,7 +1059,8 @@ const double *restrict variance, size_t n) {
 
     if (variance) {
         fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, n);
-        fcs_parameter_set_type(&param, param_type + 1u);
+        fcs_parameter_set_type(
+            &param, (enum fcs_parameter_type_t)(param_type + 1u));
         fcs_parameter_set_device_id(&param, 0);
 
         for (i = 0; i < n; i++) {

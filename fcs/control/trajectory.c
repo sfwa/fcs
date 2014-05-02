@@ -257,7 +257,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 }
 
 void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
-const struct fcs_state_estimate_t *state_estimate) {
+const struct fcs_state_estimate_t *restrict state_estimate) {
     assert(nav);
     assert(state_estimate);
 
@@ -529,9 +529,8 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     waypoint->lat = state_estimate->lat;
     waypoint->lon = state_estimate->lon;
     waypoint->alt = alt;
-    waypoint->airspeed = airspeed < FCS_CONTROL_DEFAULT_AIRSPEED ?
-        FCS_CONTROL_DEFAULT_AIRSPEED : airspeed;
-    waypoint->yaw = (float)atan2(-airflow[1], -airflow[0]);
+    waypoint->airspeed = nav->reference_trajectory[0].airspeed;
+    waypoint->yaw = nav->reference_trajectory[0].yaw;
     waypoint->pitch = 4.0f * ((float)M_PI / 180.0f);
     waypoint->roll = 0.0f;
 

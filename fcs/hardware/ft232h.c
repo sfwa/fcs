@@ -173,13 +173,9 @@ void fcs_ft232h_reset(void) {
 
     /* EDMA3 reset */
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-    edma3->TPCC_EECR = 1u << rx_edma_event;
     edma3->TPCC_EECR = 1u << tx_edma_event;
-    edma3->TPCC_SECR = 1u << rx_edma_event;
     edma3->TPCC_SECR = 1u << tx_edma_event;
-    edma3->TPCC_ECR = 1u << rx_edma_event;
     edma3->TPCC_ECR = 1u << tx_edma_event;
-    edma3->TPCC_EMCR = 1u << rx_edma_event;
     edma3->TPCC_EMCR = 1u << tx_edma_event;
 
     /*
@@ -314,6 +310,7 @@ void fcs_ft232h_reset(void) {
     Set the desired period. The timer peripheral runs at 1/6th CPU frequency,
     or 166.67MHz; the period is (input freq / max transfer rate) * 2
     */
+    float divisor;
     divisor = (166666666.67f / 1000000.0f) * 2.0;
 
     timer->PRDHI = 0;
@@ -352,7 +349,7 @@ void fcs_ft232h_start_tx_edma(uint8_t *restrict buf, uint16_t buf_size) {
               dma_register_bit, 1);
 
     /* Map PaRAM set to channel */
-    edma3->TPCC_DCHMAP[tx_edma_event = tx_edma_event << 5u;
+    edma3->TPCC_DCHMAP[tx_edma_event] = tx_edma_event << 5u;
 
     #define primary (edma3->PARAMSET[tx_edma_event])
     primary.OPT = 0;

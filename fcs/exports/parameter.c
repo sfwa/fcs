@@ -26,8 +26,17 @@ SOFTWARE.
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <float.h>
 
 #include "parameter.h"
+
+#ifndef M_PI
+#define M_PI (3.14159265358979323846)
+#endif
+
+#ifndef _nassert
+#define _nassert assert
+#endif
 
 
 /* Internal API for making and reading fields of various types */

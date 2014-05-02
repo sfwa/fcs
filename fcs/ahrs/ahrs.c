@@ -120,7 +120,7 @@ void fcs_ahrs_tick(void) {
     ahrs_solution_time++;
 
     /* Read virtual sensor values from the HAL log and pass them to the UKF */
-    hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, 'r');
+    hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, FCS_MODE_READ);
     assert(hal_log);
 
     memset(&params, 0, sizeof(params));
@@ -198,7 +198,8 @@ void fcs_ahrs_tick(void) {
 
     /* Don't update the filter during initialization */
     if (ahrs_mode != FCS_MODE_INITIALIZING) {
-        control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, 'r');
+        control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL,
+        		                           FCS_MODE_READ);
         assert(control_log);
 
         got_result = fcs_parameter_find_by_type_and_device(
@@ -340,7 +341,8 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     struct fcs_log_t *estimate_log;
     int32_t tmp[4];
 
-    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, 'w');
+    estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE,
+    		                            FCS_MODE_WRITE);
     assert(estimate_log);
 
     /* Lat/lon in (INT32_MAX/PI); alt in cm */
@@ -456,9 +458,8 @@ double *restrict variance, size_t n) {
     if (fcs_parameter_find_by_type_and_device(plog, param_type, 0, &param)) {
         fcs_parameter_get_values_d(&param, value, n);
 
-        got_variance = fcs_parameter_find_by_type_and_device(plog,
-                                                             param_type + 1u,
-                                                             0, &param);
+        got_variance = fcs_parameter_find_by_type_and_device(
+            plog, (enum fcs_parameter_type_t)(param_type + 1u), 0, &param);
         assert(got_variance);
 
         fcs_parameter_get_values_d(&param, variance, n);

@@ -63,7 +63,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "TRICAL/TRICAL.h"
 #include "ukf/cukf.h"
 #include "nmpc/cnmpc.h"
-#include "ahrs/measurement.h"
 #include "ahrs/ahrs.h"
 #include "control/control.h"
 #include "util/util.h"
