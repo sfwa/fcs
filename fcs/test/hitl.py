@@ -23,11 +23,13 @@ import sys
 import copy
 import math
 import time
+import plog
 import crcmod
 import socket
 import serial
 import struct
 import vectors
+import collections
 import datetime
 import binascii
 import traceback
@@ -83,6 +85,8 @@ sim_state = {
     "angular_velocity": [0.0, 0.0, 0.0],
     "wind_velocity": [0.0, 0.0, 0.0]
 }
+sim_state_delay = collections.deque()
+
 
 sim_ref = {
     "wind_n": None,
@@ -93,40 +97,6 @@ sim_ref = {
     "attitude_roll": 0.0,
     "airspeed": 0.0
 }
-
-
-CRC8_FUNC = crcmod.mkCrcFun(0x12F, 0, False, 0)
-
-def crc8(data):
-    return chr(CRC8_FUNC(data, crc=0))
-
-
-def serialize_state(lat=None, lon=None, alt=None, velocity=None,
-                    attitude=None, angular_velocity=None, wind_velocity=None):
-    tick = 0
-    result = struct.pack("<H3d3d4d3d3d", tick, lat, lon, alt, velocity[0],
-                         velocity[1], velocity[2], attitude[0], attitude[1],
-                         attitude[2], attitude[3], angular_velocity[0],
-                         angular_velocity[1], angular_velocity[2],
-                         0.0, 0.0, 0.0)
-                         #wind_velocity[0], wind_velocity[1], wind_velocity[2])
-    return "\x00" + cobsr.encode(crc8(result) + result) + "\x00"
-
-
-def deserialize_control(s):
-    s = cobsr.decode(s.strip("\x00"))
-    s_crc = crc8(s[1:])
-    if s[0] != s_crc:
-        print "CRC8 failure (%x, expected %x): %s" % (
-            s[0], s_crc, binascii.b2a_hex(s))
-        return None
-    else:
-        ctl = struct.unpack("<H4HfL2dff3f", s[1:])
-        return dict(zip(["tick", "pwm0", "pwm1", "pwm2", "pwm3",
-                         "objective_val", "cycles", "reference_lat",
-                         "reference_lon", "reference_alt",
-                         "reference_airspeed", "reference_yaw",
-                         "reference_pitch", "reference_roll"], ctl))
 
 
 def socket_readlines(socket):
@@ -146,22 +116,97 @@ def euler_to_q(yaw, pitch, roll):
             vectors.Q.rotate("Z", -yaw))
 
 
-def send_state_to_dsp(conn, **kwargs):
+def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
+         angular_velocity=None, wind_velocity=None):
     """
     Runs the FCS control and comms tasks with the state data provided as
     though it came from the AHRS, and returns the control output.
     """
     # Write the state out to the DSP and wait for the result
-    out_packet = serialize_state(**kwargs)
-    conn.write(out_packet)
+    estimate_log = plog.ParameterLog(
+        log_type=plog.LogType.FCS_LOG_TYPE_ESTIMATE)
 
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_POSITION_LLA,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=32,
+            values=[
+                int(lat * (2**31 - 1) / math.pi),
+                int(lon * (2**31 - 1) / math.pi),
+                int(alt * 1e2)
+            ]
+        )
+    )
 
-def recv_control_from_dsp(conn):
-    in_packet = ""
-    while not in_packet:
-        in_packet = conn.read(60)
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_VELOCITY_NED,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * 1e2), velocity)
+        )
+    )
 
-    return deserialize_control(in_packet)
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_ATTITUDE_Q,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * (2**15 - 1)), attitude)
+        )
+    )
+
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * (2**15 - 1) / math.pi * 0.25), angular_velocity)
+        )
+    )
+
+    estimate_log.append(
+        plog.DataParameter(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED,
+            value_type=plog.ValueType.FCS_VALUE_SIGNED,
+            value_precision=16,
+            values=map(lambda x: int(x * 1e2), wind_velocity)
+        )
+    )
+
+    state_out = estimate_log.serialize()
+    conn.write(state_out)
+    print binascii.b2a_hex(state_out)
+
+    packet = ""
+    data = conn.read(1)
+    while True:
+        if data:
+            if packet:
+                packet += data
+                if data == "\x00":
+                    break
+            else:
+                if data == "\x00":
+                    packet += data
+        data = conn.read(1)
+
+    try:
+        control_log = plog.ParameterLog.deserialize(packet)
+
+        print control_log
+
+        control_param = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
+        refp = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_KEY_VALUE)
+        return map(lambda x: float(x) / float(2**16), control_param.values), plog.extract_waypoint(refp.value)
+    except Exception:
+        return [0.0, 0.5, 0.5], {}
 
 
 def connect_to_xplane():
@@ -377,61 +422,69 @@ if __name__ == "__main__":
 
     print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,target_pitch,target_roll,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,actual_pitch,actual_roll,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
 
+    controls = [0.0, 0.5, 0.5]
     t = 0
     try:
         while True:
             iter_start = time.time()
 
-            if t > 0:
-                result = recv_control_from_dsp(conn)
-                thr = result["pwm0"] / 65535.0
-                le = result["pwm1"] / 65535.0
-                re = result["pwm2"] / 65535.0
-                send_control_to_xplane(
-                    sock, [thr, le, re])
-
-                print "Objective %.6f, cycles %d" % (result["objective_val"], result["cycles"])
-
-                print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
-                    t * 0.02,
-                    math.degrees(result["reference_lat"]),
-                    math.degrees(result["reference_lon"]),
-                    result["reference_alt"],
-                    result["reference_airspeed"],
-                    math.degrees(result["reference_yaw"]),
-                    math.degrees(result["reference_pitch"]),
-                    math.degrees(result["reference_roll"]),
-                    math.degrees(sim_state["lat"]),
-                    math.degrees(sim_state["lon"]),
-                    sim_state["alt"],
-                    #sim_ref["airspeed"],
-                    sim_state["velocity"][0],
-                    sim_state["velocity"][1],
-                    sim_state["velocity"][2],
-                    math.degrees(sim_ref["attitude_yaw"]),
-                    math.degrees(sim_ref["attitude_pitch"]),
-                    math.degrees(sim_ref["attitude_roll"]),
-                    sim_ref["wind_n"],
-                    sim_ref["wind_e"],
-                    sim_ref["wind_d"],
-                    result["pwm0"],
-                    result["pwm1"],
-                    result["pwm2"]
-                )
-
             recv_state_from_xplane(sock)
 
+            sim_state_delay.append(sim_state)
+
             # Skip the rest until we have a full set of data
-            if sim_state["lat"] is None or sim_state["lon"] is None or \
-                    sim_ref["wind_n"] is None:
+            if len(sim_state_delay) < 10:
                 time.sleep(0.02)
                 continue
 
-            send_state_to_dsp(conn, **sim_state)
+            sim_state_delay.popleft()
+
+            controls, ref_point = tick(
+            #    lat=sim_state_delay[0]["lat"], lon=sim_state_delay[0]["lon"],
+            #    alt=sim_state_delay[-1]["alt"], velocity=sim_state_delay[0]["velocity"],
+            #    attitude=sim_state_delay[-2]["attitude"],
+            #    angular_velocity=sim_state_delay[-1]["angular_velocity"],
+            #    wind_velocity=sim_state_delay[0]["wind_velocity"])
+                lat=sim_state_delay[-1]["lat"], lon=sim_state_delay[-1]["lon"],
+                alt=sim_state_delay[-1]["alt"], velocity=sim_state_delay[-1]["velocity"],
+                attitude=sim_state_delay[-1]["attitude"],
+                angular_velocity=sim_state_delay[-1]["angular_velocity"],
+                wind_velocity=sim_state_delay[-1]["wind_velocity"])
+
+            #print "Objective %.6f, cycles %d" % (result["objective_val"], result["cycles"])
+
+            print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
+                t * 0.02,
+                math.degrees(ref_point.get("lat", 0)),
+                math.degrees(ref_point.get("lon", 0)),
+                ref_point.get("alt", 0),
+                ref_point.get("airspeed", 0),
+                math.degrees(ref_point.get("yaw", 0)),
+                math.degrees(ref_point.get("pitch", 0)),
+                math.degrees(ref_point.get("roll", 0)),
+                math.degrees(sim_state["lat"]),
+                math.degrees(sim_state["lon"]),
+                sim_state["alt"],
+                sim_ref["airspeed"],
+                #sim_state["velocity"][0],
+                #sim_state["velocity"][1],
+                #sim_state["velocity"][2],
+                math.degrees(sim_ref["attitude_yaw"]),
+                math.degrees(sim_ref["attitude_pitch"]),
+                math.degrees(sim_ref["attitude_roll"]),
+                sim_ref["wind_n"],
+                sim_ref["wind_e"],
+                sim_ref["wind_d"],
+                controls[0],
+                controls[1],
+                controls[2]
+            )
+
+            send_control_to_xplane(sock, controls)
 
             t += 1
 
-            if abs(sim_state["alt"]) < 50.0:
+            if sim_state["alt"] < 50.0:
                 print "LOST CONTROL"
                 raise StopIteration()
 

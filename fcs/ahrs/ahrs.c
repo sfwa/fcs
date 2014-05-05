@@ -25,7 +25,6 @@ SOFTWARE.
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
-#include <assert.h>
 
 #include "../util/util.h"
 #include "../util/3dmath.h"
@@ -85,10 +84,10 @@ enum fcs_mode_t mode, double static_pressure, double static_temp);
 
 void fcs_ahrs_init(void) {
     /* Ensure UKF library is configured correctly */
-    assert(ukf_config_get_state_dim() == 24u);
-    assert(ukf_config_get_control_dim() == 4u);
-    assert(ukf_config_get_measurement_dim() == 20u);
-    assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
+    fcs_assert(ukf_config_get_state_dim() == 24u);
+    fcs_assert(ukf_config_get_control_dim() == 4u);
+    fcs_assert(ukf_config_get_measurement_dim() == 20u);
+    fcs_assert(ukf_config_get_precision() == UKF_PRECISION_DOUBLE);
 
     ahrs_solution_time = 0;
     ahrs_mode_start_time = 0;
@@ -111,17 +110,17 @@ void fcs_ahrs_tick(void) {
     information so the sensor model parameters can be updated.
     */
     double v[3], speed;
-    bool got_result, got_gps = false, got_reference_alt = false;
+    bool got_result, got_gps = false, got_reference_alt = true; /* FIXME */
     struct ukf_ioboard_params_t params;
     struct fcs_parameter_t parameter;
-    struct fcs_log_t *hal_log, *control_log;
+    struct fcs_log_t *hal_log, *measurement_log;
 
     /* Increment solution time */
     ahrs_solution_time++;
 
     /* Read virtual sensor values from the HAL log and pass them to the UKF */
     hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, FCS_MODE_READ);
-    assert(hal_log);
+    fcs_assert(hal_log);
 
     memset(&params, 0, sizeof(params));
     params.accel_orientation[W] = 1.0;
@@ -139,7 +138,7 @@ void fcs_ahrs_tick(void) {
         got_result = fcs_parameter_find_by_type_and_device(
             hal_log, FCS_PARAMETER_HAL_ACCELEROMETER_OFFSET_XYZ, 0,
             &parameter);
-        assert(got_result);
+        fcs_assert(got_result);
 
         fcs_parameter_get_values_d(&parameter, params.accel_offset, 3u);
     }
@@ -183,7 +182,7 @@ void fcs_ahrs_tick(void) {
     }
 
     hal_log = fcs_exports_log_close(hal_log);
-    assert(!hal_log);
+    fcs_assert(!hal_log);
 
     /* Use the latest WMM field vector (unit length) */
     vector_copy_d(params.mag_field, ahrs_wmm_field, 3u);
@@ -198,19 +197,19 @@ void fcs_ahrs_tick(void) {
 
     /* Don't update the filter during initialization */
     if (ahrs_mode != FCS_MODE_INITIALIZING) {
-        control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL,
-        		                           FCS_MODE_READ);
-        assert(control_log);
+        measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT,
+        		                               FCS_MODE_READ);
+        fcs_assert(measurement_log);
 
         got_result = fcs_parameter_find_by_type_and_device(
-            control_log, FCS_PARAMETER_CONTROL_POS, 0, &parameter);
+        	measurement_log, FCS_PARAMETER_CONTROL_POS, 0, &parameter);
         if (got_result) {
             fcs_parameter_get_values_d(&parameter, v, 4u);
             ukf_iterate((float)AHRS_DELTA, v);
         }
 
-        control_log = fcs_exports_log_close(control_log);
-        assert(!control_log);
+        measurement_log = fcs_exports_log_close(measurement_log);
+        fcs_assert(!measurement_log);
     }
 
     /* Copy the state out of the UKF */
@@ -261,9 +260,9 @@ void fcs_ahrs_tick(void) {
     } else if (ahrs_mode == FCS_MODE_SIMULATING) {
         /*
         Transition out of simulation mode if no packet has been received for
-        more than 5s.
+        more than 30s.
         */
-        if (ahrs_solution_time - ahrs_mode_start_time > 5000) {
+        if (ahrs_solution_time - ahrs_mode_start_time > 30000) {
             fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
         }
     } else if (ahrs_mode == FCS_MODE_CALIBRATING) {
@@ -343,7 +342,7 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
 
     estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE,
     		                            FCS_MODE_WRITE);
-    assert(estimate_log);
+    fcs_assert(estimate_log);
 
     /* Lat/lon in (INT32_MAX/PI); alt in cm */
     tmp[0] = (int32_t)(state_values[0] * ((double)INT32_MAX / M_PI));
@@ -446,7 +445,7 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
         estimate_log, FCS_PARAMETER_AHRS_STATUS, 2u, tmp, 2u);
 
     estimate_log = fcs_exports_log_close(estimate_log);
-    assert(!estimate_log);
+    fcs_assert(!estimate_log);
 }
 
 static bool _get_hal_sensor_value(const struct fcs_log_t *plog,
@@ -460,7 +459,7 @@ double *restrict variance, size_t n) {
 
         got_variance = fcs_parameter_find_by_type_and_device(
             plog, (enum fcs_parameter_type_t)(param_type + 1u), 0, &param);
-        assert(got_variance);
+        fcs_assert(got_variance);
 
         fcs_parameter_get_values_d(&param, variance, n);
 
@@ -473,9 +472,9 @@ double *restrict variance, size_t n) {
 static void _set_estimate_value_i32(struct fcs_log_t *elog,
 enum fcs_parameter_type_t param_type, uint8_t value_size,
 const int32_t *restrict v, size_t n) {
-    assert(elog);
-    assert(v);
-    assert(value_size == 1u || value_size == 2u || value_size == 4u);
+    fcs_assert(elog);
+    fcs_assert(v);
+    fcs_assert(value_size == 1u || value_size == 2u || value_size == 4u);
 
     size_t i;
     struct fcs_parameter_t param;
@@ -589,7 +588,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
         case FCS_MODE_ABORT:
             break;
         case FCS_MODE_STARTUP_VALUE:
-            assert(false);
+            fcs_assert(false);
     }
 
     return true;

@@ -30,7 +30,6 @@ SOFTWARE.
 
 #include <stdint.h>
 #include <stddef.h>
-#include <assert.h>
 
 #include "util.h"
 
@@ -38,12 +37,12 @@ struct fcs_cobsr_encode_result fcs_cobsr_encode(uint8_t *dst_buf_ptr,
 size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     /* Asserts ensure that the main loop terminates, and that buffers do not
     overlap */
-    assert(dst_buf_ptr);
-    assert(src_ptr);
-    assert(dst_buf_len <= FCS_COBSR_SIZE_LIMIT);
-    assert(src_len <= FCS_COBSR_SIZE_LIMIT);
-    assert(dst_buf_ptr + dst_buf_len < src_ptr ||
-           dst_buf_ptr > src_ptr + src_len);
+    fcs_assert(dst_buf_ptr);
+    fcs_assert(src_ptr);
+    fcs_assert(dst_buf_len <= FCS_COBSR_SIZE_LIMIT);
+    fcs_assert(src_len <= FCS_COBSR_SIZE_LIMIT);
+    fcs_assert(dst_buf_ptr + dst_buf_len < src_ptr ||
+               dst_buf_ptr > src_ptr + src_len);
 
 
     struct fcs_cobsr_encode_result result = { 0, FCS_COBSR_ENCODE_OK };
@@ -105,7 +104,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     } else {
         if (src_byte < search_len) {
             /* Encoding same as plain COBS */
-            assert(search_len <= 0xFFu);
+            fcs_assert(search_len <= 0xFFu);
             *dst_code_write_ptr = search_len;
         } else {
             /* Special COBS/R encoding: length code is final byte,
@@ -126,12 +125,12 @@ struct fcs_cobsr_decode_result fcs_cobsr_decode(uint8_t *dst_buf_ptr,
 size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
     /* Asserts ensure that the main loop terminates, and that buffers do not
     overlap */
-    assert(dst_buf_ptr);
-    assert(src_ptr);
-    assert(dst_buf_len <= FCS_COBSR_SIZE_LIMIT);
-    assert(src_len <= FCS_COBSR_SIZE_LIMIT);
-    assert(dst_buf_ptr + dst_buf_len < src_ptr ||
-           dst_buf_ptr > src_ptr + src_len);
+    fcs_assert(dst_buf_ptr);
+    fcs_assert(src_ptr);
+    fcs_assert(dst_buf_len <= FCS_COBSR_SIZE_LIMIT);
+    fcs_assert(src_len <= FCS_COBSR_SIZE_LIMIT);
+    fcs_assert(dst_buf_ptr + dst_buf_len < src_ptr ||
+               dst_buf_ptr > src_ptr + src_len);
 
     struct fcs_cobsr_decode_result result = { 0, FCS_COBSR_DECODE_OK };
     const uint8_t *     src_end_ptr         = src_ptr + src_len;
@@ -152,14 +151,14 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
         }
 
         /* Calculate remaining input bytes */
-        assert(src_end_ptr - src_ptr >= 0);
+        fcs_assert(src_end_ptr - src_ptr >= 0);
         remaining_input_bytes = (size_t)(src_end_ptr - src_ptr);
 
         if ((len_code - 1u) < remaining_input_bytes) {
             num_output_bytes = len_code - 1u;
 
             /* Check length code against remaining output buffer space */
-            assert(dst_buf_end_ptr - dst_write_ptr >= 0);
+            fcs_assert(dst_buf_end_ptr - dst_write_ptr >= 0);
             remaining_output_bytes =
                 (size_t)(dst_buf_end_ptr - dst_write_ptr);
             if (num_output_bytes > remaining_output_bytes) {
@@ -167,7 +166,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
                 num_output_bytes = remaining_output_bytes;
             }
 
-            assert(num_output_bytes <= FCS_COBSR_SIZE_LIMIT);
+            fcs_assert(num_output_bytes <= FCS_COBSR_SIZE_LIMIT);
             for (i = num_output_bytes; i != 0; i--) {
                 src_byte = *src_ptr++;
                 if (src_byte == 0) {
@@ -191,7 +190,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
             num_output_bytes = remaining_input_bytes;
 
             /* Check length code against remaining output buffer space */
-            assert(dst_buf_end_ptr - dst_write_ptr >= 0);
+            fcs_assert(dst_buf_end_ptr - dst_write_ptr >= 0);
             remaining_output_bytes =
                 (size_t)(dst_buf_end_ptr - dst_write_ptr);
             if (num_output_bytes > remaining_output_bytes) {
@@ -199,7 +198,7 @@ size_t dst_buf_len, const uint8_t * src_ptr, size_t src_len) {
                 num_output_bytes = remaining_output_bytes;
             }
 
-            assert(num_output_bytes <= FCS_COBSR_SIZE_LIMIT);
+            fcs_assert(num_output_bytes <= FCS_COBSR_SIZE_LIMIT);
             for (i = num_output_bytes; i != 0; i--) {
                 src_byte = *src_ptr++;
                 if (src_byte == 0) {

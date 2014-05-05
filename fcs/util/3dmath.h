@@ -113,7 +113,7 @@ static inline float mod_2pi_f(float x) {
 
 static inline void vector_f_from_d(float *restrict result,
 const double *restrict v, size_t n) {
-    assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
+    fcs_assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)v % 8 == 0);
 
@@ -125,7 +125,7 @@ const double *restrict v, size_t n) {
 
 static inline void vector_d_from_f(double *restrict result,
 const float *restrict v, size_t n) {
-    assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
+    fcs_assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
     _nassert((size_t)result % 8 == 0);
     _nassert((size_t)v % 4 == 0);
 
@@ -137,7 +137,7 @@ const float *restrict v, size_t n) {
 
 static inline void vector_copy_d(double *restrict result,
 const double *restrict v, size_t n) {
-    assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
+    fcs_assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
     _nassert((size_t)result % 8 == 0);
     _nassert((size_t)v % 8 == 0);
 
@@ -149,7 +149,7 @@ const double *restrict v, size_t n) {
 
 static inline void vector_copy_f(float *restrict result,
 const float *restrict v, size_t n) {
-    assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
+    fcs_assert(result && v && (ptrdiff_t)result != (ptrdiff_t)v);
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)v % 4 == 0);
 
@@ -160,7 +160,7 @@ const float *restrict v, size_t n) {
 }
 
 static inline void vector_set_d(double *restrict v1, double value, size_t n) {
-    assert(v1);
+    fcs_assert(v1);
     _nassert((size_t)v1 % 8 == 0);
 
     size_t i;
@@ -170,7 +170,7 @@ static inline void vector_set_d(double *restrict v1, double value, size_t n) {
 }
 
 static inline void vector_set_f(float *restrict v1, float value, size_t n) {
-    assert(v1);
+    fcs_assert(v1);
     _nassert((size_t)v1 % 4 == 0);
 
     size_t i;
@@ -180,7 +180,7 @@ static inline void vector_set_f(float *restrict v1, float value, size_t n) {
 }
 
 static inline void vector3_scale_d(double *restrict v, double scale) {
-    assert(v);
+    fcs_assert(v);
     _nassert((size_t)v % 8 == 0);
 
     v[0] *= scale;
@@ -189,7 +189,7 @@ static inline void vector3_scale_d(double *restrict v, double scale) {
 }
 
 static inline void vector3_scale_f(float *restrict v, float scale) {
-    assert(v);
+    fcs_assert(v);
     _nassert((size_t)v % 4 == 0);
 
     v[0] *= scale;
@@ -198,14 +198,14 @@ static inline void vector3_scale_f(float *restrict v, float scale) {
 }
 
 static inline double vector3_norm_d(const double *restrict v1) {
-    assert(v1);
+    fcs_assert(v1);
     _nassert((size_t)v1 % 8 == 0);
 
     return sqrt(v1[X]*v1[X] + v1[Y]*v1[Y] + v1[Z]*v1[Z]);
 }
 
 static inline float vector3_norm_f(const float *restrict v1) {
-    assert(v1);
+    fcs_assert(v1);
     _nassert((size_t)v1 % 8 == 0);
 
     return (float)sqrt(v1[X]*v1[X] + v1[Y]*v1[Y] + v1[Z]*v1[Z]);
@@ -214,7 +214,7 @@ static inline float vector3_norm_f(const float *restrict v1) {
 static inline void vector3_cross_d(double *restrict result,
 const double *v1,
 const double *v2) {
-    assert(result && v1 && v2 && result != v1 && result != v2);
+    fcs_assert(result && v1 && v2 && result != v1 && result != v2);
     _nassert((size_t)result % 8 == 0);
     _nassert((size_t)v1 % 8 == 0);
     _nassert((size_t)v2 % 8 == 0);
@@ -236,7 +236,7 @@ const double *v2) {
 static inline void vector3_cross_f(float *restrict result,
 const float *v1,
 const float *v2) {
-    assert(result && v1 && v2 && result != v1 && result != v2);
+    fcs_assert(result && v1 && v2 && result != v1 && result != v2);
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)v1 % 4 == 0);
     _nassert((size_t)v2 % 4 == 0);
@@ -269,7 +269,7 @@ const double *restrict v) {
     http://molecularmusings.wordpress.com/2013/05/24/a-faster-quaternion-vector-multiplication/
     */
 
-    assert(result && q && v && result != v && result != q);
+    fcs_assert(result && q && v && result != v && result != q);
     _nassert((size_t)result % 8 == 0);
     _nassert((size_t)q % 8 == 0);
     _nassert((size_t)v % 8 == 0);
@@ -319,7 +319,7 @@ const float *restrict v) {
     http://molecularmusings.wordpress.com/2013/05/24/a-faster-quaternion-vector-multiplication/
     */
 
-    assert(result && q && v && result != v && result != q);
+    fcs_assert(result && q && v && result != v && result != q);
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)q % 4 == 0);
     _nassert((size_t)v % 4 == 0);
@@ -357,7 +357,7 @@ const float *restrict v) {
 
 static inline void quaternion_normalize_d(double result[4], const double q[4],
 bool force_positive) {
-    assert(result && q);
+    fcs_assert(result && q);
     _nassert((size_t)result % 8 == 0);
     _nassert((size_t)q % 8 == 0);
 
@@ -374,7 +374,7 @@ bool force_positive) {
 
 static inline void quaternion_normalize_f(float result[4], const float q[4],
 bool force_positive) {
-    assert(result && q);
+    fcs_assert(result && q);
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)q % 4 == 0);
 
@@ -392,7 +392,7 @@ bool force_positive) {
 
 static inline void quaternion_multiply_d(double *restrict result,
 const double q1[4], const double q2[4]) {
-    assert(result && q1 && q2 && result != q1 && result != q2);
+    fcs_assert(result && q1 && q2 && result != q1 && result != q2);
     _nassert((size_t)result % 8 == 0);
     _nassert((size_t)q1 % 8 == 0);
     _nassert((size_t)q2 % 8 == 0);
@@ -405,7 +405,7 @@ const double q1[4], const double q2[4]) {
 
 static inline void quaternion_multiply_f(float *restrict result,
 const float q1[4], const float q2[4]) {
-    assert(result && q1 && q2 && result != q1 && result != q2);
+    fcs_assert(result && q1 && q2 && result != q1 && result != q2);
     _nassert((size_t)result % 4 == 0);
     _nassert((size_t)q1 % 4 == 0);
     _nassert((size_t)q2 % 4 == 0);
@@ -418,7 +418,7 @@ const float q1[4], const float q2[4]) {
 
 static inline double quaternion_quaternion_angle_d(const double q1[4],
 const double q2[4]) {
-    assert(q1 && q2);
+    fcs_assert(q1 && q2);
     _nassert((size_t)q1 % 8 == 0);
     _nassert((size_t)q2 % 8 == 0);
 
@@ -428,7 +428,7 @@ const double q2[4]) {
 
 static inline float quaternion_quaternion_angle_f(const float q1[4],
 const float q2[4]) {
-    assert(q1 && q2);
+    fcs_assert(q1 && q2);
     _nassert((size_t)q1 % 4 == 0);
     _nassert((size_t)q2 % 4 == 0);
 
@@ -445,7 +445,7 @@ http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
 */
 static inline void quaternion_f_from_yaw_pitch_roll(float *restrict result,
 float yaw, float pitch, float roll) {
-    assert(result);
+    fcs_assert(result);
     _nassert((size_t)result % 4 == 0);
 
     float qx[4] = {0.0, 0.0, 0.0, 0.0}, qy[4] = {0.0, 0.0, 0.0, 0.0},
@@ -483,7 +483,7 @@ See http://www.vectornav.com/Downloads/Support/AN002.pdf for more details.
 */
 static inline void yaw_pitch_roll_from_quaternion_f(float *yaw, float *pitch,
 float *roll, const float *restrict quaternion) {
-    assert(quaternion && yaw && pitch && roll);
+    fcs_assert(quaternion && yaw && pitch && roll);
     _nassert((size_t)quaternion % 4 == 0);
 
     float qx, qy, qz, qw;

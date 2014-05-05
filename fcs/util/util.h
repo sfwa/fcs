@@ -23,6 +23,8 @@ SOFTWARE.
 #ifndef _FCS_UTIL_H
 #define _FCS_UTIL_H
 
+#define fcs_assert(x) if (!(x)) { while (1); }
+
 /*
 fcs_crc32 - calculate a CRC32(B) over the given input data using the EDB88320
 polynomial (ANSI X3.66, ITU-T V.42, Ethernet, Gzip, PNG etc).

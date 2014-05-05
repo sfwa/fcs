@@ -60,7 +60,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <assert.h>
 
 #include "util.h"
 
@@ -113,8 +112,8 @@ static const uint32_t crc_lookup[] = { /* CRC polynomial 0xedb88320 */
 uint32_t fcs_crc32(const uint8_t *restrict pdata, size_t nbytes,
 uint32_t crc) {
     /* For standard CRC32B results, set crc = 0xffffffffu */
-    assert(pdata);
-    assert(nbytes);
+    fcs_assert(pdata);
+    fcs_assert(nbytes);
 
     size_t i;
     /* loop over the buffer data */

@@ -1003,10 +1003,6 @@ if __name__ == "__main__":
 
     time.sleep(0.1)
 
-    #recv_state_from_xplane(sock)
-
-    #disable_xplane_sim(sock)
-
     print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
 
     controls = [0.0, 0.5, 0.5]
@@ -1017,8 +1013,6 @@ if __name__ == "__main__":
             iter_start = time.time()
 
             recv_state_from_xplane(sock)
-
-            #send_state_to_xplane(sock)
 
             sim_state_delay.append(sim_state)
 

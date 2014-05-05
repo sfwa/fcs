@@ -24,7 +24,6 @@ SOFTWARE.
 #include <stddef.h>
 #include <stdbool.h>
 #include <math.h>
-#include <assert.h>
 #include <float.h>
 
 #include "../util/util.h"

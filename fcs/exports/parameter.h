@@ -41,6 +41,7 @@ enum fcs_parameter_type_t {
     FCS_PARAMETER_CONTROL_MODE,
     FCS_PARAMETER_GP_IN,
     FCS_PARAMETER_RADIO,
+    FCS_PARAMETER_IO_STATUS,
     /* Calibration/sensor merge output */
     FCS_PARAMETER_HAL_ACCELEROMETER_XYZ,
     FCS_PARAMETER_HAL_ACCELEROMETER_VARIANCE,
@@ -83,7 +84,8 @@ enum fcs_parameter_type_t {
     FCS_PARAMETER_AHRS_MODE,
     FCS_PARAMETER_GP_OUT,
     FCS_PARAMETER_NAV_VERSION,
-    FCS_PARAMETER_NAV_PATH,
+    FCS_PARAMETER_NAV_PATH_ID,
+    FCS_PARAMETER_NAV_WAYPOINT_ID,
     FCS_PARAMETER_AHRS_STATUS,
     FCS_PARAMETER_CONTROL_STATUS,
     /* General-purpose */
@@ -134,6 +136,11 @@ struct fcs_parameter_t {
 #define FCS_PARAMETER_DATA_LENGTH_MAX 61u
 #define FCS_PARAMETER_TYPE_MASK 0x7Fu
 #define FCS_PARAMETER_TYPE_OFFSET 0
+
+/* Parameter keys */
+#define FCS_PARAMETER_KEY_PATH (uint8_t*)"PATH"
+#define FCS_PARAMETER_KEY_WAYPOINT (uint8_t*)"WAYP"
+#define FCS_PARAMETER_KEY_REFERENCE_POINT (uint8_t*)"REFP"
 
 /* Parameter field accessors */
 enum fcs_parameter_type_t fcs_parameter_get_type(

@@ -24,7 +24,6 @@ SOFTWARE.
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <assert.h>
 
 /* C++ complains about the C99 'restrict' qualifier. Just ignore it. */
 #define restrict

@@ -23,7 +23,8 @@ SOFTWARE.
 #ifndef _FCS_STREAM_H
 #define _FCS_STREAM_H
 
-#define FCS_STREAM_BUFFER_SIZE 256
+#define FCS_STREAM_BUFFER_SIZE 512
+#define FCS_STREAM_BUFFER_MASK 0x1FFu
 #define FCS_STREAM_MAX_RATE 3000000u
 
 enum fcs_stream_device_t {
@@ -64,20 +65,11 @@ enum fcs_stream_result_t fcs_stream_check_error(enum fcs_stream_device_t dev);
 
 /*
 fcs_stream_read - copy up to nbytes characters to the output buffer.
-Does not consume the characters copied, so they will be returned by future
-reads unless fcs_stream_consume is called.
 
 Returns the number of bytes copied, in the range [0, nbytes].
 */
 size_t fcs_stream_read(enum fcs_stream_device_t dev, uint8_t *restrict buf,
 size_t nbytes);
-
-/*
-fcs_stream_consume - discard up to nbytes characters from the input buffer.
-
-Returns the number of bytes discarded, in the range [0, nbytes].
-*/
-size_t fcs_stream_consume(enum fcs_stream_device_t dev, size_t nbytes);
 
 /*
 fcs_stream_write - writes up to "nbytes" from "buf" into the device's output

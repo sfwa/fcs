@@ -21,7 +21,7 @@ SOFTWARE.
 */
 
 #include <stdint.h>
-#include <assert.h>
+#include <stddef.h>
 
 #include <c6x.h>
 

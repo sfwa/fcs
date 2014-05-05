@@ -53,7 +53,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdint.h>
-#include <assert.h>
 #include <stddef.h>
 #include <stdbool.h>
 
@@ -72,6 +71,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 int main(void);
 
 #pragma FUNC_NEVER_RETURNS(main);
+#pragma FUNC_EXT_CALLED(main);
 int main(void) {
     uint32_t core = DNUM & 0xFFu,
              cycles_per_tick = 0;
@@ -125,9 +125,7 @@ int main(void) {
             Lost an entire frame; abort if it's the AHRS core because that
             should be impossible.
             */
-            if (core == FCS_CORE_AHRS) {
-                assert(0);
-            }
+            fcs_assert(core != FCS_CORE_AHRS);
         } else {
             while (TSCL - start_t < cycles_per_tick);
         }

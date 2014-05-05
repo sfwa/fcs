@@ -50,6 +50,7 @@ class ParameterType(Enum):
     FCS_PARAMETER_CONTROL_MODE,
     FCS_PARAMETER_GP_IN,
     FCS_PARAMETER_RADIO,
+    FCS_PARAMETER_IO_STATUS,
     FCS_PARAMETER_HAL_ACCELEROMETER_XYZ,
     FCS_PARAMETER_HAL_ACCELEROMETER_VARIANCE,
     FCS_PARAMETER_HAL_ACCELEROMETER_OFFSET_XYZ,
@@ -87,10 +88,11 @@ class ParameterType(Enum):
     FCS_PARAMETER_AHRS_MODE,
     FCS_PARAMETER_GP_OUT,
     FCS_PARAMETER_NAV_VERSION,
-    FCS_PARAMETER_NAV_PATH,
+    FCS_PARAMETER_NAV_PATH_ID,
+    FCS_PARAMETER_NAV_WAYPOINT_ID,
     FCS_PARAMETER_AHRS_STATUS,
     FCS_PARAMETER_CONTROL_STATUS,
-    FCS_PARAMETER_KEY_VALUE) = range(1, 55)
+    FCS_PARAMETER_KEY_VALUE) = range(1, 57)
 
 
 class ValueType(Enum):
@@ -98,6 +100,11 @@ class ValueType(Enum):
     FCS_VALUE_SIGNED,
     FCS_VALUE_FLOAT,
     FCS_VALUE_RESERVED) = range(4)
+
+
+FCS_PARAMETER_KEY_PATH = "PATH"
+FCS_PARAMETER_KEY_WAYPOINT = "WAYP"
+FCS_PARAMETER_KEY_REFERENCE_POINT = "REFP"
 
 
 class Parameter(object):
@@ -226,6 +233,15 @@ class KeyValueParameter(Parameter):
         self.key = key or ""
         self.value = value or ""
 
+    def __repr__(self):
+        return json.dumps({
+            "class": "KeyValueParameter",
+            "deviceId": self.device_id,
+            "parameterType": self.parameter_type.name,
+            "key": self.key,
+            "value": binascii.b2a_hex(self.value)
+        })
+
     def serialize(self):
         # Pack the header byte -- high bit to indicate it's a key/value param,
         # and then the remaining 7 bits are the length in bytes
@@ -237,7 +253,14 @@ class KeyValueParameter(Parameter):
 
     @classmethod
     def deserialize(cls, data):
-        return None, data
+        header, device_id, parameter_type = struct.unpack("<BBB", data[0:3])
+        value_len = header & 0x7f
+
+        param = cls(device_id=device_id,
+                    parameter_type=ParameterType(parameter_type),
+                    key=data[3:7], value=data[7:value_len + 7])
+
+        return param, data[value_len + 7:]
 
 
 class LogType(Enum):
@@ -315,6 +338,12 @@ class ParameterLog(list):
     def print_c_data(self):
         print ''.join(('\\x%02x' % ord(c)) for c in
                       cobsr.decode(self.serialize())[:-4])
+
+
+def extract_waypoint(data):
+    return dict(zip(
+        ("lat", "lon", "alt", "airspeed", "yaw", "pitch", "roll", "flags"),
+        struct.unpack("<ddfffffL", data)))
 
 
 if __name__ == "__main__":

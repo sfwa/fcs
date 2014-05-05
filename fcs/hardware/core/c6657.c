@@ -21,7 +21,6 @@ SOFTWARE.
 */
 
 #include <stdint.h>
-#include <assert.h>
 #include <stddef.h>
 #include <stdbool.h>
 
@@ -38,6 +37,8 @@ SOFTWARE.
 #include "../../c66x-csl/ti/csl/cslr_sem.h"
 
 #include "../board.h"
+#include "../../util/util.h"
+#include "../emif-uart.h"
 
 static void _fcs_core_pll_setup(void);
 static void _fcs_ddr3_pll_setup(void);
@@ -88,7 +89,7 @@ Use the following for 1333MHz:
 */
 
 static void _fcs_core_pll_setup(void) {
-    assert(DNUM == 0);
+    fcs_assert(DNUM == 0);
 
     volatile CSL_PllcRegs *const pll = (CSL_PllcRegs*)CSL_PLL_CONTROLLER_REGS;
     volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
@@ -256,7 +257,7 @@ static void _fcs_core_pll_setup(void) {
         }
     }
     /* Error if it doesn't lock */
-    assert(i != 1000);
+    fcs_assert(i != 1000);
 
     /* 9. Place PLL in Reset, In PLLCTL, write PLLRST = 1 (PLL is reset) */
     pll->PLLCTL |= 0x00000008;
@@ -288,7 +289,7 @@ static void _fcs_core_pll_setup(void) {
 }
 
 static void _fcs_ddr3_pll_setup(void) {
-    assert(DNUM == 0);
+    fcs_assert(DNUM == 0);
 
     volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
 
@@ -356,7 +357,7 @@ static void _fcs_ddr3_pll_setup(void) {
 }
 
 static void _fcs_ddr3_emif_setup(void) {
-    assert(DNUM == 0);
+    fcs_assert(DNUM == 0);
 
     volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
 
@@ -604,7 +605,7 @@ static void _fcs_enable_edc(void) {
     msmc->SMEDCC |= 0x40000000u;
 
     /* Check MSMC status */
-    assert((msmc->SMEDCC >> 30u) == 1u);
+    fcs_assert((msmc->SMEDCC >> 30u) == 1u);
 }
 
 uint32_t _fcs_init_core0(void) {
@@ -636,11 +637,11 @@ uint32_t _fcs_init_core0(void) {
 
         /* Wait for PTSTAT.GOSTAT to clear */
         _fcs_delay_cycles(150u);
-        assert((psc->PTSTAT & (1u << 7u)) == 0);
+        fcs_assert((psc->PTSTAT & (1u << 7u)) == 0);
 
         /* Verify that the state has changed to ENABLE (3) */
         _fcs_delay_cycles(150u);
-        assert((psc->MDSTAT[14] & 0x1Fu) == 3u);
+        fcs_assert((psc->MDSTAT[14] & 0x1Fu) == 3u);
     }
 
     /*
@@ -801,6 +802,9 @@ uint32_t _fcs_init_core0(void) {
     gpio->BANK_REGISTERS[0].DIR &= 0xF33FFFFFu;
     gpio->BANK_REGISTERS[0].OUT_DATA = 0x0CC00000u;
 
+    fcs_emif_uart_reset(0);
+    fcs_emif_uart_reset(1);
+
     /*
     Start booting core 1:
     - Copy all code/data in CorePac 0 L2 to CorePac 1 L2
@@ -876,7 +880,7 @@ uint32_t fcs_board_init_core(void) {
     } else if (core == 1u) {
         result_cycles = _fcs_init_core1();
     } else {
-        assert(false);
+        fcs_assert(false);
     }
 
     /*

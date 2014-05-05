@@ -26,7 +26,6 @@ SOFTWARE.
 #include <stddef.h>
 #include <stdbool.h>
 #include <math.h>
-#include <assert.h>
 #include <float.h>
 
 #include "../util/util.h"
@@ -89,8 +88,8 @@ trajectory.
 */
 void fcs_trajectory_recalculate(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
-    assert(nav);
-    assert(state_estimate);
+    fcs_assert(nav);
+    fcs_assert(state_estimate);
 
     float reference[NMPC_REFERENCE_DIM], weights[NMPC_DELTA_DIM];
     struct fcs_waypoint_t *ref, *new_point, *last_point;
@@ -108,6 +107,8 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     new_point = NULL;
     last_point = NULL;
     last_point_path_id = NULL;
+
+    nmpc_init(true);
 
     /* Calculate the first point and save it to the reference trajectory */
     path = &nav->paths[ref_path_id[0]];
@@ -138,7 +139,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         _make_reference(reference, new_point, last_point, ref,
                         state_estimate->wind_velocity);
 
-        assert(i < UINT32_MAX);
+        fcs_assert(i < UINT32_MAX);
         if (ref_path_id[i] == FCS_CONTROL_STABILISE_PATH_ID) {
             for (j = 0; j < NMPC_DELTA_DIM; j++) {
                 weights[j] = stabilise_state_weights[j] +
@@ -160,7 +161,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     if (*last_point_path_id != FCS_CONTROL_HOLD_PATH_ID &&
             *last_point_path_id != FCS_CONTROL_STABILISE_PATH_ID &&
             *last_point_path_id != FCS_CONTROL_INTERPOLATE_PATH_ID) {
-        assert(new_point);
+        fcs_assert(new_point);
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
     }
@@ -168,8 +169,8 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 
 void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
-    assert(nav);
-    assert(state_estimate);
+    fcs_assert(nav);
+    fcs_assert(state_estimate);
 
     float state_vec[NMPC_STATE_DIM];
 
@@ -184,8 +185,8 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 
 void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
-    assert(nav);
-    assert(state_estimate);
+    fcs_assert(nav);
+    fcs_assert(state_estimate);
 
     uint16_t original_path_id;
 
@@ -258,13 +259,18 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 
 void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate) {
-    assert(nav);
-    assert(state_estimate);
+    fcs_assert(nav);
+    fcs_assert(state_estimate);
 
     /*
     Start a 5-second stabilisation path and enter a holding pattern at the
     end of it.
     */
+    nav->reference_trajectory[0].lat = state_estimate->lat;
+    nav->reference_trajectory[0].lon = state_estimate->lon;
+    nav->reference_trajectory[0].alt = state_estimate->alt;
+    nav->reference_trajectory[0].airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
+
     _stabilise_path_to_waypoint(nav, state_estimate,
                                 FCS_CONTROL_HOLD_WAYPOINT_ID,
                                 FCS_CONTROL_HOLD_PATH_ID);
@@ -287,8 +293,8 @@ should be called instead.
 */
 static void _shift_horizon(struct fcs_nav_state_t *nav,
 const float *restrict wind) {
-    assert(nav);
-    assert(wind);
+    fcs_assert(nav);
+    fcs_assert(wind);
 
     float reference[NMPC_REFERENCE_DIM];
     struct fcs_waypoint_t *ref, *new_point, *last_point;
@@ -346,7 +352,7 @@ enum fcs_path_type_t type, float t) {
         return fcs_trajectory_interpolate_figure_eight(new_point, last_point,
                                                        wind, start, end, t);
     } else {
-        assert(false && "Invalid path type.");
+        fcs_assert(false && "Invalid path type.");
     }
 
     return t;
@@ -356,10 +362,10 @@ static void _make_reference(float *restrict reference,
 const struct fcs_waypoint_t *current_point,
 const struct fcs_waypoint_t *last_point, const struct fcs_waypoint_t *start,
 const float *restrict wind) {
-    assert(reference);
-    assert(current_point);
-    assert(start);
-    assert(wind);
+    fcs_assert(reference);
+    fcs_assert(current_point);
+    fcs_assert(start);
+    fcs_assert(wind);
     _nassert((size_t)reference % 4u == 0);
     _nassert((size_t)current_point % 8u == 0);
     _nassert((size_t)wind % 4u == 0);
@@ -437,13 +443,13 @@ uint16_t *restrict new_point_path_id,
 const struct fcs_waypoint_t *restrict last_point,
 const uint16_t *restrict last_point_path_id, const float *restrict wind,
 struct fcs_nav_state_t *nav) {
-    assert(new_point);
-    assert(new_point_path_id);
-    assert(last_point);
-    assert(last_point_path_id);
-    assert(wind);
-    assert(nav);
-    assert(*last_point_path_id != FCS_CONTROL_INVALID_PATH_ID);
+    fcs_assert(new_point);
+    fcs_assert(new_point_path_id);
+    fcs_assert(last_point);
+    fcs_assert(last_point_path_id);
+    fcs_assert(wind);
+    fcs_assert(nav);
+    fcs_assert(*last_point_path_id != FCS_CONTROL_INVALID_PATH_ID);
 
     float t;
     struct fcs_path_t *path;
@@ -482,11 +488,11 @@ struct fcs_nav_state_t *nav) {
         HOLD paths are exempt from that because they always result in a
         waypoint switch (to FCS_CONTROL_HOLD_WAYPOINT_ID).
         */
-        assert(nav->paths[*new_point_path_id].start_waypoint_id ==
-               path->end_waypoint_id ||
-               *new_point_path_id == FCS_CONTROL_HOLD_PATH_ID);
-        assert(nav->paths[*new_point_path_id].type != FCS_PATH_LINE ||
-               path->type != FCS_PATH_LINE);
+        fcs_assert(nav->paths[*new_point_path_id].start_waypoint_id ==
+                   path->end_waypoint_id ||
+                   *new_point_path_id == FCS_CONTROL_HOLD_PATH_ID);
+        fcs_assert(nav->paths[*new_point_path_id].type != FCS_PATH_LINE ||
+                   path->type != FCS_PATH_LINE);
 
         path = &nav->paths[*new_point_path_id];
         t -= _next_point_from_path(
@@ -501,15 +507,14 @@ struct fcs_nav_state_t *nav) {
 static void _stabilise_path_to_waypoint(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate,
 uint16_t out_waypoint_id, uint16_t out_path_id) {
-    assert(nav);
-    assert(state_estimate);
-    assert(out_path_id != FCS_CONTROL_INVALID_PATH_ID);
-    assert(out_waypoint_id != FCS_CONTROL_INVALID_WAYPOINT_ID);
+    fcs_assert(nav);
+    fcs_assert(state_estimate);
+    fcs_assert(out_path_id != FCS_CONTROL_INVALID_PATH_ID);
+    fcs_assert(out_waypoint_id != FCS_CONTROL_INVALID_WAYPOINT_ID);
 
     struct fcs_waypoint_t *waypoint, *out_waypoint;
-    float stabilise_delta, stabilise_heading, airflow[3], airspeed, alt;
-
-    out_waypoint = &nav->waypoints[out_waypoint_id];
+    float stabilise_delta, stabilise_heading, alt;
+    float airflow[3], airspeed;
 
     /* Start with actual airspeed if it's lower than the reference */
     airflow[0] = state_estimate->wind_velocity[0] - state_estimate->velocity[0];
@@ -517,21 +522,17 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     airflow[2] = state_estimate->velocity[2];
     airspeed = vector3_norm_f(airflow);
 
-    /* Pick whichever altitude is the higher */
-    if (out_waypoint->alt > state_estimate->alt) {
-        alt = out_waypoint->alt;
-    } else {
-        alt = state_estimate->alt;
-    }
+    out_waypoint = &nav->waypoints[out_waypoint_id];
 
     /* Set up the stabilisation path waypoint */
     waypoint = &nav->waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID];
     waypoint->lat = state_estimate->lat;
     waypoint->lon = state_estimate->lon;
-    waypoint->alt = alt;
+    waypoint->alt = state_estimate->alt;
     waypoint->airspeed = nav->reference_trajectory[0].airspeed;
-    waypoint->yaw = nav->reference_trajectory[0].yaw;
-    waypoint->pitch = 4.0f * ((float)M_PI / 180.0f);
+    waypoint->yaw =
+        (float)atan2(state_estimate->velocity[1], state_estimate->velocity[0]);
+    waypoint->pitch = 0.0f;
     waypoint->roll = 0.0f;
 
     /*
@@ -540,6 +541,8 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     */
     stabilise_delta = waypoint->airspeed * 5.0f;
     stabilise_heading = waypoint->yaw;
+    alt = waypoint->alt < state_estimate->alt ?
+          waypoint->alt : state_estimate->alt;
 
     out_waypoint->lat = waypoint->lat +
         (1.0/WGS84_A) * cos(stabilise_heading) * stabilise_delta;
@@ -549,7 +552,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     out_waypoint->alt = alt;
     out_waypoint->airspeed = waypoint->airspeed;
     out_waypoint->yaw = stabilise_heading;
-    out_waypoint->pitch = 4.0f * ((float)M_PI / 180.0f);
+    out_waypoint->pitch = 0.0f;
     out_waypoint->roll = 0.0f;
 
     nav->paths[FCS_CONTROL_STABILISE_PATH_ID].start_waypoint_id =
@@ -567,7 +570,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
 void _ned_from_point_diff(float *restrict ned,
 const struct fcs_waypoint_t *restrict ref,
 const struct fcs_waypoint_t *restrict point) {
-    assert(ned && ref && point);
+    fcs_assert(ned && ref && point);
     _nassert((size_t)ned % 4u == 0);
     _nassert((size_t)ref % 8u == 0);
     _nassert((size_t)point % 8u == 0);
@@ -588,9 +591,9 @@ const struct fcs_waypoint_t *restrict point) {
 static void _get_ahrs_state(float *restrict state,
 const struct fcs_state_estimate_t *restrict state_estimate,
 const struct fcs_waypoint_t *restrict reference) {
-    assert(state);
-    assert(state_estimate);
-    assert(reference);
+    fcs_assert(state);
+    fcs_assert(state_estimate);
+    fcs_assert(reference);
     _nassert((size_t)state % 4u == 0);
 
     /*
@@ -620,7 +623,7 @@ const struct fcs_waypoint_t *restrict reference) {
 }
 
 void _get_next_reference_point(float *restrict state) {
-    assert(state);
+    fcs_assert(state);
 
     nmpc_get_reference_point(state, 0);
 }

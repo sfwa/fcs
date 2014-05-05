@@ -24,10 +24,10 @@ SOFTWARE.
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
-#include <assert.h>
 #include <math.h>
 
 #include "calibration.h"
+#include "../util/util.h"
 #include "../util/3dmath.h"
 
 
@@ -43,9 +43,9 @@ Returns false if no more entries are available, or true otherwise.
 bool fcs_calibration_map_register_calibration(
 struct fcs_calibration_map_t *restrict cmap,
 struct fcs_calibration_t *restrict calibration) {
-    assert(cmap);
-    assert(cmap->num_entries <= FCS_CALIBRATION_COUNT);
-    assert(calibration);
+    fcs_assert(cmap);
+    fcs_assert(cmap->num_entries <= FCS_CALIBRATION_COUNT);
+    fcs_assert(calibration);
 
     if (cmap->num_entries == FCS_CALIBRATION_COUNT) {
         return false;
@@ -59,15 +59,13 @@ struct fcs_calibration_t *restrict calibration) {
 
 enum fcs_calibration_type_t fcs_calibration_get_type(
 const struct fcs_calibration_t *restrict calibration) {
-    assert(calibration);
+    fcs_assert(calibration);
 
     enum fcs_calibration_type_t type;
     type = (enum fcs_calibration_type_t)(
-        (calibration->type & FCS_CALIBRATION_TYPE_MASK)
+        (calibration->calibration_type & FCS_CALIBRATION_TYPE_MASK)
         >> FCS_CALIBRATION_TYPE_OFFSET
     );
-
-    assert(type < FCS_CALIBRATION_LAST);
 
     return type;
 }
@@ -79,9 +77,9 @@ Returns NULL if the calibration for `parameter` was not found.
 struct fcs_calibration_t* fcs_parameter_get_calibration(
 struct fcs_calibration_map_t *restrict cmap,
 const struct fcs_parameter_t *restrict parameter) {
-    assert(cmap);
-    assert(cmap->num_entries <= FCS_CALIBRATION_COUNT);
-    assert(parameter);
+    fcs_assert(cmap);
+    fcs_assert(cmap->num_entries <= FCS_CALIBRATION_COUNT);
+    fcs_assert(parameter);
 
     size_t i;
 
@@ -104,13 +102,13 @@ void fcs_parameter_calibrate(
 const struct fcs_parameter_t *restrict parameter,
 struct fcs_calibration_map_t *cmap, double out_value[4], double *out_error,
 double *restrict out_offset, double prescale) {
-    assert(parameter);
-    assert(cmap);
-    assert(out_value);
-    assert(out_error);
-    assert(out_value != out_error);
-    assert(out_value != out_offset);
-    assert(out_error != out_offset);
+    fcs_assert(parameter);
+    fcs_assert(cmap);
+    fcs_assert(out_value);
+    fcs_assert(out_error);
+    fcs_assert(out_value != out_error);
+    fcs_assert(out_value != out_offset);
+    fcs_assert(out_error != out_offset);
     _nassert((size_t)out_value % 8 == 0);
     _nassert((size_t)out_error % 8 == 0);
     _nassert((size_t)out_offset % 8 == 0);
@@ -127,7 +125,7 @@ double *restrict out_offset, double prescale) {
         fcs_parameter_get_calibration(cmap, parameter);
     const float *restrict p = calibration->params;
 
-    assert(calibration->type);
+    fcs_assert(calibration->type);
 
     /* Apply prescaling and scale factor */
     prescale *= calibration->scale_factor;
@@ -177,7 +175,7 @@ double *restrict out_offset, double prescale) {
             break;
         case FCS_CALIBRATION_LAST:
             /* Invalid calibration type */
-            assert(false);
+            fcs_assert(false);
             break;
     }
 
@@ -211,13 +209,13 @@ size_t fcs_log_get_calibrated_value(
 const struct fcs_log_t *restrict plog, struct fcs_calibration_map_t *cmap,
 enum fcs_parameter_type_t type, double out_value[4], double *out_error,
 double *restrict out_offset, double prescale) {
-    assert(plog);
-    assert(cmap);
-    assert(out_value);
-    assert(out_error);
-    assert(out_value != out_error);
-    assert(out_value != out_offset);
-    assert(out_error != out_offset);
+    fcs_assert(plog);
+    fcs_assert(cmap);
+    fcs_assert(out_value);
+    fcs_assert(out_error);
+    fcs_assert(out_value != out_error);
+    fcs_assert(out_value != out_offset);
+    fcs_assert(out_error != out_offset);
     _nassert((size_t)out_value % 8 == 0);
     _nassert((size_t)out_error % 8 == 0);
     _nassert((size_t)out_offset % 8 == 0);

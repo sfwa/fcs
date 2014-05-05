@@ -21,7 +21,7 @@ SOFTWARE.
 */
 
 #include <stdint.h>
-#include <assert.h>
+#include <stddef.h>
 
 #include <c6x.h>
 
@@ -33,6 +33,7 @@ SOFTWARE.
 
 #include "board.h"
 #include "int-uart.h"
+#include "../util/util.h"
 
 /* Return the difference between val and the closest int */
 static inline float approximation_error(float val) {
@@ -77,7 +78,7 @@ static uint16_t rx_last_buf_size[2] = { 0, 0 },
 static uint32_t uart_baud[2] = { 115200u, 115200u };
 
 void fcs_int_uart_reset(uint8_t uart_idx) {
-    assert(uart_idx == 0 || uart_idx == 1);
+    fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     /* Initialization process as described in part 2.7 of SPRUGP1 */
 
@@ -178,7 +179,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 
     We try both
     */
-    assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
+    fcs_assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
     float divisor16 = 166666666.67f / (float)(uart_baud[uart_idx] * 16);
     float divisor13 = 166666666.67f / (float)(uart_baud[uart_idx] * 13);
@@ -336,14 +337,14 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 }
 
 void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
-    assert(uart_idx == 0 || uart_idx == 1);
-    assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
+    fcs_assert(uart_idx == 0 || uart_idx == 1);
+    fcs_assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
 
     uart_baud[uart_idx] = baud;
 }
 
 uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
-    assert(uart_idx == 0 || uart_idx == 1);
+    fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     volatile CSL_UartRegs *const uart[2] =
         { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
@@ -480,7 +481,7 @@ addresses into whatever the "global" format is.
 
 void fcs_int_uart_start_rx_edma(uint8_t uart_idx, uint8_t *restrict buf,
 uint16_t buf_size) {
-    assert(uart_idx == 0 || uart_idx == 1);
+    fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     /*
     Track this so we can return how many bytes have been written to the RX
@@ -756,7 +757,7 @@ uint16_t buf_size) {
     differences in configuration are mentioned below.
     */
 
-    assert(uart_idx == 0 || uart_idx == 1);
+    fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     /*
     Track buffer size so we can return number of bytes read from TX buffer
@@ -814,7 +815,7 @@ uint16_t buf_size) {
 }
 
 uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
-    assert(uart_idx == 0 || uart_idx == 1);
+    fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
@@ -845,7 +846,7 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
 }
 
 uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
-    assert(uart_idx == 0 || uart_idx == 1);
+    fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;

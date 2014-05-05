@@ -24,7 +24,6 @@ SOFTWARE.
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
-#include <assert.h>
 #include <math.h>
 
 #include "log.h"
@@ -34,9 +33,9 @@ SOFTWARE.
 /* Initialize a log packet with a type and packet index */
 void fcs_log_init(struct fcs_log_t *restrict plog, enum fcs_log_type_t type,
 uint16_t frame_id) {
-    assert(plog);
-    assert(type > FCS_LOG_TYPE_INVALID);
-    assert(type < FCS_LOG_TYPE_LAST);
+    fcs_assert(plog);
+    fcs_assert(type > FCS_LOG_TYPE_INVALID);
+    fcs_assert(type < FCS_LOG_TYPE_LAST);
 
     plog->data[0] = (uint8_t)type;
     plog->data[1] = 0;
@@ -54,19 +53,19 @@ Modifies `log` to include a CRC32.
 */
 size_t fcs_log_serialize(uint8_t *restrict out_buf, size_t out_buf_length,
 struct fcs_log_t *plog) {
-    assert(out_buf);
-    assert(out_buf_length);
-    assert(plog);
-    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
-           plog->length <= FCS_LOG_MAX_LENGTH);
-    assert(plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
-    assert(plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
+    fcs_assert(out_buf);
+    fcs_assert(out_buf_length);
+    fcs_assert(plog);
+    fcs_assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+               plog->length <= FCS_LOG_MAX_LENGTH);
+    fcs_assert(plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
+    fcs_assert(plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
 
     /*
     4 bytes for CRC, 2 + ceil((len+4) / 256) bytes for COBS-R + NUL start/end
     */
-    assert(out_buf_length >= plog->length + 4u + 2u +
-                             ((plog->length + 259u) >> 8u));
+    fcs_assert(out_buf_length >= plog->length + 4u + 2u +
+                                 ((plog->length + 259u) >> 8u));
 
     /* Calculate checksum and update the packet with the result */
     uint32_t crc = fcs_crc32(plog->data, plog->length, 0xFFFFFFFFu);
@@ -79,23 +78,23 @@ struct fcs_log_t *plog) {
     struct fcs_cobsr_encode_result result;
     result = fcs_cobsr_encode(&out_buf[1], out_buf_length - 2u, plog->data,
                               plog->length + 4u);
-    assert(result.status == FCS_COBSR_ENCODE_OK);
+    fcs_assert(result.status == FCS_COBSR_ENCODE_OK);
 
     /* Add NUL start/end bytes */
     out_buf[0] = 0;
     out_buf[result.out_len + 1u] = 0;
 
     /* Return the COBS-R encoded length, plus the length of the NUL bytes */
-    assert(result.out_len > 0 && (size_t)result.out_len < SIZE_MAX - 2u);
+    fcs_assert(result.out_len > 0 && (size_t)result.out_len < SIZE_MAX - 2u);
     return (size_t)(result.out_len + 2u);
 }
 
 /* Deserialize a log frame */
 bool fcs_log_deserialize(
 struct fcs_log_t *plog, const uint8_t *restrict in_buf, size_t in_buf_len) {
-    assert(plog);
-    assert(in_buf);
-    assert(in_buf_len);
+    fcs_assert(plog);
+    fcs_assert(in_buf);
+    fcs_assert(in_buf_len);
 
     uint32_t crc, packet_crc;
     struct fcs_cobsr_decode_result result;
@@ -143,16 +142,16 @@ If `dst` has insufficient space available, return `false`, otherwise `true`.
 */
 bool fcs_log_merge(struct fcs_log_t *restrict dst,
 const struct fcs_log_t *restrict src) {
-    assert(dst);
-    assert(FCS_LOG_MIN_LENGTH <= dst->length &&
-           dst->length <= FCS_LOG_MAX_LENGTH);
-    assert(src);
-    assert(FCS_LOG_MIN_LENGTH <= src->length &&
-           src->length <= FCS_LOG_MAX_LENGTH);
-    assert(dst->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
-    assert(dst->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
-    assert(src->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
-    assert(src->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
+    fcs_assert(dst);
+    fcs_assert(FCS_LOG_MIN_LENGTH <= dst->length &&
+               dst->length <= FCS_LOG_MAX_LENGTH);
+    fcs_assert(src);
+    fcs_assert(FCS_LOG_MIN_LENGTH <= src->length &&
+               src->length <= FCS_LOG_MAX_LENGTH);
+    fcs_assert(dst->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
+    fcs_assert(dst->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
+    fcs_assert(src->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
+    fcs_assert(src->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
 
     /* Make sure there's enough room in dst */
     if (dst->length + src->length - 5u > FCS_LOG_MAX_LENGTH) {

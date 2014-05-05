@@ -24,18 +24,18 @@ SOFTWARE.
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
-#include <assert.h>
 #include <math.h>
 #include <float.h>
 
 #include "parameter.h"
+#include "../util/util.h"
 
 #ifndef M_PI
 #define M_PI (3.14159265358979323846)
 #endif
 
 #ifndef _nassert
-#define _nassert assert
+#define _nassert(x) ((void)0)
 #endif
 
 
@@ -115,14 +115,14 @@ static inline enum fcs_value_type_t _extract_value_type(uint8_t header) {
 
 static inline uint8_t _make_parameter_header(enum fcs_value_type_t type,
 size_t precision_bits, size_t num_values) {
-    assert(type < FCS_VALUE_RESERVED);
-    assert(precision_bits == 8u || precision_bits == 16u ||
-           precision_bits == 32u || precision_bits == 64u);
-    assert(0 < num_values && num_values <= FCS_PARAMETER_NUM_VALUES_MAX);
+    fcs_assert(type < FCS_VALUE_RESERVED);
+    fcs_assert(precision_bits == 8u || precision_bits == 16u ||
+               precision_bits == 32u || precision_bits == 64u);
+    fcs_assert(0 < num_values && num_values <= FCS_PARAMETER_NUM_VALUES_MAX);
 
     size_t length;
     length = 3u + num_values * ((precision_bits + 7u) >> 3u);
-    assert(length <= 64u);
+    fcs_assert(length <= 64u);
 
     if (precision_bits == 64u) {
         precision_bits = 3u;
@@ -133,7 +133,7 @@ size_t precision_bits, size_t num_values) {
     } else if (precision_bits == 8u) {
         precision_bits = 0;
     } else {
-        assert(false);
+        fcs_assert(false);
     }
     num_values -= 1u;
 
@@ -170,70 +170,70 @@ const struct fcs_parameter_t *parameter) {
 /* Public, typed wrappers for the above functions */
 enum fcs_parameter_type_t fcs_parameter_get_type(
 const struct fcs_parameter_t *parameter) {
-    assert(_validate_parameter(parameter));
+    fcs_assert(_validate_parameter(parameter));
     return (enum fcs_parameter_type_t)parameter->type;
 }
 
 uint8_t fcs_parameter_get_device_id(
 const struct fcs_parameter_t *restrict parameter) {
-    assert(_validate_parameter(parameter));
+    fcs_assert(_validate_parameter(parameter));
     return parameter->device;
 }
 
 size_t fcs_parameter_get_num_values(
 const struct fcs_parameter_t *restrict parameter) {
-    assert(_validate_parameter(parameter));
+    fcs_assert(_validate_parameter(parameter));
     return _extract_num_values(parameter->header);
 }
 
 size_t fcs_parameter_get_precision_bits(
 const struct fcs_parameter_t *restrict parameter) {
-    assert(_validate_parameter(parameter));
+    fcs_assert(_validate_parameter(parameter));
     return _extract_precision_bits(parameter->header);
 }
 
 size_t fcs_parameter_get_length(
 const struct fcs_parameter_t *restrict parameter) {
-    assert(_validate_parameter(parameter));
+    fcs_assert(_validate_parameter(parameter));
     return _extract_length(parameter->header);
 }
 
 enum fcs_value_type_t fcs_parameter_get_value_type(
 const struct fcs_parameter_t *restrict parameter) {
-    assert(_validate_parameter(parameter));
+    fcs_assert(_validate_parameter(parameter));
     return _extract_value_type(parameter->header);
 }
 
 void fcs_parameter_set_header(
 struct fcs_parameter_t *restrict parameter, enum fcs_value_type_t type,
 size_t precision_bits, size_t num_values) {
-    assert(parameter);
+    fcs_assert(parameter);
     parameter->header = _make_parameter_header(
         type, precision_bits, num_values);
 }
 
 void fcs_parameter_set_device_id(
 struct fcs_parameter_t *restrict parameter, uint8_t device) {
-    assert(parameter);
+    fcs_assert(parameter);
     parameter->device = device;
 }
 
 void fcs_parameter_set_type(
 struct fcs_parameter_t *restrict parameter, enum fcs_parameter_type_t type) {
-    assert(parameter);
-    assert(FCS_PARAMETER_INVALID < type && type < FCS_PARAMETER_LAST);
+    fcs_assert(parameter);
+    fcs_assert(FCS_PARAMETER_INVALID < type && type < FCS_PARAMETER_LAST);
 
     parameter->type = (uint8_t)type;
 }
 
 size_t fcs_parameter_get_key_value(uint8_t key[4], uint8_t *restrict value,
 size_t value_length, const struct fcs_parameter_t *restrict parameter) {
-    assert(_validate_parameter(parameter));
-    assert(key);
-    assert((value && value_length) || (!value && !value_length));
+    fcs_assert(_validate_parameter(parameter));
+    fcs_assert(key);
+    fcs_assert((value && value_length) || (!value && !value_length));
 
     size_t data_length = _extract_length(parameter->header);
-    assert(data_length > 7u);
+    fcs_assert(data_length > 7u);
     data_length -= 7u;  /* header + key */
 
     key[0] = parameter->data.u8[0];
@@ -253,9 +253,9 @@ size_t value_length, const struct fcs_parameter_t *restrict parameter) {
 
 void fcs_parameter_set_key_value(struct fcs_parameter_t *restrict parameter,
 uint8_t key[4], uint8_t *restrict value, size_t value_length) {
-    assert(key);
-    assert(value);
-    assert(value_length < FCS_PARAMETER_DATA_LENGTH_MAX - 4u);
+    fcs_assert(key);
+    fcs_assert(value);
+    fcs_assert(value_length < FCS_PARAMETER_DATA_LENGTH_MAX - 4u);
 
     parameter->data.u8[0] = key[0];
     parameter->data.u8[1] = key[1];
@@ -278,8 +278,8 @@ Returns the number of values in the parameter.
 size_t fcs_parameter_get_values_d(
 const struct fcs_parameter_t *restrict parameter, double *restrict out_value,
 size_t out_value_length) {
-    assert(_validate_parameter(parameter));
-    assert(out_value);
+    fcs_assert(_validate_parameter(parameter));
+    fcs_assert(out_value);
     _nassert((size_t)out_value % 8 == 0);
 
     enum fcs_parameter_type_t type = fcs_parameter_get_type(parameter);
@@ -311,7 +311,7 @@ size_t out_value_length) {
         } else if (datatype == FCS_VALUE_SIGNED) {
             COPYLOOP(i8)
         } else if (datatype == FCS_VALUE_FLOAT) {
-            assert(false);
+            fcs_assert(false);
         }
     } else if (precision == 16u) {
         /* Handle 2-byte values */
@@ -341,7 +341,7 @@ size_t out_value_length) {
             COPYLOOP(f64)
         }
     } else {
-        assert(false);
+        fcs_assert(false);
     }
 
 #undef COPYLOOP
@@ -355,8 +355,8 @@ be added, or `false` if it couldn't.
 */
 bool fcs_log_add_parameter(struct fcs_log_t *restrict plog,
 struct fcs_parameter_t *restrict parameter) {
-    assert(plog);
-    assert(_validate_parameter(parameter));
+    fcs_assert(plog);
+    fcs_assert(_validate_parameter(parameter));
 
     /*
     If there's not enough space in the log record to save the value, return
@@ -379,11 +379,11 @@ Set the device ID of all parameters in the log to `device_id`
 */
 void fcs_log_set_parameter_device_id(struct fcs_log_t *restrict plog,
 uint8_t device_id) {
-    assert(plog);
-    assert(plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
-    assert(plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
-    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
-           plog->length <= FCS_LOG_MAX_LENGTH);
+    fcs_assert(plog);
+    fcs_assert(plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
+    fcs_assert(plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
+    fcs_assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+               plog->length <= FCS_LOG_MAX_LENGTH);
 
     size_t i, length = 0;
 
@@ -407,10 +407,10 @@ if not.
 bool fcs_parameter_find_by_type_and_device(
 const struct fcs_log_t *restrict plog, enum fcs_parameter_type_t type,
 uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
-    assert(plog);
-    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
-           plog->length <= FCS_LOG_MAX_LENGTH);
-    assert(out_parameter);
+    fcs_assert(plog);
+    fcs_assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+               plog->length <= FCS_LOG_MAX_LENGTH);
+    fcs_assert(out_parameter);
 
     size_t i, length;
 
@@ -442,10 +442,10 @@ Returns the number of parameters found
 size_t fcs_parameter_find_all_by_type(const struct fcs_log_t *restrict plog,
 enum fcs_parameter_type_t type,
 struct fcs_parameter_t *restrict out_parameters, size_t max_parameters) {
-    assert(plog);
-    assert(FCS_LOG_MIN_LENGTH <= plog->length &&
-           plog->length <= FCS_LOG_MAX_LENGTH);
-    assert(out_parameters);
+    fcs_assert(plog);
+    fcs_assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+               plog->length <= FCS_LOG_MAX_LENGTH);
+    fcs_assert(out_parameters);
 
     size_t i, length, count = 0;
 

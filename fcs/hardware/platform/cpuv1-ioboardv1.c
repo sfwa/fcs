@@ -25,7 +25,6 @@ SOFTWARE.
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
-#include <assert.h>
 
 #ifdef __TI_COMPILER_VERSION__
 #include "../c66x-csl/ti/csl/cslr_device.h"
@@ -66,16 +65,19 @@ inline static bool _vec_hasnan_f(const float *vec, size_t n) {
 #define GYRO_SENSITIVITY 65.5f /* LSB/(deg/s) @ 500deg/s FS */
 #define MAG_SENSITIVITY 1090.0f /* LSB/G @ ±2G FS */
 
-#define FCS_IOBOARD_COUNT 2
-#define FCS_IOBOARD_RESET_TIMEOUT 50
-#define FCS_IOBOARD_PACKET_TIMEOUT 5
+#define FCS_IOBOARD_COUNT 2u
+#define FCS_IOBOARD_RESET_TIMEOUT 50u
+#define FCS_IOBOARD_PACKET_TIMEOUT 10u
 
 static struct fcs_calibration_map_t board_calibration;
 static TRICAL_instance_t board_accel_trical_instances[FCS_IOBOARD_COUNT];
 static TRICAL_instance_t board_mag_trical_instances[FCS_IOBOARD_COUNT];
 static double board_mag_trical_update_attitude[FCS_IOBOARD_COUNT];
-static int16_t board_timeout[FCS_IOBOARD_COUNT];
+static int16_t board_timeout[FCS_IOBOARD_COUNT] = { 5u, 5u };
 static double board_reference_pressure, board_reference_alt;
+static uint8_t
+    stream_msg_buf[FCS_STREAM_NUM_DEVICES][FCS_LOG_SERIALIZED_LENGTH];
+static size_t stream_msg_idx[FCS_STREAM_NUM_DEVICES];
 
 
 /* Prototypes of internal functions */
@@ -120,13 +122,21 @@ void fcs_board_init_platform(void) {
     ensure we get a clean start.
     */
     enum fcs_stream_result_t result;
+
     result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 2604168u);
-    assert(result == FCS_STREAM_OK);
+    fcs_assert(result == FCS_STREAM_OK);
+    result = fcs_stream_open(FCS_STREAM_UART_INT0);
+    fcs_assert(result == FCS_STREAM_OK);
+
     result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 2604168u);
-    assert(result == FCS_STREAM_OK);
+    fcs_assert(result == FCS_STREAM_OK);
+    result = fcs_stream_open(FCS_STREAM_UART_INT1);
+    fcs_assert(result == FCS_STREAM_OK);
 
     result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
-    assert(result == FCS_STREAM_OK);
+    fcs_assert(result == FCS_STREAM_OK);
+    result = fcs_stream_open(FCS_STREAM_UART_EXT1);
+    fcs_assert(result == FCS_STREAM_OK);
 
 #ifdef __TI_COMPILER_VERSION__
     volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
@@ -298,6 +308,7 @@ void fcs_board_init_platform(void) {
     board_reference_alt = 0.0;
 }
 
+#include <c6x.h>
 void fcs_board_tick(void) {
     uint8_t out_buf[FCS_LOG_SERIALIZED_LENGTH];
     size_t out_buf_len, write_len, i;
@@ -308,13 +319,17 @@ void fcs_board_tick(void) {
     struct fcs_parameter_t param;
     enum fcs_mode_t ahrs_mode;
     bool got_result, mode_ok;
+    enum fcs_stream_result_t stream_result;
+    volatile uint32_t times[4];
+
+    times[0] = TSCL;
 
     /*
     Read attitude, WMM field, static pressure, static temp and AHRS mode from
     old estimate log
     */
     estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, FCS_MODE_READ);
-    assert(estimate_log);
+    fcs_assert(estimate_log);
 
     got_result = fcs_parameter_find_by_type_and_device(
         estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 0, &param);
@@ -367,13 +382,14 @@ void fcs_board_tick(void) {
     /* Read the latest measurements from the I/O boards */
     measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT,
     		                               FCS_MODE_WRITE);
-    assert(measurement_log);
+    fcs_assert(measurement_log);
 
-    for (i = 0; i < FCS_IOBOARD_COUNT; i++){
+    for (i = 1; i < FCS_IOBOARD_COUNT; i++){
         if (_fcs_read_log_packet(
-                (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), i,
+                (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), (1u - i), /* FIXME */
                 measurement_log)) {
             board_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
+            fcs_global_counters.ioboard_packet_rx[i]++;
 
             /* Get reference pressure and altitude */
             got_result = fcs_parameter_find_by_type_and_device(
@@ -437,14 +453,16 @@ void fcs_board_tick(void) {
             enum fcs_stream_result_t result;
             result = fcs_stream_open(
                 (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i));
-            assert(result == FCS_STREAM_OK);
+            fcs_assert(result == FCS_STREAM_OK);
         } else if (board_timeout[i] > INT16_MIN) {
             board_timeout[i]--;
         }
     }
 
+    times[1] = TSCL;
+
     hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, FCS_MODE_WRITE);
-    assert(hal_log);
+    fcs_assert(hal_log);
 
     /* Add calibrated virtual sensor values to the HAL log */
     _apply_accelerometer_calibration(measurement_log, hal_log,
@@ -462,14 +480,16 @@ void fcs_board_tick(void) {
     _set_gps_velocity(measurement_log, hal_log, &board_calibration);
 
     hal_log = fcs_exports_log_close(hal_log);
-    assert(!hal_log);
+    fcs_assert(!hal_log);
+
+    times[2] = TSCL;
 
     /*
     Merge the AHRS estimate log and the NMPC control log and send them to the
     I/O boards.
     */
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_READ);
-    assert(control_log);
+    fcs_assert(control_log);
 
     /*
     Check the simulation port for a log packet -- if received, it replaces the
@@ -485,22 +505,31 @@ void fcs_board_tick(void) {
             closed below after it's merged into the I/O board logs.
             */
             estimate_log = fcs_exports_log_close(estimate_log);
-            assert(!estimate_log);
+            fcs_assert(!estimate_log);
             estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE,
                                                 FCS_MODE_WRITE);
-            assert(estimate_log);
+            fcs_assert(estimate_log);
 
             memcpy(estimate_log, &out_log, sizeof(struct fcs_log_t));
         }
+    //}
 
+    //if (fcs_global_counters.ioboard_packet_tx[0] % 20 == 0) {
         /* Serialize the control log only, and write it to the HITL port */
         out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
                                         control_log);
-        assert(out_buf_len < 255u);
+        fcs_assert(out_buf_len < 255u);
 
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf,
                                      out_buf_len);
-        assert(out_buf_len == write_len);
+        fcs_assert(out_buf_len == write_len);
+    }
+
+    if (fcs_stream_check_error(FCS_STREAM_UART_EXT1) == FCS_STREAM_ERROR) {
+        stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
+        fcs_assert(stream_result == FCS_STREAM_OK);
+        stream_result = fcs_stream_open(FCS_STREAM_UART_EXT1);
+        fcs_assert(stream_result == FCS_STREAM_OK);
     }
 
     /*
@@ -511,13 +540,13 @@ void fcs_board_tick(void) {
     (void)fcs_log_merge(&out_log, estimate_log);
 
     control_log = fcs_exports_log_close(control_log);
-    assert(!control_log);
+    fcs_assert(!control_log);
 
     measurement_log = fcs_exports_log_close(measurement_log);
-    assert(!measurement_log);
+    fcs_assert(!measurement_log);
 
     estimate_log = fcs_exports_log_close(estimate_log);
-    assert(!estimate_log);
+    fcs_assert(!estimate_log);
 
     /*
     Serialize the merged log and write it to both internal UARTs (I/O boards
@@ -525,17 +554,25 @@ void fcs_board_tick(void) {
     */
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
     /* FIXME: limitation of current stream driver */
-    assert(out_buf_len < 255u);
+    fcs_assert(out_buf_len < 240u);
 
     write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, out_buf_len);
-    assert(out_buf_len == write_len);
+    fcs_assert(out_buf_len == write_len);
 
+/*
     write_len = fcs_stream_write(FCS_STREAM_UART_INT1, out_buf, out_buf_len);
-    assert(out_buf_len == write_len);
+    fcs_assert(out_buf_len == write_len);
+*/
 
     /* Increment transmit counters */
     fcs_global_counters.ioboard_packet_tx[0]++;
     fcs_global_counters.ioboard_packet_tx[1]++;
+
+    times[3] = TSCL;
+
+    if (times[3] - times[0] > 100000) {
+    	times[0]++;
+    }
 }
 
 /*
@@ -545,81 +582,57 @@ need to make sure we can deal with partial/corrupted packets.
 */
 bool _fcs_read_log_packet(enum fcs_stream_device_t dev, size_t board_id,
 struct fcs_log_t *out_log) {
-    assert(out_log);
+    fcs_assert(out_log);
 
     /* Read the latest I/O board packet from the UART streams */
-    uint8_t buf[256];
     struct fcs_log_t plog;
-    size_t nbytes, i, packet_start = 0, packet_end = 0;
-    enum {
-        UNKNOWN,
-        GOT_ZERO,
-        IN_PACKET,
-        ENDED_PACKET
-    } state = UNKNOWN;
-    bool result = false;
+    size_t i = 0, nbytes;
+    uint8_t ch, buf[512];
+    bool result = false, got_message = false;
 
-    nbytes = fcs_stream_read(dev, buf, 255u);
-    while (!result && nbytes) {
-        state = UNKNOWN;
-        packet_start = packet_end = 0;
-        for (i = 0; i < nbytes && state != ENDED_PACKET; i++) {
-            switch (state) {
-                case UNKNOWN:
-                    if (buf[i] == 0) {
-                        state = GOT_ZERO;
-                    }
-                    break;
-                case GOT_ZERO:
-                    if (buf[i] != 0) {
-                        state = IN_PACKET;
-                        packet_start = i - 1u;
-                    }
-                    break;
-                case IN_PACKET:
-                    if (buf[i] == 0) {
-                        state = ENDED_PACKET;
-                        packet_end = i;
-                    }
-                    break;
-                case ENDED_PACKET:
-                    assert(false);
-                    break;
+    nbytes = fcs_stream_read(dev, buf, 511);
+    while (i < nbytes) {
+        ch = buf[i];
+        i++;
+
+        if (ch == 0x00 || stream_msg_idx[dev]) {
+            if (ch == 0x00 && stream_msg_idx[dev]) {
+                if (stream_msg_buf[dev][stream_msg_idx[dev] - 1u] == 0x00) {
+                    /*
+                    This was a false start -- the previous character was
+                    actually the end of an incomplete packet rather than the
+                    start of a new one.
+                    */
+                    stream_msg_idx[dev]--;
+                } else {
+                    got_message = true;
+                }
+            }
+
+            /* in a message */
+            stream_msg_buf[dev][stream_msg_idx[dev]] = ch;
+            stream_msg_idx[dev]++;
+
+            if (stream_msg_idx[dev] >= FCS_LOG_SERIALIZED_LENGTH) {
+                stream_msg_idx[dev] = 0;
             }
         }
 
-        if (state == ENDED_PACKET) {
-            result = fcs_log_deserialize(&plog, &buf[packet_start],
-                                         packet_end - packet_start + 1u);
-            if (result) {
-                fcs_log_set_parameter_device_id(&plog, (uint8_t)board_id);
-                fcs_log_merge(out_log, &plog);
-            }
+        if (got_message) {
+    		result = fcs_log_deserialize(&plog, stream_msg_buf[dev],
+    		                             stream_msg_idx[dev]);
+    		if (!result) {
+    		    fcs_global_counters.ioboard_packet_rx_err[board_id]++;
+    		}
 
-            /* Consume all bytes until the end of the packet */
-            fcs_stream_consume(dev, packet_end + 1u);
-        } else if (state == IN_PACKET) {
-            /*
-            Consume bytes until the start of the packet, so we can parse the
-            full packet next time
-            */
-            if (packet_start > 0) {
-                fcs_stream_consume(dev, packet_start);
-            }
-        } else if (state == GOT_ZERO) {
-            /* Consume bytes up to the current 0 */
-            fcs_stream_consume(dev, nbytes - 1u);
-        } else {
-            /*
-            Something has gone badly wrong. Consume the whole buffer and hope
-            we get actual data next time.
-            */
-            fcs_stream_consume(dev, nbytes);
+            stream_msg_idx[dev] = 0;
+            got_message = false;
         }
+    }
 
-        if (!result) {
-            nbytes = fcs_stream_read(dev, buf, 255u);
-        }
+    if (result) {
+        fcs_log_set_parameter_device_id(&plog, (uint8_t)board_id);
+        fcs_log_merge(out_log, &plog);
     }
 
     return result;
@@ -1041,8 +1054,8 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
 static void _set_hal_sensor_value_f32(struct fcs_log_t *plog,
 enum fcs_parameter_type_t param_type, const double *restrict value,
 const double *restrict variance, size_t n) {
-    assert(plog);
-    assert(value);
+    fcs_assert(plog);
+    fcs_assert(value);
 
     size_t i;
     struct fcs_parameter_t param;

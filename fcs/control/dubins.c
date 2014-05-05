@@ -24,7 +24,6 @@ SOFTWARE.
 #include <stddef.h>
 #include <stdbool.h>
 #include <math.h>
-#include <assert.h>
 #include <float.h>
 
 #include "../util/util.h"
@@ -241,7 +240,7 @@ float t) {
 
         last_segment = 0;
 
-        assert(path_type != 0xFFu && "No valid Dubins path found.");
+        fcs_assert(path_type != 0xFFu && "No valid Dubins path found.");
     } else {
         /* Already started the path, use the existing trajectory. */
         path_type =
@@ -276,7 +275,7 @@ float t) {
                 last_action = 1;
                 break;
             default:
-                assert(false && "Invalid Dubins path type");
+                fcs_assert(false && "Invalid Dubins path type");
                 break;
         }
 
@@ -285,7 +284,7 @@ float t) {
     }
 
     /* Both of these should have been set to one of the curve types. */
-    assert(first_action && last_action);
+    fcs_assert(first_action && last_action);
 
     /* Get the position at the end of the first curve. */
     ref[0] = 0.0;
@@ -296,7 +295,7 @@ float t) {
     } else if (first_action == 1) {
         _calculate_dubins_r(p1, ref, start_turn_d);
     } else {
-        assert(false && "Invalid Dubins first action");
+        fcs_assert(false && "Invalid Dubins first action");
     }
 
     /* Find the path interpolation parameter as at the last point. */
@@ -334,7 +333,7 @@ float t) {
                      absval(end_turn_d * 0.5f - path_t);
         path_t = min_d - path_t;
     } else {
-        assert(false && "Invalid Dubins segment ID");
+        fcs_assert(false && "Invalid Dubins segment ID");
     }
 
     /*
@@ -378,7 +377,7 @@ float t) {
         } else if (first_action == 1) {
             _calculate_dubins_r(out, ref, path_t);
         } else {
-            assert(false && "Invalid Dubins first action");
+            fcs_assert(false && "Invalid Dubins first action");
         }
 
         segment = 0;
@@ -400,7 +399,7 @@ float t) {
             _calculate_dubins_r(
                 out, p2, path_t - start_turn_d - straight_d);
         } else {
-            assert(false && "Invalid Dubins last action");
+            fcs_assert(false && "Invalid Dubins last action");
         }
 
         segment = 2u;

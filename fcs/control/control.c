@@ -26,7 +26,6 @@ SOFTWARE.
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
-#include <assert.h>
 #include <float.h>
 
 #include "../util/util.h"
@@ -164,25 +163,14 @@ void fcs_control_init(void) {
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
-    struct fcs_log_t *control_log;
+    struct fcs_log_t *control_log, *measurement_log;
     struct fcs_parameter_t param;
     float controls[NMPC_CONTROL_DIM], alt_diff;
     uint32_t start_t = cycle_count();
+    uint16_t update_obj_id;
     bool control_timeout = false;
 
-    assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
-
-#ifdef __TI_COMPILER_VERSION__
-    /* FIXME -- move this to the board definition file instead */
-    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
-    if (gpio->BANK_REGISTERS[0].IN_DATA & 0x40u) {
-        control_state.mode = FCS_CONTROL_MODE_AUTO;
-    } else {
-        control_state.mode = FCS_CONTROL_MODE_MANUAL;
-    }
-#else
-    control_state.mode = FCS_CONTROL_MODE_AUTO;
-#endif
+    fcs_assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
 
     /*
     Check for multiple infeasible results in a row, and reset the trajectory
@@ -197,25 +185,57 @@ void fcs_control_tick(void) {
         control_tick++;
     }
 
+    measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT,
+                                           FCS_MODE_READ);
+    fcs_assert(measurement_log);
+
     /*
-    TODO: Handle path and waypoint updates
-    fcs_exports_recv_waypoint_update(&waypoint_update);
-    if (waypoint_update.nav_state_version > nav_state.version) {
-        assert(waypoint_update.waypoint_id < FCS_CONTROL_MAX_WAYPOINTS);
-
-        nav_state.waypoints[waypoint_update.waypoint_id] =
-            waypoint_update.waypoint;
-        nav_state.version = waypoint_update.nav_state_version;
-    }
-
-    fcs_exports_recv_path_update(&path_update);
-    if (path_update.nav_state_version > nav_state.version) {
-        assert(path_update.path_id < FCS_CONTROL_MAX_PATHS);
-
-        nav_state.paths[path_update.path_id] = path_update.path;
-        nav_state.version = path_update.nav_state_version;
-    }
+    Find the control mode -- switch to auto if the packet is present and it's
+    an auto command.
     */
+    //if (fcs_parameter_find_by_type_and_device(
+    //        measurement_log, FCS_PARAMETER_CONTROL_MODE, 0, &param) &&
+    //        param.data.u8[0] == 1u) {
+        control_state.mode = FCS_CONTROL_MODE_AUTO;
+    //} else {
+    //    control_state.mode = FCS_CONTROL_MODE_MANUAL;
+    //}
+
+    /* Handle navigation state updates */
+    if (fcs_parameter_find_by_type_and_device(
+            measurement_log, FCS_PARAMETER_NAV_VERSION, 0, &param) &&
+            param.data.u32[0] == nav_state.version + 1u) {
+        /* Look for path and waypoint updates */
+        if (fcs_parameter_find_by_type_and_device(
+                measurement_log, FCS_PARAMETER_NAV_PATH_ID, 0, &param)) {
+            /* Update path */
+            update_obj_id = param.data.u16[0];
+            if (fcs_parameter_find_by_type_and_device(
+                    measurement_log, FCS_PARAMETER_KEY_VALUE, 0, &param)) {
+                (void)fcs_parameter_get_key_value(
+                    FCS_PARAMETER_KEY_PATH,
+                    (uint8_t*)&nav_state.paths[update_obj_id],
+                    sizeof(struct fcs_path_t), &param);
+                nav_state.version++;
+            }
+        } else if (fcs_parameter_find_by_type_and_device(
+                measurement_log, FCS_PARAMETER_NAV_WAYPOINT_ID, 0,
+                &param)) {
+            /* Update waypoint */
+            update_obj_id = param.data.u16[0];
+            if (fcs_parameter_find_by_type_and_device(
+                    measurement_log, FCS_PARAMETER_KEY_VALUE, 0, &param)) {
+                (void)fcs_parameter_get_key_value(
+                    FCS_PARAMETER_KEY_WAYPOINT,
+                    (uint8_t*)&nav_state.waypoints[update_obj_id],
+                    sizeof(struct fcs_waypoint_t), &param);
+                nav_state.version++;
+            }
+        }
+    }
+
+    measurement_log = fcs_exports_log_close(measurement_log);
+    fcs_assert(!measurement_log);
 
     /*
     Read the relevant parts of the AHRS output and convert them to a format
@@ -284,25 +304,60 @@ void fcs_control_tick(void) {
     	fcs_global_counters.nmpc_errors++;
     }
 
-    /* Write the output to the control log */
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_WRITE);
-    assert(control_log);
+    fcs_assert(control_log);
 
+    /* Write the setpoints to the control log */
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 3u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_CONTROL_SETPOINT);
     fcs_parameter_set_device_id(&param, 0);
-
     param.data.u16[0] = (uint16_t)(controls[0] * (float)UINT16_MAX);
     param.data.u16[1] = (uint16_t)(controls[1] * (float)UINT16_MAX);
     param.data.u16[2] = (uint16_t)(controls[2] * (float)UINT16_MAX);
+    fcs_log_add_parameter(control_log, &param);
 
+    /*
+    Calculate cycle count and objective value, then add them to the control
+    log as float32s
+    */
+    fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
+    fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
+
+    fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 4u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_CONTROL_STATUS);
+    fcs_parameter_set_device_id(&param, 0);
+    param.data.f32[0] = fcs_global_counters.nmpc_last_cycle_count;
+    param.data.f32[1] = fcs_global_counters.nmpc_objective_value;
+    param.data.f32[2] = fcs_global_counters.nmpc_errors;
+    param.data.f32[3] = fcs_global_counters.nmpc_resets;
+    fcs_log_add_parameter(control_log, &param);
+
+    /*
+    Add navigation status to the control log -- path ID, nav state version,
+    and a reference waypoint packet
+    */
+    fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 1u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_NAV_PATH_ID);
+    fcs_parameter_set_device_id(&param, 0);
+    param.data.u16[0] = nav_state.reference_path_id[0];
+    fcs_log_add_parameter(control_log, &param);
+
+    fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 32u, 1u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_NAV_VERSION);
+    fcs_parameter_set_device_id(&param, 0);
+    param.data.u32[0] = nav_state.version;
+    fcs_log_add_parameter(control_log, &param);
+
+    fcs_parameter_set_key_value(
+        &param, FCS_PARAMETER_KEY_REFERENCE_POINT,
+        (uint8_t*)&nav_state.reference_trajectory[0],
+        sizeof(nav_state.reference_trajectory[0]));
+    fcs_parameter_set_device_id(&param, 0);
+    param.data.u32[0] = nav_state.version;
     fcs_log_add_parameter(control_log, &param);
 
     control_log = fcs_exports_log_close(control_log);
-    assert(!control_log);
-
-    fcs_global_counters.nmpc_last_cycle_count = cycle_count() - start_t;
-    fcs_global_counters.nmpc_objective_value = nmpc_get_objective_value();
+    fcs_assert(!control_log);
 }
 
 void fcs_control_reset(void) {
@@ -316,13 +371,13 @@ Copy estimate values from the estimate log to the state estimate structure.
 See _populate_estimate_log at ahrs/ahrs.c:329.
 */
 static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
-    assert(estimate);
+    fcs_assert(estimate);
 
     struct fcs_log_t *estimate_log;
     struct fcs_parameter_t param;
 
     estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, FCS_MODE_READ);
-    assert(estimate_log);
+    fcs_assert(estimate_log);
 
     if (fcs_parameter_find_by_type_and_device(
             estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_LLA, 0, &param)) {
@@ -398,7 +453,7 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
     /* TODO: set mode */
 
     estimate_log = fcs_exports_log_close(estimate_log);
-    assert(!estimate_log);
+    fcs_assert(!estimate_log);
 
 /*
     printf("estimate: %13.9f %13.9f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f"

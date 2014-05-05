@@ -27,20 +27,20 @@ Control data:
 values: 3x uint16 = 9
 gpio: 1x uint8 = 4
 path ID: 1x uint16 = 5
-reference waypoint (packet): 24 + 6 = 30
+reference waypoint (packet): 40 + 7 = 47
 version: 1x uint32 = 7
 
-total = 55 bytes
+total = 71 bytes
 
 Status data:
 
 I/O boards x2: 2x uint16 = 7
-AHRS/UKF: 4x uint16 = 11
-NMPC: 2x uint32 = 11
+AHRS/UKF: 1x float32 = 7
+NMPC: 4x float32 = 19
 
-total = 29 bytes
+total = 37 bytes
 
--> 206 bytes + COBS-R + NUL + NUL + CRC32 = 214
+-> 231 bytes + COBS-R + NUL + NUL + CRC32 = 238
 
 
 Measurements:
@@ -108,4 +108,4 @@ dynamic pressure: 1x float32 = 7
 total: 35 bytes
 
 path update = 15 bytes (path = 9 bytes)
-waypoint update = 30 bytes (waypoint = 24 bytes)
+waypoint update = 46 bytes (waypoint = 40 bytes)

@@ -47,7 +47,6 @@ However, in relation to this code following disclaimer applies:
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
-#include <assert.h>
 
 #include "../util/util.h"
 #include "../util/3dmath.h"
@@ -69,8 +68,8 @@ void fcs_wmm_init(void) {
 
 bool fcs_wmm_calculate_field(double lat, double lon, double alt, double year,
 double out_field[3]) {
-    assert(wmm_inited);
-    assert(out_field);
+    fcs_assert(wmm_inited);
+    fcs_assert(out_field);
     _nassert((size_t)out_field % 8 == 0);
 
     double dec, dip, ti, gv;

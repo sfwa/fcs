@@ -26,7 +26,6 @@ SOFTWARE.
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
-#include <assert.h>
 #include <float.h>
 
 #ifdef __TI_COMPILER_VERSION__
@@ -36,6 +35,7 @@ SOFTWARE.
 #endif
 
 #include "exports.h"
+#include "../util/util.h"
 
 #ifdef __TI_COMPILER_VERSION__
 #define FCS_SEMAPHORE_ID_EXPORTS 1u
@@ -53,7 +53,9 @@ SOFTWARE.
 volatile static struct fcs_log_t exports_shared_logs[FCS_LOG_TYPE_LAST - 1u];
 
 static struct fcs_log_t exports_local_logs[FCS_LOG_TYPE_LAST - 1u];
-static enum fcs_log_open_mode_t exports_local_states[FCS_LOG_TYPE_LAST - 1u];
+static enum fcs_log_open_mode_t exports_local_states[FCS_LOG_TYPE_LAST - 1u] =
+    { FCS_MODE_CLOSED, FCS_MODE_CLOSED, FCS_MODE_CLOSED, FCS_MODE_CLOSED,
+      FCS_MODE_CLOSED };
 
 
 void fcs_exports_init(void) {
@@ -78,10 +80,10 @@ struct fcs_log_t *fcs_exports_log_open(enum fcs_log_type_t type,
 enum fcs_log_open_mode_t mode) {
     /* printf("fcs_exports_log_open(%d, %c)\n", (int)type, (char)mode); */
 
-    assert(FCS_LOG_TYPE_INVALID < type && type < FCS_LOG_TYPE_LAST);
-    assert(mode == FCS_MODE_READ || mode == FCS_MODE_WRITE ||
-           mode == FCS_MODE_APPEND);
-    assert(exports_local_states[type] == FCS_MODE_CLOSED);
+    fcs_assert(FCS_LOG_TYPE_INVALID < type && type < FCS_LOG_TYPE_LAST);
+    fcs_assert(mode == FCS_MODE_READ || mode == FCS_MODE_WRITE ||
+               mode == FCS_MODE_APPEND);
+    fcs_assert(exports_local_states[type] == FCS_MODE_CLOSED);
 
 #ifdef __TI_COMPILER_VERSION__
     /* Wait until we can acquire the semaphore */
@@ -91,6 +93,9 @@ enum fcs_log_open_mode_t mode) {
     while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
         sem_val = semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS];
         i++;
+    }
+    if (sem_val != 1u) {
+        return NULL;
     }
 #endif
 
@@ -103,6 +108,9 @@ enum fcs_log_open_mode_t mode) {
 
     if (mode == FCS_MODE_WRITE) {
         /* Set up a new log -- TODO: track frame ID */
+        fcs_log_init(&exports_local_logs[type], type, 0);
+    } else if (exports_shared_logs[type].length < FCS_LOG_MIN_LENGTH) {
+        /* Invalid source log; just hand back an empty log */
         fcs_log_init(&exports_local_logs[type], type, 0);
     } else {
         exports_local_logs[type] = exports_shared_logs[type];
@@ -119,7 +127,7 @@ enum fcs_log_open_mode_t mode) {
 }
 
 struct fcs_log_t *fcs_exports_log_close(struct fcs_log_t *l) {
-    assert(l);
+    fcs_assert(l);
 
     enum fcs_log_type_t type;
     size_t idx;
@@ -131,12 +139,14 @@ struct fcs_log_t *fcs_exports_log_close(struct fcs_log_t *l) {
 
     /* printf("fcs_exports_log_close(%u)\n", (int)idx); */
 
-    assert(0 < idx && idx < FCS_LOG_TYPE_LAST);
+    fcs_assert(0 < idx && idx < FCS_LOG_TYPE_LAST);
     type = (enum fcs_log_type_t)idx;
 
-    assert(exports_local_states[type] == FCS_MODE_READ ||
-           exports_local_states[type] == FCS_MODE_WRITE ||
-           exports_local_states[type] == FCS_MODE_APPEND);
+    fcs_assert(exports_local_states[type] == FCS_MODE_READ ||
+               exports_local_states[type] == FCS_MODE_WRITE ||
+               exports_local_states[type] == FCS_MODE_APPEND);
+    fcs_assert(l->length >= FCS_LOG_MIN_LENGTH &&
+               l->length <= FCS_LOG_MAX_LENGTH);
 
     if (exports_local_states[type] == FCS_MODE_WRITE ||
             exports_local_states[type] == FCS_MODE_APPEND) {
@@ -144,13 +154,17 @@ struct fcs_log_t *fcs_exports_log_close(struct fcs_log_t *l) {
         /* Acquire the global state semaphore; exit if that's not possible */
         volatile CSL_SemRegs *const semaphore =
             (CSL_SemRegs*)CSL_SEMAPHORE_REGS;
-        uint32_t sem_val = semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS];
+        uint32_t sem_val = 0, i = 0;
+        while (sem_val != 1u && i < FCS_SEMAPHORE_TIMEOUT) {
+            sem_val = semaphore->SEM[FCS_SEMAPHORE_ID_EXPORTS];
+            i++;
+        }
         if (sem_val != 1u) {
-            return l;
+            return NULL;
         }
 #endif
 
-        exports_shared_logs[type] = exports_local_logs[type];
+        exports_shared_logs[type] = *l;
 
 #ifdef __TI_COMPILER_VERSION__
         /* Write back L1 */
