@@ -64,7 +64,24 @@ static uint32_t control_tick;
 
 
 inline static bool is_path_valid() {
-    return nav_state.reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID;
+    struct fcs_path_t *path;
+    struct fcs_waypoint_t *start, *end;
+
+    if (nav_state.reference_path_id[0] != FCS_CONTROL_INVALID_PATH_ID) {
+        path = &nav_state.paths[nav_state.reference_path_id[0]];
+        start = &nav_state.waypoints[path->start_waypoint_id];
+        end = &nav_state.waypoints[path->end_waypoint_id];
+
+        /* Make sure the path isn't too long */
+        if (absval(start->lat - end->lat) * WGS84_A <
+                    FCS_CONTROL_MAX_PATH_LENGTH &&
+                absval(start->lon - end->lon) * WGS84_A <
+                    FCS_CONTROL_MAX_PATH_LENGTH) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 inline static bool is_navigating() {
@@ -167,7 +184,7 @@ void fcs_control_tick(void) {
     struct fcs_parameter_t param;
     float controls[NMPC_CONTROL_DIM], alt_diff;
     uint32_t start_t = cycle_count();
-    uint16_t update_obj_id;
+    uint16_t update_obj_id, manual_setpoint[NMPC_CONTROL_DIM];
     bool control_timeout = false;
 
     fcs_assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
@@ -190,16 +207,29 @@ void fcs_control_tick(void) {
     fcs_assert(measurement_log);
 
     /*
-    Find the control mode -- switch to auto if the packet is present and it's
-    an auto command.
+    Find the control mode -- switch to the mode identified in the packet if
+    it's present, otherwise default to auto (safer).
     */
-    //if (fcs_parameter_find_by_type_and_device(
-    //        measurement_log, FCS_PARAMETER_CONTROL_MODE, 0, &param) &&
-    //        param.data.u8[0] == 1u) {
+    if (fcs_parameter_find_by_type_and_device(
+            measurement_log, FCS_PARAMETER_CONTROL_MODE, 0, &param)) {
+        if (param.data.u8[0] == 1u) {
+            control_state.mode = FCS_CONTROL_MODE_AUTO;
+        } else {
+            control_state.mode = FCS_CONTROL_MODE_MANUAL;
+        }
+    } else {
         control_state.mode = FCS_CONTROL_MODE_AUTO;
-    //} else {
-    //    control_state.mode = FCS_CONTROL_MODE_MANUAL;
-    //}
+    }
+
+    /*
+    If we're in manual mode, extract the input control values and use those as
+    the setpoint.
+    */
+    if (control_state.mode == FCS_CONTROL_MODE_MANUAL &&
+            fcs_parameter_find_by_type_and_device(
+                measurement_log, FCS_PARAMETER_CONTROL_POS, 0, &param)) {
+        memcpy(manual_setpoint, param.data.u16, sizeof(manual_setpoint));
+    }
 
     /* Handle navigation state updates */
     if (fcs_parameter_find_by_type_and_device(
@@ -311,9 +341,18 @@ void fcs_control_tick(void) {
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 3u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_CONTROL_SETPOINT);
     fcs_parameter_set_device_id(&param, 0);
-    param.data.u16[0] = (uint16_t)(controls[0] * (float)UINT16_MAX);
-    param.data.u16[1] = (uint16_t)(controls[1] * (float)UINT16_MAX);
-    param.data.u16[2] = (uint16_t)(controls[2] * (float)UINT16_MAX);
+    if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
+        /* Use auto setpoints */
+        param.data.u16[0] = (uint16_t)(controls[0] * (float)UINT16_MAX);
+        param.data.u16[1] = (uint16_t)(controls[1] * (float)UINT16_MAX);
+        param.data.u16[2] = (uint16_t)(controls[2] * (float)UINT16_MAX);
+    } else {
+        /* Use manual setpoints */
+        param.data.u16[0] = manual_setpoint[0];
+        param.data.u16[1] = manual_setpoint[1];
+        param.data.u16[2] = manual_setpoint[2];
+    }
+
     fcs_log_add_parameter(control_log, &param);
 
     /*

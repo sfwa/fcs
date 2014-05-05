@@ -48,6 +48,9 @@ trajectory to get back on track.
 /* Turn radius in metres */
 #define FCS_CONTROL_TURN_RADIUS 60.0
 
+/* Maximum path length in metres */
+#define FCS_CONTROL_MAX_PATH_LENGTH 10000.0
+
 /*
 The number of control ticks (@ 50Hz) after which the path should be recomputed
 */

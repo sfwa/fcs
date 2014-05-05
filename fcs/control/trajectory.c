@@ -514,13 +514,12 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
 
     struct fcs_waypoint_t *waypoint, *out_waypoint;
     float stabilise_delta, stabilise_heading, alt;
-    float airflow[3], airspeed;
+    float airflow[3];
 
     /* Start with actual airspeed if it's lower than the reference */
     airflow[0] = state_estimate->wind_velocity[0] - state_estimate->velocity[0];
     airflow[1] = state_estimate->wind_velocity[1] - state_estimate->velocity[1];
     airflow[2] = state_estimate->velocity[2];
-    airspeed = vector3_norm_f(airflow);
 
     out_waypoint = &nav->waypoints[out_waypoint_id];
 
@@ -530,8 +529,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     waypoint->lon = state_estimate->lon;
     waypoint->alt = state_estimate->alt;
     waypoint->airspeed = nav->reference_trajectory[0].airspeed;
-    waypoint->yaw =
-        (float)atan2(state_estimate->velocity[1], state_estimate->velocity[0]);
+    waypoint->yaw = (float)atan2(-airflow[1], -airflow[0]);
     waypoint->pitch = 0.0f;
     waypoint->roll = 0.0f;
 
