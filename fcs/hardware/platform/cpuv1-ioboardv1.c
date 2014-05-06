@@ -27,6 +27,7 @@ SOFTWARE.
 #include <math.h>
 
 #ifdef __TI_COMPILER_VERSION__
+#include <c6x.h>
 #include "../c66x-csl/ti/csl/cslr_device.h"
 #include "../c66x-csl/ti/csl/cslr_sem.h"
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
@@ -308,7 +309,6 @@ void fcs_board_init_platform(void) {
     board_reference_alt = 0.0;
 }
 
-#include <c6x.h>
 void fcs_board_tick(void) {
     uint8_t out_buf[FCS_LOG_SERIALIZED_LENGTH];
     size_t out_buf_len, write_len, i;
@@ -320,9 +320,6 @@ void fcs_board_tick(void) {
     enum fcs_mode_t ahrs_mode;
     bool got_result, mode_ok;
     enum fcs_stream_result_t stream_result;
-    volatile uint32_t times[4];
-
-    times[0] = TSCL;
 
     /*
     Read attitude, WMM field, static pressure, static temp and AHRS mode from
@@ -459,8 +456,6 @@ void fcs_board_tick(void) {
         }
     }
 
-    times[1] = TSCL;
-
     hal_log = fcs_exports_log_open(FCS_LOG_TYPE_SENSOR_HAL, FCS_MODE_WRITE);
     fcs_assert(hal_log);
 
@@ -481,8 +476,6 @@ void fcs_board_tick(void) {
 
     hal_log = fcs_exports_log_close(hal_log);
     fcs_assert(!hal_log);
-
-    times[2] = TSCL;
 
     /*
     Merge the AHRS estimate log and the NMPC control log and send them to the
@@ -549,6 +542,11 @@ void fcs_board_tick(void) {
     fcs_assert(!estimate_log);
 
     /*
+    TODO: check last control log frame ID and if it hasn't changed in N ticks,
+    tell the I/O board to enter failsafe.
+    */
+
+    /*
     Serialize the merged log and write it to both internal UARTs (I/O boards
     1 and 2).
     */
@@ -559,20 +557,12 @@ void fcs_board_tick(void) {
     write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, out_buf_len);
     fcs_assert(out_buf_len == write_len);
 
-/*
     write_len = fcs_stream_write(FCS_STREAM_UART_INT1, out_buf, out_buf_len);
     fcs_assert(out_buf_len == write_len);
-*/
 
     /* Increment transmit counters */
     fcs_global_counters.ioboard_packet_tx[0]++;
     fcs_global_counters.ioboard_packet_tx[1]++;
-
-    times[3] = TSCL;
-
-    if (times[3] - times[0] > 100000) {
-    	times[0]++;
-    }
 }
 
 /*

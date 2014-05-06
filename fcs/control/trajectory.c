@@ -354,8 +354,6 @@ enum fcs_path_type_t type, float t) {
     } else {
         fcs_assert(false && "Invalid path type.");
     }
-
-    return t;
 }
 
 static void _make_reference(float *restrict reference,

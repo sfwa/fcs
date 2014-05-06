@@ -195,10 +195,13 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     conn.write(state_out)
     #print binascii.b2a_hex(state_out)
 
+    print "Recvd: ",
+
     packet = ""
     data = conn.read(1)
     while True:
         if data:
+            print binascii.b2a_hex(data),
             if packet:
                 packet += data
                 if data == "\x00":
@@ -207,6 +210,8 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
                 if data == "\x00":
                     packet += data
         data = conn.read(1)
+
+    print ""
 
     try:
         control_log = plog.ParameterLog.deserialize(packet)

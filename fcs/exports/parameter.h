@@ -141,6 +141,7 @@ struct fcs_parameter_t {
 #define FCS_PARAMETER_KEY_PATH (uint8_t*)"PATH"
 #define FCS_PARAMETER_KEY_WAYPOINT (uint8_t*)"WAYP"
 #define FCS_PARAMETER_KEY_REFERENCE_POINT (uint8_t*)"REFP"
+#define FCS_PARAMETER_KEY_NAV_BOUNDARY (uint8_t*)"BDRY"
 
 /* Parameter field accessors */
 enum fcs_parameter_type_t fcs_parameter_get_type(
@@ -202,6 +203,17 @@ if not.
 */
 bool fcs_parameter_find_by_type_and_device(
 const struct fcs_log_t *restrict plog, enum fcs_parameter_type_t type,
+uint8_t device_id, struct fcs_parameter_t *restrict out_parameter);
+
+/*
+Finds a parameter with a given device and key in the log, and copies the
+result to `out_parameter`.
+
+Returns true if a parameter with matching device and key was found, and false
+if not.
+*/
+bool fcs_parameter_find_by_key_and_device(
+const struct fcs_log_t *restrict plog, const uint8_t key[4],
 uint8_t device_id, struct fcs_parameter_t *restrict out_parameter);
 
 /*

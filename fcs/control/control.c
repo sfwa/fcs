@@ -98,6 +98,8 @@ inline static bool is_position_error_ok(float err) {
 }
 
 static void _read_estimate_log(struct fcs_state_estimate_t *estimate);
+static bool is_latlng_in_poly(double pt_lat, double pt_lng, float pt_alt,
+size_t num_point_ids, uint16_t point_ids[], struct fcs_waypoint_t points[]);
 
 
 void fcs_control_init(void) {
@@ -181,10 +183,11 @@ void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
     struct fcs_log_t *control_log, *measurement_log;
-    struct fcs_parameter_t param;
+    struct fcs_parameter_t param, param2;
     float controls[NMPC_CONTROL_DIM], alt_diff;
     uint32_t start_t = cycle_count();
-    uint16_t update_obj_id, manual_setpoint[NMPC_CONTROL_DIM];
+    uint16_t manual_setpoint[NMPC_CONTROL_DIM];
+    uint8_t param_key[4];
     bool control_timeout = false;
 
     fcs_assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
@@ -237,30 +240,33 @@ void fcs_control_tick(void) {
             param.data.u32[0] == nav_state.version + 1u) {
         /* Look for path and waypoint updates */
         if (fcs_parameter_find_by_type_and_device(
-                measurement_log, FCS_PARAMETER_NAV_PATH_ID, 0, &param)) {
+                    measurement_log, FCS_PARAMETER_NAV_PATH_ID, 0, &param) &&
+                fcs_parameter_find_by_key_and_device(
+                    measurement_log, FCS_PARAMETER_KEY_PATH, 0, &param2)) {
             /* Update path */
-            update_obj_id = param.data.u16[0];
-            if (fcs_parameter_find_by_type_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_VALUE, 0, &param)) {
-                (void)fcs_parameter_get_key_value(
-                    FCS_PARAMETER_KEY_PATH,
-                    (uint8_t*)&nav_state.paths[update_obj_id],
-                    sizeof(struct fcs_path_t), &param);
-                nav_state.version++;
-            }
+            (void)fcs_parameter_get_key_value(
+                param_key, (uint8_t*)&nav_state.paths[param.data.u16[0]],
+                sizeof(struct fcs_path_t), &param2);
+            nav_state.version++;
         } else if (fcs_parameter_find_by_type_and_device(
-                measurement_log, FCS_PARAMETER_NAV_WAYPOINT_ID, 0,
-                &param)) {
+                    measurement_log, FCS_PARAMETER_NAV_WAYPOINT_ID, 0,
+                    &param) &&
+                fcs_parameter_find_by_key_and_device(
+                    measurement_log, FCS_PARAMETER_KEY_WAYPOINT, 0,
+                    &param2)) {
             /* Update waypoint */
-            update_obj_id = param.data.u16[0];
-            if (fcs_parameter_find_by_type_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_VALUE, 0, &param)) {
-                (void)fcs_parameter_get_key_value(
-                    FCS_PARAMETER_KEY_WAYPOINT,
-                    (uint8_t*)&nav_state.waypoints[update_obj_id],
-                    sizeof(struct fcs_waypoint_t), &param);
-                nav_state.version++;
-            }
+            (void)fcs_parameter_get_key_value(
+                param_key, (uint8_t*)&nav_state.waypoints[param.data.u16[0]],
+                sizeof(struct fcs_waypoint_t), &param2);
+            nav_state.version++;
+        } else if (fcs_parameter_find_by_key_and_device(
+                    measurement_log, FCS_PARAMETER_KEY_NAV_BOUNDARY, 0,
+                    &param)) {
+            /* Update mission boundary */
+            (void)fcs_parameter_get_key_value(
+                param_key, (uint8_t*)&nav_state.boundary,
+                sizeof(struct fcs_boundary_t), &param);
+            nav_state.version++;
         }
     }
 
@@ -275,6 +281,16 @@ void fcs_control_tick(void) {
 
     alt_diff = absval(state_estimate.alt -
                       nav_state.reference_trajectory[0].alt);
+
+    /* Check we're still inside the mission boundary */
+    if (!is_latlng_in_poly(state_estimate.lat, state_estimate.lon,
+                           state_estimate.alt,
+                           nav_state.boundary.num_waypoint_ids,
+                           nav_state.boundary.waypoint_ids,
+                           nav_state.waypoints)) {
+        /* Lock up so the AHRS core signals I/O boards to abort flight */
+        fcs_assert(0 && "Mission boundary crossed");
+    }
 
     /*
     Four options here:
@@ -505,4 +521,64 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
            estimate->angular_velocity[2], estimate->wind_velocity[0],
            estimate->wind_velocity[1], estimate->wind_velocity[2]);
 */
+}
+
+static bool is_latlng_in_poly(double pt_lat, double pt_lng, float pt_alt,
+size_t num_point_ids, uint16_t point_ids[], struct fcs_waypoint_t points[]) {
+    /*
+    Check lat/long is within boundary.
+    See http://msdn.microsoft.com/en-us/library/cc451895.aspx
+
+    Scaling of all lat and lng points is 1/10,000,000 of a degree.
+
+    Does not work at the poles, and probably also doesn't work across the
+    -180/180 split. Also doesn't do any correction for spherical surfaces so
+    won't work for very large polygons (more than a few degrees across).
+    */
+    fcs_assert(!num_point_ids || (points && point_ids));
+    fcs_assert(num_point_ids <= FCS_CONTROL_BOUNDARY_MAX_WAYPOINTS);
+
+    uint8_t in_bounds = 0;
+    size_t i, j;
+    double i_lat, i_lng, j_lat, j_lng, ij_grad;
+
+    if (num_point_ids == 0) {
+        return true;
+    }
+
+    for (i = 0, j = num_point_ids - 1; i < num_point_ids; i++) {
+        fcs_assert(point_ids[i] < FCS_CONTROL_MAX_WAYPOINTS);
+        fcs_assert(point_ids[j] < FCS_CONTROL_MAX_WAYPOINTS);
+
+        /* Altitude check */
+        if (points[point_ids[i]].alt < pt_alt) {
+            return false;
+        }
+
+        /*
+        Only validate i points because each point in the polygon is used as
+        both j and i
+        */
+        i_lat = points[point_ids[i]].lat;
+        i_lng = points[point_ids[i]].lon;
+        j_lat = points[point_ids[j]].lat;
+        j_lng = points[point_ids[j]].lon;
+
+        /*
+        Check if line segment points are either side of the POI,
+        longitudinally
+        */
+        if ((i_lng < pt_lng && j_lng >= pt_lng) ||
+                (j_lng < pt_lng && i_lng >= pt_lng)) {
+            /* See which side of the line segment the point is on */
+            ij_grad = (pt_lng - i_lng) * (j_lat - i_lat) / (j_lng - i_lng);
+
+            if (i_lat + ij_grad < pt_lat) {
+                in_bounds = ~in_bounds;
+            }
+        }
+        j = i;
+    }
+
+    return in_bounds != 0;
 }

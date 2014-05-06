@@ -168,3 +168,17 @@ const struct fcs_log_t *restrict src) {
 
     return true;
 }
+
+/* Return a log's frame ID */
+uint16_t fcs_log_get_frame_id(const struct fcs_log_t *restrict plog) {
+    fcs_assert(plog);
+
+    if (FCS_LOG_MIN_LENGTH <= plog->length &&
+            plog->length <= FCS_LOG_MAX_LENGTH &&
+            plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID &&
+            plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST) {
+        return (uint16_t)plog->data[3] + (uint16_t)(plog->data[4] << 8u);
+    } else {
+        return 0;
+    }
+}

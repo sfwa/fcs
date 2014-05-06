@@ -77,4 +77,7 @@ If `dst` has insufficient space available, return `false`, otherwise `true`.
 bool fcs_log_merge(struct fcs_log_t *restrict dst,
 const struct fcs_log_t *restrict src);
 
+/* Return a log's frame ID */
+uint16_t fcs_log_get_frame_id(const struct fcs_log_t *restrict plog);
+
 #endif

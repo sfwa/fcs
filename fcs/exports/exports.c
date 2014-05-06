@@ -106,14 +106,14 @@ enum fcs_log_open_mode_t mode) {
     while (L1DIWC & 0xFFFFu);
 #endif
 
+    exports_local_logs[type] = exports_shared_logs[type];
     if (mode == FCS_MODE_WRITE) {
-        /* Set up a new log -- TODO: track frame ID */
-        fcs_log_init(&exports_local_logs[type], type, 0);
+        /* Set up a new log -- track frame ID */
+        fcs_log_init(&exports_local_logs[type], type,
+                     fcs_log_get_frame_id(&exports_local_logs[type]) + 1u);
     } else if (exports_shared_logs[type].length < FCS_LOG_MIN_LENGTH) {
         /* Invalid source log; just hand back an empty log */
         fcs_log_init(&exports_local_logs[type], type, 0);
-    } else {
-        exports_local_logs[type] = exports_shared_logs[type];
     }
 
 #ifdef __TI_COMPILER_VERSION__

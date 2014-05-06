@@ -276,7 +276,6 @@ float t) {
                 break;
             default:
                 fcs_assert(false && "Invalid Dubins path type");
-                break;
         }
 
         /* Calculate total path length. */

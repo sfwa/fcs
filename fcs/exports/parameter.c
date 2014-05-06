@@ -434,6 +434,46 @@ uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
 }
 
 /*
+Finds a parameter with a given device and key in the log, and copies the
+result to `out_parameter`.
+
+Returns true if a parameter with matching device and key was found, and false
+if not.
+*/
+bool fcs_parameter_find_by_key_and_device(
+const struct fcs_log_t *restrict plog, const uint8_t key[4],
+uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
+    fcs_assert(plog);
+    fcs_assert(FCS_LOG_MIN_LENGTH <= plog->length &&
+               plog->length <= FCS_LOG_MAX_LENGTH);
+    fcs_assert(out_parameter);
+
+    size_t i, length;
+
+    for (i = 5u; i < plog->length;) {
+        length = _extract_length(plog->data[i]);
+        if (!length) {
+            return false;
+        }
+
+        if (plog->data[i + 1u] == device_id &&
+                plog->data[i + 2u] == (uint8_t)FCS_PARAMETER_KEY_VALUE &&
+                plog->data[i + 3u] == key[0] &&
+                plog->data[i + 4u] == key[1] &&
+                plog->data[i + 5u] == key[2] &&
+                plog->data[i + 6u] == key[3]) {
+            memcpy(out_parameter, &plog->data[i], length);
+            /* Return false if the parameter is found but invalid */
+            return _validate_parameter(out_parameter);
+        }
+
+        i += length;
+    }
+
+    return false;
+}
+
+/*
 Finds all parameters with a given type, and copies the first `max_parameters`
 of them to the array `out_parameters`.
 

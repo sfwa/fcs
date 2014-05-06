@@ -176,7 +176,6 @@ double *restrict out_offset, double prescale) {
         case FCS_CALIBRATION_LAST:
             /* Invalid calibration type */
             fcs_assert(false);
-            break;
     }
 
     if (calibration->type & FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION) {
