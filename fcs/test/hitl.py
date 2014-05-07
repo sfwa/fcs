@@ -127,8 +127,8 @@ def lla_to_ned(a, origin):
     )
 
 
-def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
-         angular_velocity=None, wind_velocity=None):
+def write_state(conn, lat=None, lon=None, alt=None, velocity=None,
+                attitude=None, angular_velocity=None, wind_velocity=None):
     """
     Runs the FCS control and comms tasks with the state data provided as
     though it came from the AHRS, and returns the control output.
@@ -195,35 +195,59 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     conn.write(state_out)
     #print binascii.b2a_hex(state_out)
 
-    print "Recvd: ",
+PACKET = ""
+PACKETS = []
+LAST_CONTROL = None
 
-    packet = ""
-    data = conn.read(1)
-    while True:
-        if data:
-            print binascii.b2a_hex(data),
-            if packet:
-                packet += data
-                if data == "\x00":
-                    break
-            else:
-                if data == "\x00":
-                    packet += data
-        data = conn.read(1)
+def read_control(conn):
+    global PACKET, PACKETS, LAST_CONTROL
 
-    print ""
+    data = conn.read()
+    while data:
+        for ch in data:
+            if ch == "\x00" or PACKET:
+                if ch == "\x00" and PACKET:
+                    if PACKET[-1] == "\x00":
+                        PACKET = PACKET[:-1]
+                    else:
+                        got_message = True
+                PACKET = PACKET + ch
+                if len(PACKET) > 1024:
+                    PACKET = ""
+            if got_message:
+                PACKETS.push(PACKET)
+                PACKET = ""
+                got_message = False
+
+        data = conn.read()
+
+    last_packet = PACKETS[-1] if PACKETS else None
+    PACKETS = []
 
     try:
-        control_log = plog.ParameterLog.deserialize(packet)
+        control_log = plog.ParameterLog.deserialize(last_packet)
 
         # print control_log
 
-        control_param = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
-        refp = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_KEY_VALUE)
-        cycles, obj_val, errors, resets = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_STATUS).values
-        return map(lambda x: float(x) / float(2**16), control_param.values), plog.extract_waypoint(refp.value), obj_val, cycles, errors, resets
+        control_param = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
+        refp = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_KEY_VALUE)
+        cycles, obj_val, errors, resets = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_STATUS).values
+
+        LAST_CONTROL = (
+            map(lambda x: float(x) / float(2**16), control_param.values),
+            plog.extract_waypoint(refp.value),
+            obj_val, cycles, errors, resets
+        )
+
+        return LAST_CONTROL
     except Exception:
-        return [0.0, 0.5, 0.5], {}, 0, 0, 0, 0
+        return LAST_CONTROL or ([0.0, 0.5, 0.5], {}, 0, 0, 0, 0)
 
 
 def connect_to_xplane():
@@ -425,7 +449,8 @@ def send_control_to_xplane(s, controls):
 
 
 if __name__ == "__main__":
-    conn = serial.Serial("/dev/tty.usbserial", 921600, timeout=0.01)
+    conn = serial.Serial("/dev/tty.usbserial", 921600, timeout=0,
+                         writeTimeout=0.02)  # Blocking writes to rate limit
     conn.read(1024)  # Clear out the read buffer
 
     sock = connect_to_xplane()
@@ -437,14 +462,10 @@ if __name__ == "__main__":
 
     time.sleep(0.1)
 
-    #print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,target_pitch,target_roll,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,actual_pitch,actual_roll,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
-
     controls = [0.0, 0.5, 0.5]
-    t = 0
+    t = time.time()
     try:
         while True:
-            iter_start = time.time()
-
             recv_state_from_xplane(sock)
 
             sim_state_delay.append(sim_state)
@@ -456,22 +477,26 @@ if __name__ == "__main__":
 
             sim_state_delay.popleft()
 
+            write_state(
+                conn,
+                # lat=sim_state_delay[0]["lat"],
+                # lon=sim_state_delay[0]["lon"],
+                # alt=sim_state_delay[-1]["alt"],
+                # velocity=sim_state_delay[0]["velocity"],
+                # attitude=sim_state_delay[-2]["attitude"],
+                # angular_velocity=sim_state_delay[-1]["angular_velocity"],
+                # wind_velocity=sim_state_delay[0]["wind_velocity"])
+                lat=sim_state_delay[-1]["lat"],
+                lon=sim_state_delay[-1]["lon"],
+                alt=sim_state_delay[-1]["alt"],
+                velocity=sim_state_delay[-1]["velocity"],
+                attitude=sim_state_delay[-1]["attitude"],
+                angular_velocity=sim_state_delay[-1]["angular_velocity"],
+                wind_velocity=sim_state_delay[-1]["wind_velocity"]
+            )
+
             controls, ref_point, obj_val, cycles, nmpc_errors, nmpc_resets = \
-                tick(
-                    # lat=sim_state_delay[0]["lat"],
-                    # lon=sim_state_delay[0]["lon"],
-                    # alt=sim_state_delay[-1]["alt"],
-                    # velocity=sim_state_delay[0]["velocity"],
-                    # attitude=sim_state_delay[-2]["attitude"],
-                    # angular_velocity=sim_state_delay[-1]["angular_velocity"],
-                    # wind_velocity=sim_state_delay[0]["wind_velocity"])
-                    lat=sim_state_delay[-1]["lat"],
-                    lon=sim_state_delay[-1]["lon"],
-                    alt=sim_state_delay[-1]["alt"],
-                    velocity=sim_state_delay[-1]["velocity"],
-                    attitude=sim_state_delay[-1]["attitude"],
-                    angular_velocity=sim_state_delay[-1]["angular_velocity"],
-                    wind_velocity=sim_state_delay[-1]["wind_velocity"])
+                read_control(conn)
 
             send_control_to_xplane(sock, controls)
 
@@ -512,7 +537,7 @@ if __name__ == "__main__":
                 "t=%.3f, l=%.3f, r=%.3f, " +
                 "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d"
             ) % (
-                (t * 0.02, ) +
+                (time.time() - t, ) +
                 lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
                            ref_point.get("alt", 0)), (sim_state["lat"],
                            sim_state["lon"], sim_state["alt"])) +
@@ -527,17 +552,8 @@ if __name__ == "__main__":
                 (obj_val, cycles, nmpc_errors, nmpc_resets)
             )
 
-            t += 1
-
             if sim_state["alt"] < 50.0:
                 print "LOST CONTROL"
                 raise StopIteration()
-
-            slack_time = 0.02 - (time.time() - iter_start)
-            if slack_time > 0:
-                print "Time %.3fs" % (time.time() - iter_start)
-                time.sleep(slack_time)
-            else:
-                print "DEADLINE MISSED: %.3fs late" % -slack_time
     finally:
         disable_xplane_sim(sock)

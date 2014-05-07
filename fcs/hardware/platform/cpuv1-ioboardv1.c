@@ -79,6 +79,7 @@ static double board_reference_pressure, board_reference_alt;
 static uint8_t
     stream_msg_buf[FCS_STREAM_NUM_DEVICES][FCS_LOG_SERIALIZED_LENGTH];
 static size_t stream_msg_idx[FCS_STREAM_NUM_DEVICES];
+static uint16_t last_control_packet_frame_id;
 
 
 /* Prototypes of internal functions */
@@ -320,6 +321,7 @@ void fcs_board_tick(void) {
     enum fcs_mode_t ahrs_mode;
     bool got_result, mode_ok;
     enum fcs_stream_result_t stream_result;
+    uint16_t frame_id;
 
     /*
     Read attitude, WMM field, static pressure, static temp and AHRS mode from
@@ -474,15 +476,29 @@ void fcs_board_tick(void) {
     _set_gps_position(measurement_log, hal_log, &board_calibration);
     _set_gps_velocity(measurement_log, hal_log, &board_calibration);
 
-    hal_log = fcs_exports_log_close(hal_log);
-    fcs_assert(!hal_log);
-
     /*
     Merge the AHRS estimate log and the NMPC control log and send them to the
     I/O boards.
     */
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_READ);
     fcs_assert(control_log);
+
+    /* Check for control log updates */
+    frame_id = fcs_log_get_frame_id(control_log);
+    if (frame_id != last_control_packet_frame_id) {
+        /* Got a new frame; send the control log to the HITL port */
+        out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
+                                        control_log);
+
+        write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf,
+                                     out_buf_len);
+        fcs_assert(out_buf_len == write_len);
+    } else {
+        /*
+        TODO: check last control log frame ID and if it hasn't changed in N
+        ticks, tell the I/O board to enter failsafe.
+        */
+    }
 
     /*
     Check the simulation port for a log packet -- if received, it replaces the
@@ -505,17 +521,6 @@ void fcs_board_tick(void) {
 
             memcpy(estimate_log, &out_log, sizeof(struct fcs_log_t));
         }
-    //}
-
-    //if (fcs_global_counters.ioboard_packet_tx[0] % 20 == 0) {
-        /* Serialize the control log only, and write it to the HITL port */
-        out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
-                                        control_log);
-        fcs_assert(out_buf_len < 255u);
-
-        write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf,
-                                     out_buf_len);
-        fcs_assert(out_buf_len == write_len);
     }
 
     if (fcs_stream_check_error(FCS_STREAM_UART_EXT1) == FCS_STREAM_ERROR) {
@@ -532,33 +537,42 @@ void fcs_board_tick(void) {
     memcpy(&out_log, control_log, sizeof(struct fcs_log_t));
     (void)fcs_log_merge(&out_log, estimate_log);
 
-    control_log = fcs_exports_log_close(control_log);
-    fcs_assert(!control_log);
-
-    measurement_log = fcs_exports_log_close(measurement_log);
-    fcs_assert(!measurement_log);
-
-    estimate_log = fcs_exports_log_close(estimate_log);
-    fcs_assert(!estimate_log);
-
-    /*
-    TODO: check last control log frame ID and if it hasn't changed in N ticks,
-    tell the I/O board to enter failsafe.
-    */
-
     /*
     Serialize the merged log and write it to both internal UARTs (I/O boards
     1 and 2).
     */
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
-    /* FIXME: limitation of current stream driver */
-    fcs_assert(out_buf_len < 240u);
 
     write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, out_buf_len);
     fcs_assert(out_buf_len == write_len);
 
     write_len = fcs_stream_write(FCS_STREAM_UART_INT1, out_buf, out_buf_len);
     fcs_assert(out_buf_len == write_len);
+
+    /*
+    Now merge in the measurement log and HAL log, then send everything to the
+    CPU via the USB stream.
+    */
+    (void)fcs_log_merge(&out_log, measurement_log);
+    (void)fcs_log_merge(&out_log, hal_log);
+
+    out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
+
+    //write_len = fcs_stream_write(FCS_STREAM_USB, out_buf, out_buf_len);
+    //fcs_assert(out_buf_len == write_len);
+
+    /* Close all the logs */
+    control_log = fcs_exports_log_close(control_log);
+    fcs_assert(!control_log);
+
+    hal_log = fcs_exports_log_close(hal_log);
+    fcs_assert(!hal_log);
+
+    measurement_log = fcs_exports_log_close(measurement_log);
+    fcs_assert(!measurement_log);
+
+    estimate_log = fcs_exports_log_close(estimate_log);
+    fcs_assert(!estimate_log);
 
     /* Increment transmit counters */
     fcs_global_counters.ioboard_packet_tx[0]++;

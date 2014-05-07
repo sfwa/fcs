@@ -401,12 +401,13 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     _fcs.fcs_control_tick()
 
     # Read out ignored streams
-    read(0, 255)
-    read(1, 255)
-    read(2, 255)
+    read(0, 1023)
+    read(1, 1023)
+    read(2, 1023)
+    read(4, 1023)
 
     try:
-        control_log = plog.ParameterLog.deserialize(read(3, 255))
+        control_log = plog.ParameterLog.deserialize(read(3, 1023))
 
         control_param = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
         return map(lambda x: float(x) / float(2**16), control_param.values)
@@ -423,9 +424,9 @@ def write(stream_id, value):
         raise RuntimeError("Please call init()")
     if stream_id < 0 or stream_id > FCS_STREAM_NUM_DEVICES:
         raise ValueError("Invalid stream ID")
-    if len(value) >= 256:
+    if len(value) >= 1024:
         raise ValueError(
-            "Input value is too long (got %d bytes, max is 255)" % len(value))
+            "Input value is too long (got %d bytes, max is 1023)" % len(value))
 
     bytes_written = _fcs._fcs_stream_write_to_rx_buffer(
         stream_id, value, len(value))
@@ -442,14 +443,14 @@ def read(stream_id, max_len):
         raise RuntimeError("Please call init()")
     if stream_id < 0 or stream_id > FCS_STREAM_NUM_DEVICES:
         raise ValueError("Invalid stream ID")
-    if max_len >= 256:
+    if max_len >= 1024:
         raise ValueError(
-            "Too many bytes requested (got %d, max is 255)" % max_len)
+            "Too many bytes requested (got %d, max is 1023)" % max_len)
     elif max_len < 1:
         raise ValueError(
             "Can't request fewer than 1 bytes (got %d)" % max_len)
 
-    buf = create_string_buffer(256)
+    buf = create_string_buffer(1024)
     bytes_read = _fcs._fcs_stream_read_from_tx_buffer(
         stream_id, buf, max_len)
 

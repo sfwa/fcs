@@ -61,6 +61,7 @@ struct fcs_control_state_t control_state;
 struct fcs_nav_state_t nav_state;
 static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
+static uint32_t control_hold_timer;
 
 
 inline static bool is_path_valid() {
@@ -97,7 +98,8 @@ inline static bool is_position_error_ok(float err) {
            (is_stabilising() || absval(err) < FCS_CONTROL_POSITION_TOLERANCE);
 }
 
-static void _read_estimate_log(struct fcs_state_estimate_t *estimate);
+static void _read_estimate_log(struct fcs_state_estimate_t *estimate,
+int32_t *time_since_last_gps, int32_t *time_since_last_data);
 static bool is_latlng_in_poly(double pt_lat, double pt_lng, float pt_alt,
 size_t num_point_ids, uint16_t point_ids[], struct fcs_waypoint_t points[]);
 
@@ -177,15 +179,19 @@ void fcs_control_init(void) {
     control_tick = 0;
 
     control_state.mode = FCS_CONTROL_MODE_MANUAL;
+    control_state.intent = FCS_CONTROL_INTENT_NAVIGATING;
 }
 
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
     struct fcs_log_t *control_log, *measurement_log;
+    struct fcs_waypoint_t *waypoint;
+    struct fcs_path_t *path;
     struct fcs_parameter_t param, param2;
     float controls[NMPC_CONTROL_DIM], alt_diff;
     uint32_t start_t = cycle_count();
+    int32_t ms_since_last_gps, ms_since_last_data;
     uint16_t manual_setpoint[NMPC_CONTROL_DIM];
     uint8_t param_key[4];
     bool control_timeout = false;
@@ -277,7 +283,8 @@ void fcs_control_tick(void) {
     Read the relevant parts of the AHRS output and convert them to a format
     usable by the control system.
     */
-    _read_estimate_log(&state_estimate);
+    _read_estimate_log(&state_estimate, &ms_since_last_gps,
+                       &ms_since_last_data);
 
     alt_diff = absval(state_estimate.alt -
                       nav_state.reference_trajectory[0].alt);
@@ -290,6 +297,72 @@ void fcs_control_tick(void) {
                            nav_state.waypoints)) {
         /* Lock up so the AHRS core signals I/O boards to abort flight */
         fcs_assert(0 && "Mission boundary crossed");
+    }
+
+    if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
+        /* Handle loss of data link and loss of GPS when in autonomous mode */
+        if (time_since_last_gps > 1000 && time_since_last_data > 10000) {
+            /* Lock up */
+            fcs_assert(0 && "Lost GPS and lost data link");
+        }
+
+        if (time_since_last_gps > 30000) {
+            /* Lock up */
+            fcs_assert(0 && "Lost GPS > 30 sec");
+        } else if (time_since_last_gps > 1000) {
+            /* Enter a holding pattern if we're not already in one */
+            if (nav_state.reference_path_id[0] != FCS_CONTROL_HOLD_PATH_ID &&
+                    nav_state.reference_path_id[0] !=
+                    FCS_CONTROL_STABILISE_PATH_ID) {
+                fcs_trajectory_start_hold(&nav_state, &state_estimate);
+                fcs_trajectory_recalcluate(&nav_state, &state_estimate);
+            }
+        }
+
+        if (control_state.intent == FCS_CONTROL_INTENT_RETURNING_HOME &&
+                control_hold_timer > 120000) {
+            /* We've been holding at the HOME waypoint for 2 min -- abort */
+            fcs_assert(0 && "Lost data link");
+        } else if (control_state.intent == FCS_CONTROL_INTENT_RALLYING &&
+                control_hold_timer > 120000) {
+            /*
+            We've been holding at the RALLY waypoint for 2 min -- return
+            home.
+            */
+            memcpy(&nav_state.waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID],
+                   &nav_state.reference_trajectory[0],
+                   sizeof(struct fcs_waypoint_t));
+            memcpy(&nav_state.waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+                   &nav_state.waypoints[FCS_CONTROL_HOME_WAYPOINT_ID],
+                   sizeof(struct fcs_waypoint_t));
+
+            path = &nav_state.paths[FCS_CONTROL_RETURN_HOME_PATH_ID];
+            path->start_waypoint_id = FCS_CONTROL_STABILISE_WAYPOINT_ID;
+            path->end_waypoint_id = FCS_CONTROL_HOME_WAYPOINT_ID;
+            path->next_path_id = FCS_CONTROL_HOLD_PATH_ID;
+            path->type = FCS_PATH_DUBINS_CURVE;
+
+            nav_state.reference_path_id[0] = FCS_CONTROL_RETURN_HOME_PATH_ID;
+            fcs_trajectory_recalcluate(&nav_state, &state_estimate);
+        } else if (control_state.intent == FCS_CONTROL_INTENT_NAVIGATING &&
+                time_since_last_data > 10000) {
+            /* Lost the data link -- go to the RALLY waypoint */
+            memcpy(&nav_state.waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID],
+                   &nav_state.reference_trajectory[0],
+                   sizeof(struct fcs_waypoint_t));
+            memcpy(&nav_state.waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+                   &nav_state.waypoints[FCS_CONTROL_RALLY_WAYPOINT_ID],
+                   sizeof(struct fcs_waypoint_t));
+
+            path = &nav_state.paths[FCS_CONTROL_RALLY_PATH_ID];
+            path->start_waypoint_id = FCS_CONTROL_STABILISE_WAYPOINT_ID;
+            path->end_waypoint_id = FCS_CONTROL_RALLY_WAYPOINT_ID;
+            path->next_path_id = FCS_CONTROL_HOLD_PATH_ID;
+            path->type = FCS_PATH_DUBINS_CURVE;
+
+            nav_state.reference_path_id[0] = FCS_CONTROL_RALLY_PATH_ID;
+            fcs_trajectory_recalcluate(&nav_state, &state_estimate);
+        }
     }
 
     /*
@@ -340,6 +413,13 @@ void fcs_control_tick(void) {
         fcs_trajectory_start_hold(&nav_state, &state_estimate);
         fcs_trajectory_recalculate(&nav_state, &state_estimate);
         fcs_trajectory_timestep(&nav_state, &state_estimate);
+    }
+
+    /* If we're holding, increment the hold timer; otherwise reset it */
+    if (nav_state.reference_path_id[0] == FCS_CONTROL_HOLD_PATH_ID) {
+        control_hold_timer += 20;
+    } else {
+        control_hold_timer = 0;
     }
 
     /* Get the control values and update the global state. */
@@ -425,7 +505,8 @@ void fcs_control_reset(void) {
 Copy estimate values from the estimate log to the state estimate structure.
 See _populate_estimate_log at ahrs/ahrs.c:329.
 */
-static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
+static void _read_estimate_log(struct fcs_state_estimate_t *estimate,
+int32_t *time_since_last_gps, int32_t *time_since_last_data) {
     fcs_assert(estimate);
 
     struct fcs_log_t *estimate_log;
@@ -433,6 +514,15 @@ static void _read_estimate_log(struct fcs_state_estimate_t *estimate) {
 
     estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, FCS_MODE_READ);
     fcs_assert(estimate_log);
+
+    if (fcs_parameter_find_by_type_and_device(
+            estimate_log, FCS_PARAMETER_AHRS_STATE, 0, &param)) {
+        *time_since_last_gps = param.data.i32[0];
+        *time_since_last_data = param.data.i32[1];
+    } else {
+        *time_since_last_gps = 0;
+        *time_since_last_data = 0;
+    }
 
     if (fcs_parameter_find_by_type_and_device(
             estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_LLA, 0, &param)) {

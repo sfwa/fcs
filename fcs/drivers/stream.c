@@ -33,6 +33,7 @@ SOFTWARE.
 #ifdef __TI_COMPILER_VERSION__
 #include "../hardware/int-uart.h"
 #include "../hardware/emif-uart.h"
+#include "../hardware/ft232h.h"
 #endif
 
 /*
@@ -96,9 +97,10 @@ uint32_t baud) {
     fcs_assert(dev < FCS_STREAM_NUM_DEVICES);
 
     if (dev != FCS_STREAM_UART_INT0 && dev != FCS_STREAM_UART_INT1 &&
-            dev != FCS_STREAM_UART_EXT0 && dev != FCS_STREAM_UART_EXT1) {
+            dev != FCS_STREAM_UART_EXT0 && dev != FCS_STREAM_UART_EXT1 &&
+            dev != FCS_STREAM_USB) {
         return FCS_STREAM_ERROR;
-    } else if (baud < 57600 || baud > 3000000) {
+    } else if (baud < 57600 || baud > FCS_STREAM_MAX_RATE) {
         return FCS_STREAM_ERROR;
     }
 
@@ -113,6 +115,8 @@ uint32_t baud) {
         uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
         fcs_emif_uart_set_baud_rate(dev_idx, baud);
         fcs_emif_uart_reset(dev_idx);
+    } else if (dev == FCS_STREAM_USB) {
+        /* Nothing to do here -- no rates need to be set. */
     } else {
         fcs_assert(false);
     }
@@ -143,6 +147,9 @@ enum fcs_stream_result_t fcs_stream_open(enum fcs_stream_device_t dev) {
         uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
         fcs_emif_uart_start_rx_edma(
             dev_idx, rx_buffers[dev], FCS_STREAM_BUFFER_SIZE);
+    } else if (dev == FCS_STREAM_USB) {
+        /* Set up the device */
+        fcs_ft232h_reset();
     } else {
         fcs_assert(false);
     }
@@ -165,6 +172,8 @@ enum fcs_stream_device_t dev) {
         err = fcs_int_uart_check_error(dev == FCS_STREAM_UART_INT0 ? 0 : 1);
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
         err = fcs_emif_uart_check_error(dev == FCS_STREAM_UART_EXT0 ? 0 : 1);
+    } else if (dev == FCS_STREAM_USB) {
+        /* TODO? */
     } else {
         fcs_assert(false);
     }
@@ -199,6 +208,10 @@ size_t nbytes) {
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
         dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
         rx_write_idx[dev] = fcs_emif_uart_get_rx_edma_count(dev_idx);
+    } else if (dev == FCS_STREAM_USB) {
+        rx_write_idx[dev] = 0;
+    } else {
+        fcs_assert(false);
     }
 #endif
 
@@ -240,6 +253,8 @@ const uint8_t *restrict buf, size_t nbytes) {
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
         dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
         tx_read_idx[dev] = fcs_emif_uart_get_tx_edma_count(dev_idx);
+    } else if (dev == FCS_STREAM_USB) {
+        tx_read_idx[dev] = fcs_ft232h_get_tx_edma_count();
     } else {
         fcs_assert(false);
     }
@@ -267,6 +282,8 @@ const uint8_t *restrict buf, size_t nbytes) {
     } else if (dev == FCS_STREAM_UART_EXT0 || dev == FCS_STREAM_UART_EXT1) {
         uint8_t dev_idx = dev == FCS_STREAM_UART_EXT0 ? 0 : 1;
         fcs_emif_uart_start_tx_edma(dev_idx, &tx_buffers[dev][0], nbytes);
+    } else if (dev == FCS_STREAM_USB) {
+        fcs_ft232h_start_tx_edma(&tx_buffers[dev][0], nbytes);
     } else {
         fcs_assert(false);
     }

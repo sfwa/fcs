@@ -36,6 +36,12 @@ enum fcs_control_mode_t {
     FCS_CONTROL_MODE_AUTO = 'F'
 };
 
+enum fcs_control_intent_t {
+    FCS_CONTROL_INTENT_NAVIGATING,
+    FCS_CONTROL_INTENT_RALLYING,
+    FCS_CONTROL_INTENT_RETURNING_HOME
+};
+
 /*
 If the vehicle is more than 15m from where it should be, switch to a recovery
 trajectory to get back on track.
@@ -116,6 +122,12 @@ struct fcs_path_t {
 /* Marker for 'stabilise after loss of control' path */
 #define FCS_CONTROL_STABILISE_PATH_ID (FCS_CONTROL_MAX_PATHS - 4u)
 
+/* Marker for 'return to rally then hold' path */
+#define FCS_CONTROL_RALLY_PATH_ID (FCS_CONTROL_MAX_PATHS - 5u)
+
+/* Marker for 'return home then hold' path */
+#define FCS_CONTORL_RETURN_HOME_PATH_ID (FCS_CONTORL_MAX_PATHS - 6u)
+
 /* Invalid/uninitialized waypoint ID */
 #define FCS_CONTROL_INVALID_WAYPOINT_ID 0xFFFFu
 
@@ -133,6 +145,12 @@ Marker for 'interpolate from an arbitrary state to the next path' waypoint ID
 /* Marker for 'stabilise path commence' waypoint ID */
 #define FCS_CONTROL_STABILISE_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 4u)
 
+/* Marker for 'home' waypoint ID */
+#define FCS_CONTROL_HOME_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 5u)
+
+/* Marker for 'rally' waypoint ID */
+#define FCS_CONTROL_RALLY_WAYPOINT_ID (FCS_CONTROL_MAX_WAYPOINTS - 6u)
+
 struct fcs_boundary_t {
     uint16_t num_waypoint_ids;
     uint16_t waypoint_ids[FCS_CONTROL_BOUNDARY_MAX_WAYPOINTS];
@@ -142,6 +160,7 @@ struct fcs_boundary_t {
 struct fcs_control_state_t {
     struct fcs_control_channel_t controls[FCS_CONTROL_CHANNELS];
     enum fcs_control_mode_t mode;
+    enum fcs_control_intent_t intent;
     uint8_t gpio_state;
 };
 

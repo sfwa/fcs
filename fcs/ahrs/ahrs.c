@@ -55,6 +55,8 @@ static uint64_t ahrs_solution_time;
 static enum ukf_model_t ahrs_dynamics_model;
 static uint64_t ahrs_mode_start_time;
 static enum fcs_mode_t ahrs_mode;
+static uint64_t ahrs_last_gps_time;
+static uint64_t ahrs_last_baro_time;
 
 /*
 Check a vector for NaN values; return true if any are found, and false
@@ -93,6 +95,7 @@ void fcs_ahrs_init(void) {
     ahrs_mode_start_time = 0;
     ahrs_wmm_field[0] = 1.0;
     ahrs_wmm_field[1] = ahrs_wmm_field[2] = 0.0;
+    ahrs_last_gps_time = ahrs_last_baro_time = 0;
 
     fcs_wmm_init();
 
@@ -165,6 +168,7 @@ void fcs_ahrs_tick(void) {
     if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_PRESSURE_ALTITUDE, v,
                               &params.barometer_amsl_covariance, 1u)) {
         ukf_sensor_set_barometer_amsl(v[0]);
+        ahrs_last_baro_time = ahrs_solution_time;
     }
 
     /* Read GPS position and velocity */
@@ -174,6 +178,7 @@ void fcs_ahrs_tick(void) {
                                   &v[2], &params.gps_position_covariance[2],
                                   1u)) {
         ukf_sensor_set_gps_position(v[0], v[1], v[2]);
+        ahrs_last_gps_time = ahrs_solution_time;
         got_gps = true;
     }
     if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_VELOCITY_NED, v,
@@ -243,6 +248,9 @@ void fcs_ahrs_tick(void) {
 
         _populate_estimate_log(state_values, error, ahrs_wmm_field, ahrs_mode,
                                STANDARD_PRESSURE, STANDARD_TEMP);
+    } else {
+        /* In simulation mode, pretend sensors are always good */
+        ahrs_last_baro_time = ahrs_last_gps_time = ahrs_solution_time;
     }
 
 
@@ -439,7 +447,25 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_AHRS_MODE, 1u, tmp, 2u);
 
-    tmp[0] = 0;
+    /*
+    AHRS status 0 is the maximum time since last critical sensor update (for
+    GPS and barometric pressure) -- if it exceeds a certain value flight
+    should be terminated by the control system.
+    */
+    uint64_t t_since_last_sensor;
+    t_since_last_sensor = ahrs_solution_time - ahrs_last_gps_time;
+    if (ahrs_solution_time - ahrs_last_baro_time > t_since_last_sensor) {
+        t_since_last_sensor = ahrs_solution_time - ahrs_last_baro_time;
+    }
+
+    tmp[0] = (int32_t)(t_since_last_sensor > INT32_MAX ?
+                       INT32_MAX : t_since_last_sensor);
+
+    /*
+    AHRS status 1 is the time since the last reference pressure/GCS update --
+    if it exceeds a certain value the control system should follow the loss
+    of data link procedure.
+    */
     tmp[1] = 0;
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_AHRS_STATUS, 2u, tmp, 2u);
