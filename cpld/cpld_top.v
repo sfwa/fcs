@@ -159,7 +159,7 @@ wire[3:0] c66x_state;
 assign led[0] = (c66x_state == 4'b1001);
 assign led[1] = dsp_resetfull_INV;
 assign led[2] = pll_locked;
-assign led[3] = dsp_ext_uart1_int;
+assign led[3] = ~dsp_ext_uart_tx;
 
 /*
 Break out the CDCE62002 SPI signals to the external SPI connector to enable
@@ -274,7 +274,7 @@ always @(*) begin
 
 		cpu_ext_uart0_rx = dsp_int_uart1_tx;
 		cpu_ext_uart1_rx = dsp_int_uart1_tx;
-		ext_uart0_tx = dsp_int_uart1_tx;
+		ext_uart0_tx = dsp_ext_uart_tx;
 
 		spi_flash_cs_INV = dsp_spi_cs0_INV;
 		spi_flash_mosi = dsp_spi_mosi;

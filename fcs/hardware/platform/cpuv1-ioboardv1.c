@@ -492,7 +492,9 @@ void fcs_board_tick(void) {
 
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf,
                                      out_buf_len);
-        fcs_assert(out_buf_len == write_len);
+        // fcs_assert(out_buf_len == write_len);
+
+        last_control_packet_frame_id = frame_id;
     } else {
         /*
         TODO: check last control log frame ID and if it hasn't changed in N

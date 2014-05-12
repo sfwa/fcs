@@ -248,11 +248,7 @@ void fcs_ahrs_tick(void) {
 
         _populate_estimate_log(state_values, error, ahrs_wmm_field, ahrs_mode,
                                STANDARD_PRESSURE, STANDARD_TEMP);
-    } else {
-        /* In simulation mode, pretend sensors are always good */
-        ahrs_last_baro_time = ahrs_last_gps_time = ahrs_solution_time;
     }
-
 
     /* Check the current mode and transition if necessary */
     if (ahrs_mode == FCS_MODE_STARTUP_VALUE) {
@@ -456,6 +452,11 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     t_since_last_sensor = ahrs_solution_time - ahrs_last_gps_time;
     if (ahrs_solution_time - ahrs_last_baro_time > t_since_last_sensor) {
         t_since_last_sensor = ahrs_solution_time - ahrs_last_baro_time;
+    }
+
+    /* Ignore sensor timeouts in any mode but active */
+    if (ahrs_mode != FCS_MODE_ACTIVE) {
+        t_since_last_sensor = 0;
     }
 
     tmp[0] = (int32_t)(t_since_last_sensor > INT32_MAX ?

@@ -211,7 +211,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     and the end_waypoint_id and next_path_id of the current path.
     */
     if (nav->reference_path_id[0] != FCS_CONTROL_INTERPOLATE_PATH_ID &&
-            nav->reference_path_id[0] != FCS_CONTROL_STABILISE_PATH_ID) {
+               nav->reference_path_id[0] != FCS_CONTROL_STABILISE_PATH_ID) {
         original_path_id = nav->reference_path_id[0];
         memcpy(&nav->paths[FCS_CONTROL_RESUME_PATH_ID],
                &nav->paths[original_path_id], sizeof(struct fcs_path_t));
@@ -266,11 +266,6 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     Start a 5-second stabilisation path and enter a holding pattern at the
     end of it.
     */
-    nav->reference_trajectory[0].lat = state_estimate->lat;
-    nav->reference_trajectory[0].lon = state_estimate->lon;
-    nav->reference_trajectory[0].alt = state_estimate->alt;
-    nav->reference_trajectory[0].airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
-
     _stabilise_path_to_waypoint(nav, state_estimate,
                                 FCS_CONTROL_HOLD_WAYPOINT_ID,
                                 FCS_CONTROL_HOLD_PATH_ID);
@@ -327,7 +322,7 @@ const float *restrict wind) {
             *last_point_path_id != FCS_CONTROL_STABILISE_PATH_ID &&
             *last_point_path_id != FCS_CONTROL_INTERPOLATE_PATH_ID) {
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
-           new_point, sizeof(struct fcs_waypoint_t));
+           last_point, sizeof(struct fcs_waypoint_t));
     }
 
     _make_reference(reference, new_point, last_point,
@@ -515,8 +510,10 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     float airflow[3];
 
     /* Start with actual airspeed if it's lower than the reference */
-    airflow[0] = state_estimate->wind_velocity[0] - state_estimate->velocity[0];
-    airflow[1] = state_estimate->wind_velocity[1] - state_estimate->velocity[1];
+    airflow[0] = state_estimate->wind_velocity[0] -
+                 state_estimate->velocity[0];
+    airflow[1] = state_estimate->wind_velocity[1] -
+                 state_estimate->velocity[1];
     airflow[2] = state_estimate->velocity[2];
 
     out_waypoint = &nav->waypoints[out_waypoint_id];
@@ -526,7 +523,10 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     waypoint->lat = state_estimate->lat;
     waypoint->lon = state_estimate->lon;
     waypoint->alt = state_estimate->alt;
-    waypoint->airspeed = nav->reference_trajectory[0].airspeed;
+    waypoint->airspeed = nav->reference_trajectory[0].airspeed >
+                            FCS_CONTROL_DEFAULT_AIRSPEED ?
+                         nav->reference_trajectory[0].airspeed :
+                         FCS_CONTROL_DEFAULT_AIRSPEED;
     waypoint->yaw = (float)atan2(-airflow[1], -airflow[0]);
     waypoint->pitch = 0.0f;
     waypoint->roll = 0.0f;
@@ -546,7 +546,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
         (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
         cos(waypoint->lat);
     out_waypoint->alt = alt;
-    out_waypoint->airspeed = waypoint->airspeed;
+    out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
     out_waypoint->yaw = stabilise_heading;
     out_waypoint->pitch = 0.0f;
     out_waypoint->roll = 0.0f;

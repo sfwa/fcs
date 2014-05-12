@@ -203,6 +203,7 @@ def read_control(conn):
     global PACKET, PACKETS, LAST_CONTROL
 
     data = conn.read()
+    got_message = False
     while data:
         for ch in data:
             if ch == "\x00" or PACKET:
@@ -215,7 +216,7 @@ def read_control(conn):
                 if len(PACKET) > 1024:
                     PACKET = ""
             if got_message:
-                PACKETS.push(PACKET)
+                PACKETS.append(PACKET)
                 PACKET = ""
                 got_message = False
 
@@ -232,6 +233,9 @@ def read_control(conn):
         control_param = control_log.find_by(
             device_id=0,
             parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
+        path = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID).values[0]
         refp = control_log.find_by(
             device_id=0,
             parameter_type=plog.ParameterType.FCS_PARAMETER_KEY_VALUE)
@@ -242,12 +246,12 @@ def read_control(conn):
         LAST_CONTROL = (
             map(lambda x: float(x) / float(2**16), control_param.values),
             plog.extract_waypoint(refp.value),
-            obj_val, cycles, errors, resets
+            obj_val, cycles, errors, resets, control_log.tick, path
         )
 
         return LAST_CONTROL
     except Exception:
-        return LAST_CONTROL or ([0.0, 0.5, 0.5], {}, 0, 0, 0, 0)
+        return LAST_CONTROL or ([0.0, 0.5, 0.5], {}, 0, 0, 0, 0, 0, 0xFFFF)
 
 
 def connect_to_xplane():
@@ -443,14 +447,13 @@ def recv_state_from_xplane(s):
 
 def send_control_to_xplane(s, controls):
     update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % controls[0]
-    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 2.0)
-    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 2.0)
+    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 1.5)
+    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 1.5)
     s.sendall(update)
 
 
 if __name__ == "__main__":
-    conn = serial.Serial("/dev/tty.usbserial", 921600, timeout=0,
-                         writeTimeout=0.02)  # Blocking writes to rate limit
+    conn = serial.Serial("/dev/tty.usbserial-FTVONZXS", 921600, timeout=0)
     conn.read(1024)  # Clear out the read buffer
 
     sock = connect_to_xplane()
@@ -464,6 +467,7 @@ if __name__ == "__main__":
 
     controls = [0.0, 0.5, 0.5]
     t = time.time()
+    last_print_tick = 0
     try:
         while True:
             recv_state_from_xplane(sock)
@@ -495,8 +499,8 @@ if __name__ == "__main__":
                 wind_velocity=sim_state_delay[-1]["wind_velocity"]
             )
 
-            controls, ref_point, obj_val, cycles, nmpc_errors, nmpc_resets = \
-                read_control(conn)
+            controls, ref_point, obj_val, cycles, nmpc_errors, nmpc_resets, \
+                tick, path = read_control(conn)
 
             send_control_to_xplane(sock, controls)
 
@@ -527,30 +531,34 @@ if __name__ == "__main__":
             #    controls[2]
             #)
 
-            print (
-                "t=%6.2f, " +
-                "n=%6.2f, e=%6.2f, d=%6.2f, " +
-                "tas=%5.2f, tas_ref=%5.2f, " +
-                "yaw=%3.0f, yaw_ref=%3.0f, " +
-                "pitch=%4.0f, pitch_ref=%4.0f, " +
-                "roll=%4.0f, roll_ref=%4.0f, " +
-                "t=%.3f, l=%.3f, r=%.3f, " +
-                "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d"
-            ) % (
-                (time.time() - t, ) +
-                lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
-                           ref_point.get("alt", 0)), (sim_state["lat"],
-                           sim_state["lon"], sim_state["alt"])) +
-                (sim_ref["airspeed"], ref_point.get("airspeed", 0)) +
-                (math.degrees(sim_ref["attitude_yaw"]),
-                    math.degrees(ref_point.get("yaw", 0))) +
-                (math.degrees(sim_ref["attitude_pitch"]),
-                    math.degrees(ref_point.get("pitch", 0))) +
-                (math.degrees(sim_ref["attitude_roll"]),
-                    math.degrees(ref_point.get("roll", 0))) +
-                (controls[0], controls[1], controls[2]) +
-                (obj_val, cycles, nmpc_errors, nmpc_resets)
-            )
+            if tick != last_print_tick:
+                print (
+                    "t=%6.2f, " +
+                    "n=%6.2f, e=%6.2f, d=%6.2f, " +
+                    "tas=%5.2f, tas_ref=%5.2f, " +
+                    "yaw=%3.0f, yaw_ref=%3.0f, " +
+                    "pitch=%4.0f, pitch_ref=%4.0f, " +
+                    "roll=%4.0f, roll_ref=%4.0f, " +
+                    "t=%.3f, l=%.3f, r=%.3f, " +
+                    "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
+                    "path=%4d"
+                ) % (
+                    (time.time() - t, ) +
+                    lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
+                               ref_point.get("alt", 0)), (sim_state["lat"],
+                               sim_state["lon"], sim_state["alt"])) +
+                    (sim_ref["airspeed"], ref_point.get("airspeed", 0)) +
+                    (math.degrees(sim_ref["attitude_yaw"]),
+                        math.degrees(ref_point.get("yaw", 0))) +
+                    (math.degrees(sim_ref["attitude_pitch"]),
+                        math.degrees(ref_point.get("pitch", 0))) +
+                    (math.degrees(sim_ref["attitude_roll"]),
+                        math.degrees(ref_point.get("roll", 0))) +
+                    (controls[0], controls[1], controls[2]) +
+                    (obj_val, cycles, nmpc_errors, nmpc_resets) +
+                    (path, )
+                )
+                last_print_tick = tick
 
             if sim_state["alt"] < 50.0:
                 print "LOST CONTROL"

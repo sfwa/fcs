@@ -126,7 +126,7 @@ struct fcs_path_t {
 #define FCS_CONTROL_RALLY_PATH_ID (FCS_CONTROL_MAX_PATHS - 5u)
 
 /* Marker for 'return home then hold' path */
-#define FCS_CONTORL_RETURN_HOME_PATH_ID (FCS_CONTORL_MAX_PATHS - 6u)
+#define FCS_CONTROL_RETURN_HOME_PATH_ID (FCS_CONTROL_MAX_PATHS - 6u)
 
 /* Invalid/uninitialized waypoint ID */
 #define FCS_CONTROL_INVALID_WAYPOINT_ID 0xFFFFu

@@ -77,7 +77,9 @@ inline static bool is_path_valid() {
         if (absval(start->lat - end->lat) * WGS84_A <
                     FCS_CONTROL_MAX_PATH_LENGTH &&
                 absval(start->lon - end->lon) * WGS84_A <
-                    FCS_CONTROL_MAX_PATH_LENGTH) {
+                    FCS_CONTROL_MAX_PATH_LENGTH &&
+                start->alt && end->alt &&
+                !isnan(start->alt) && !isnan(end->alt)) {
             return true;
         }
     }
@@ -112,7 +114,7 @@ void fcs_control_init(void) {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
     float control_weights[NMPC_CONTROL_DIM] = { 3e2, 5e2, 5e2 };
-    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.0f, 0.25f, 0.25f };
+    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.15f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
     /* Clear GPIO outs */
@@ -186,7 +188,6 @@ void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
     struct fcs_log_t *control_log, *measurement_log;
-    struct fcs_waypoint_t *waypoint;
     struct fcs_path_t *path;
     struct fcs_parameter_t param, param2;
     float controls[NMPC_CONTROL_DIM], alt_diff;
@@ -301,21 +302,21 @@ void fcs_control_tick(void) {
 
     if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
         /* Handle loss of data link and loss of GPS when in autonomous mode */
-        if (time_since_last_gps > 1000 && time_since_last_data > 10000) {
+        if (ms_since_last_gps > 1000 && ms_since_last_data > 10000) {
             /* Lock up */
             fcs_assert(0 && "Lost GPS and lost data link");
         }
 
-        if (time_since_last_gps > 30000) {
+        if (ms_since_last_gps > 30000) {
             /* Lock up */
             fcs_assert(0 && "Lost GPS > 30 sec");
-        } else if (time_since_last_gps > 1000) {
+        } else if (ms_since_last_gps > 1000) {
             /* Enter a holding pattern if we're not already in one */
             if (nav_state.reference_path_id[0] != FCS_CONTROL_HOLD_PATH_ID &&
                     nav_state.reference_path_id[0] !=
                     FCS_CONTROL_STABILISE_PATH_ID) {
                 fcs_trajectory_start_hold(&nav_state, &state_estimate);
-                fcs_trajectory_recalcluate(&nav_state, &state_estimate);
+                fcs_trajectory_recalculate(&nav_state, &state_estimate);
             }
         }
 
@@ -324,7 +325,7 @@ void fcs_control_tick(void) {
             /* We've been holding at the HOME waypoint for 2 min -- abort */
             fcs_assert(0 && "Lost data link");
         } else if (control_state.intent == FCS_CONTROL_INTENT_RALLYING &&
-                control_hold_timer > 120000) {
+                   control_hold_timer > 120000) {
             /*
             We've been holding at the RALLY waypoint for 2 min -- return
             home.
@@ -343,9 +344,9 @@ void fcs_control_tick(void) {
             path->type = FCS_PATH_DUBINS_CURVE;
 
             nav_state.reference_path_id[0] = FCS_CONTROL_RETURN_HOME_PATH_ID;
-            fcs_trajectory_recalcluate(&nav_state, &state_estimate);
+            fcs_trajectory_recalculate(&nav_state, &state_estimate);
         } else if (control_state.intent == FCS_CONTROL_INTENT_NAVIGATING &&
-                time_since_last_data > 10000) {
+                   ms_since_last_data > 10000) {
             /* Lost the data link -- go to the RALLY waypoint */
             memcpy(&nav_state.waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID],
                    &nav_state.reference_trajectory[0],
@@ -361,7 +362,7 @@ void fcs_control_tick(void) {
             path->type = FCS_PATH_DUBINS_CURVE;
 
             nav_state.reference_path_id[0] = FCS_CONTROL_RALLY_PATH_ID;
-            fcs_trajectory_recalcluate(&nav_state, &state_estimate);
+            fcs_trajectory_recalculate(&nav_state, &state_estimate);
         }
     }
 
@@ -474,7 +475,7 @@ void fcs_control_tick(void) {
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 1u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_NAV_PATH_ID);
     fcs_parameter_set_device_id(&param, 0);
-    param.data.u16[0] = nav_state.reference_path_id[0];
+    param.data.u16[0] = nav_state.reference_path_id[100];
     fcs_log_add_parameter(control_log, &param);
 
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 32u, 1u);
@@ -485,8 +486,8 @@ void fcs_control_tick(void) {
 
     fcs_parameter_set_key_value(
         &param, FCS_PARAMETER_KEY_REFERENCE_POINT,
-        (uint8_t*)&nav_state.reference_trajectory[0],
-        sizeof(nav_state.reference_trajectory[0]));
+        (uint8_t*)&nav_state.reference_trajectory[100],
+        sizeof(nav_state.reference_trajectory[100]));
     fcs_parameter_set_device_id(&param, 0);
     param.data.u32[0] = nav_state.version;
     fcs_log_add_parameter(control_log, &param);
@@ -497,7 +498,8 @@ void fcs_control_tick(void) {
 
 void fcs_control_reset(void) {
     struct fcs_state_estimate_t state_estimate;
-    _read_estimate_log(&state_estimate);
+    int32_t tmp1, tmp2;
+    _read_estimate_log(&state_estimate, &tmp1, &tmp2);
     fcs_trajectory_recalculate(&nav_state, &state_estimate);
 }
 
@@ -516,7 +518,7 @@ int32_t *time_since_last_gps, int32_t *time_since_last_data) {
     fcs_assert(estimate_log);
 
     if (fcs_parameter_find_by_type_and_device(
-            estimate_log, FCS_PARAMETER_AHRS_STATE, 0, &param)) {
+            estimate_log, FCS_PARAMETER_AHRS_STATUS, 0, &param)) {
         *time_since_last_gps = param.data.i32[0];
         *time_since_last_data = param.data.i32[1];
     } else {
