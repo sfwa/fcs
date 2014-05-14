@@ -41,11 +41,11 @@ SOFTWARE.
 
 /* Global FCS state structure */
 static double ahrs_process_noise[] = {
-    1e-15, 1e-15, 1e-5, /* lat, lon, alt */
+    1e-15, 1e-15, 1e-3, /* lat, lon, alt */
     7e-5, 7e-5, 7e-5, /* velocity N, E, D */
     2e-4, 2e-4, 2e-4, /* acceleration x, y, z */
-    1e-9, 1e-9, 1e-9, /* attitude roll, pitch, yaw */
-    3e-6, 3e-6, 3e-6, /* angular velocity roll, pitch, yaw */
+    1e-7, 1e-7, 1e-7, /* attitude roll, pitch, yaw */
+    3e-3, 3e-3, 3e-3, /* angular velocity roll, pitch, yaw */
     1e-3, 1e-3, 1e-3, /* angular acceleration roll, pitch, yaw */
     1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
     1.5e-12, 1.5e-12, 1.5e-12 /* gyro bias x, y, z */
@@ -99,9 +99,6 @@ void fcs_ahrs_init(void) {
 
     fcs_wmm_init();
 
-    /* Reset/init the UKF */
-    _reset_state();
-
     /* Initialize AHRS mode */
     ahrs_dynamics_model = UKF_MODEL_X8;
     fcs_ahrs_set_mode(FCS_MODE_INITIALIZING);
@@ -112,7 +109,7 @@ void fcs_ahrs_tick(void) {
     While copying measurement data to the UKF, get sensor error and geometry
     information so the sensor model parameters can be updated.
     */
-    double v[3], speed;
+    double v[3], speed, wmm_field_inv;
     bool got_result, got_gps = false, got_reference_alt = true; /* FIXME */
     struct ukf_ioboard_params_t params;
     struct fcs_parameter_t parameter;
@@ -129,6 +126,11 @@ void fcs_ahrs_tick(void) {
     params.accel_orientation[W] = 1.0;
     params.gyro_orientation[W] = 1.0;
     params.mag_orientation[W] = 1.0;
+
+    /* Use the latest WMM field vector (unit length) */
+    wmm_field_inv = 1.0 / vector3_norm_d(ahrs_wmm_field);
+    vector3_scale_d(ahrs_wmm_field, wmm_field_inv);
+    vector_copy_d(params.mag_field, ahrs_wmm_field, 3u);
 
     /* Read sensor data from the measurement log, and pass it to the UKF */
     ukf_sensor_clear();
@@ -155,14 +157,17 @@ void fcs_ahrs_tick(void) {
     /* Read magnetometer */
     if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_MAGNETOMETER_XYZ, v,
                               params.mag_covariance, 3u)) {
+        vector3_scale_d(v, wmm_field_inv);
         ukf_sensor_set_magnetometer(v[0], v[1], v[2]);
     }
 
     /* Read pitot-derived airspeed */
     if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_AIRSPEED, v,
                               &params.pitot_covariance, 1u)) {
-        ukf_sensor_set_pitot_tas(v[0]);
+        //ukf_sensor_set_pitot_tas(v[0]);
     }
+    ukf_sensor_set_pitot_tas(0);
+    params.pitot_covariance = 1.0;
 
     /* Read barometer-derived altitude */
     if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_PRESSURE_ALTITUDE, v,
@@ -172,11 +177,11 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Read GPS position and velocity */
-    if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_POSITION_LAT_LON, v,
-                              params.gps_position_covariance, 2u) &&
-            _get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_POSITION_ALT,
-                                  &v[2], &params.gps_position_covariance[2],
-                                  1u)) {
+   if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_POSITION_LAT_LON, v,
+                             params.gps_position_covariance, 2u) &&
+           _get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_POSITION_ALT,
+                                 &v[2], &params.gps_position_covariance[2],
+                                 1u)) {
         ukf_sensor_set_gps_position(v[0], v[1], v[2]);
         ahrs_last_gps_time = ahrs_solution_time;
         got_gps = true;
@@ -188,10 +193,6 @@ void fcs_ahrs_tick(void) {
 
     hal_log = fcs_exports_log_close(hal_log);
     fcs_assert(!hal_log);
-
-    /* Use the latest WMM field vector (unit length) */
-    vector_copy_d(params.mag_field, ahrs_wmm_field, 3u);
-    vector3_scale_d(params.mag_field, vector3_norm_d(ahrs_wmm_field));
 
     /*
     Run the UKF, taking sensor readings and current control position into
@@ -588,6 +589,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
 
     switch (mode) {
         case FCS_MODE_INITIALIZING:
+            _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
             break;
         case FCS_MODE_SIMULATING:
@@ -595,15 +597,15 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
         case FCS_MODE_CALIBRATING:
             /* Start up clean */
             _reset_state();
+            ukf_choose_dynamics(UKF_MODEL_NONE);
             /* Trust attitude and gyro bias predictors less. */
             vector_set_d(&ahrs_process_noise[9], 1e-5, 3u);
             vector_set_d(&ahrs_process_noise[21], 1e-7, 3u);
             break;
         case FCS_MODE_SAFE:
             ukf_choose_dynamics(UKF_MODEL_NONE);
-
-            vector_set_d(&ahrs_process_noise[9], 1e-8, 3u);
-            vector_set_d(&ahrs_process_noise[21], 1e-9, 3u);
+            vector_set_d(&ahrs_process_noise[9], 1e-7, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             break;
         case FCS_MODE_ARMED:
             break;

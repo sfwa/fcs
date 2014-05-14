@@ -159,7 +159,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_ACCELEROMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.98f, /* about 0.1g */
+            .error = 0.75f, /* 0.75m/s^2 */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -176,7 +176,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_GYROSCOPE_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.0349f, /* approx 2 degrees */
+            .error = 0.03f, /* approx 2 degrees */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -193,7 +193,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.1f, /* = 0.1 Gauss */
+            .error = 0.05f, /* = 0.05 Gauss */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -217,7 +217,7 @@ void fcs_board_init_platform(void) {
             .device = 0,
             .type = FCS_PARAMETER_GPS_VELOCITY_NED,
             .calibration_type = FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 3.0f,
+            .error = 1.0f,
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -244,7 +244,7 @@ void fcs_board_init_platform(void) {
             .device = 0,
             .type = FCS_PARAMETER_PRESSURE_TEMP,
             .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
-            .error = 1.0f,
+            .error = 0.5f,
             /*
             0.02 is the sensor scale factor for conversion to mbar; multiply
             by 100 for Pa.
@@ -876,14 +876,13 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     This isn't the right way to do it as the UKF assumes zero-mean error,
     but in practice it's OK.
     */
-    vector3_scale_d(v, 0.1);
-    variance[X] = err + absval(v[X]);
+    variance[X] = err + absval(v[X] * 0.1);
     variance[X] *= variance[X];
 
-    variance[Y] = err + absval(v[Y]);
+    variance[Y] = err + absval(v[Y] * 0.1);
     variance[Y] *= variance[Y];
 
-    variance[Z] = err + absval(v[Z] + G_ACCEL * 0.1);
+    variance[Z] = err + absval(v[Z] * 0.1 + G_ACCEL * 0.1);
     variance[Z] *= variance[Z];
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_ACCELEROMETER_XYZ, v,
@@ -903,14 +902,13 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     Add a relative error term, as above. Remove this if gyro scale factor
     error is included in the process model.
     */
-    vector3_scale_d(v, 0.03);
-    variance[X] = err + absval(v[X]);
+    variance[X] = err + absval(v[X] * 0.1);
     variance[X] *= variance[X];
 
-    variance[Y] = err + absval(v[Y]);
+    variance[Y] = err + absval(v[Y] * 0.1);
     variance[Y] *= variance[Y];
 
-    variance[Z] = err + absval(v[Z]);
+    variance[Z] = err + absval(v[Z] * 0.1);
     variance[Z] *= variance[Z];
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_GYROSCOPE_XYZ, v,
@@ -985,8 +983,6 @@ double reference_pressure, double static_temp, double reference_alt) {
     alt = altitude_diff_from_pressure_diff(reference_pressure, v[0],
                                            static_temp) + reference_alt;
 
-    /* Allow for 3% scale factor error in altitude */
-    err += absval(alt) * 0.03;
     err *= err;
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_PRESSURE_ALTITUDE, &alt,
@@ -1035,7 +1031,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     fcs_parameter_set_type(&param, FCS_PARAMETER_HAL_POSITION_ALT_VARIANCE);
     fcs_parameter_set_device_id(&param, 0);
 
-    param.data.f32[0] = 225.0f;
+    param.data.f32[0] = 1024.0f;
 
     fcs_log_add_parameter(hlog, &param);
 }
@@ -1051,7 +1047,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     }
 
     variance[X] = variance[Y] = err * err;
-    variance[Z] = 25.0;
+    variance[Z] = 9.0;
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_VELOCITY_NED, v,
                               variance, 3u);

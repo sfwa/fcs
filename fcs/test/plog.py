@@ -346,6 +346,72 @@ def extract_waypoint(data):
         struct.unpack("<ddfffffL", data)))
 
 
+def q_to_euler(q):
+    qx = -q[0]
+    qy = -q[1]
+    qz = -q[2]
+    qw = q[3]
+
+    norm = math.sqrt(qx*qx + qy*qy + qz*qz + qw*qw)
+    qx /= norm
+    qy /= norm
+    qz /= norm
+    qw /= norm
+
+    yaw = math.atan2(2.0 * (qx * qy + qw * qz),
+                     qw * qw - qz * qz - qy * qy + qx * qx)
+    pitch = math.asin(-2.0 * (qx * qz - qy * qw))
+    roll = math.atan2(2.0 * (qy * qz + qx * qw),
+                      qw * qw + qz * qz - qy * qy - qx * qx)
+
+    yaw = math.degrees(yaw)
+    pitch = math.degrees(pitch)
+    roll = math.degrees(roll)
+
+    if yaw < 0.0:
+        yaw += 360.0
+
+    return yaw, pitch, roll
+
+
+def print_estimate_log(data):
+    tmp = data.find_by(
+        device_id=0,
+        parameter_type=ParameterType.FCS_PARAMETER_ESTIMATED_POSITION_LLA).values
+    pos = [math.degrees(tmp[0] * math.pi / 2**31), math.degrees(tmp[1] * math.pi / 2**31), tmp[2] * 1e-2]
+
+    tmp = data.find_by(
+        device_id=0,
+        parameter_type=ParameterType.FCS_PARAMETER_ESTIMATED_VELOCITY_NED).values
+    v = map(lambda x: float(x) * 1e-2, tmp)
+
+    att = data.find_by(
+        device_id=0,
+        parameter_type=ParameterType.FCS_PARAMETER_ESTIMATED_ATTITUDE_Q).values
+    att_ypr = list(q_to_euler(map(lambda x: float(x) / 32767.0, att)))
+
+    tmp = data.find_by(
+        device_id=0,
+        parameter_type=ParameterType.FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ).values
+    angular_v = map(lambda x: math.degrees(float(x) / (32767.0 / math.pi * 0.25)), tmp)
+
+    tmp = data.find_by(
+        device_id=0,
+        parameter_type=ParameterType.FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED).values
+    wind_v = map(lambda x: float(x) * 1e-2, tmp)
+
+    mode = chr(data.find_by(
+        device_id=0,
+        parameter_type=ParameterType.FCS_PARAMETER_AHRS_MODE).values[0])
+
+    print ("lat=%12.8f, lon=%12.8f, alt=%6.2f, " + \
+           "vn=%5.2f, ve=%5.2f, vd=%5.2f, " + \
+           "yaw=%5.1f, pitch=%5.1f, roll=%6.1f, " + \
+           "yaw_rate=%5.1f, pitch_rate=%5.1f, roll_rate=%5.1f, " + \
+           "wind_vn=%5.2f, wind_ve=%5.2f, wind_vd=%5.2f, mode=%s") % \
+          tuple(pos + v + att_ypr + angular_v + wind_v + [mode])
+
+
 if __name__ == "__main__":
     in_packet = False
     got_data = False
@@ -362,9 +428,15 @@ if __name__ == "__main__":
             got_data = False
         elif c == '\x00' and got_data and in_packet:
             try:
-                print repr(ParameterLog.deserialize(data))
+                logf = ParameterLog.deserialize(data)
+                #print repr(logf)
             except Exception:
                 print "Invalid packet: %s" % binascii.b2a_hex(data)
+            else:
+                try:
+                    print_estimate_log(logf)
+                except Exception:
+                    print "Incomplete packet"
             data = ''
             in_packet = False
             got_data = False
