@@ -28,6 +28,31 @@ SOFTWARE.
 #define Z 2
 #define W 3
 
+
+#ifndef absval
+#define absval(x) ((x) < 0 ? -(x) : (x))
+#endif
+
+#ifndef min
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+
+#ifndef max
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef M_PI
+#define M_PI (3.14159265358979323846)
+#endif
+
+#ifndef M_PI_2
+#define M_PI_2 (M_PI * 0.5)
+#endif
+
+#ifndef M_PI_4
+#define M_PI_4 (M_PI * 0.25)
+#endif
+
 #define G_ACCEL 9.80665 /* m/s^2 */
 #define STANDARD_PRESSURE 101325 /* Pa at sea level */
 #define STANDARD_TEMP (273.15 + 15.0) /* K */
@@ -74,32 +99,8 @@ double pdynamic, double temp) {
 
     return STANDARD_C *
            sqrt((5.0 / STANDARD_TEMP) *
-                (pow(pdynamic / pstatic + 1.0, 2.0 / 7.0) - 1.0));
+                (pow(absval(pdynamic / pstatic) + 1.0, 2.0 / 7.0) - 1.0));
 }
-
-#ifndef absval
-#define absval(x) ((x) < 0 ? -(x) : (x))
-#endif
-
-#ifndef min
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-
-#ifndef max
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-#endif
-
-#ifndef M_PI
-#define M_PI (3.14159265358979323846)
-#endif
-
-#ifndef M_PI_2
-#define M_PI_2 (M_PI * 0.5)
-#endif
-
-#ifndef M_PI_4
-#define M_PI_4 (M_PI * 0.25)
-#endif
 
 /* Return x mod 2 * PI */
 static inline float mod_2pi_f(float x) {

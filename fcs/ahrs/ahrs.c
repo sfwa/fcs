@@ -42,13 +42,13 @@ SOFTWARE.
 /* Global FCS state structure */
 static double ahrs_process_noise[] = {
     1e-15, 1e-15, 1e-3, /* lat, lon, alt */
-    7e-5, 7e-5, 7e-5, /* velocity N, E, D */
-    2e-4, 2e-4, 2e-4, /* acceleration x, y, z */
+    7e-4, 7e-4, 7e-4, /* velocity N, E, D */
+    2e-6, 2e-6, 2e-6, /* acceleration x, y, z */
     1e-7, 1e-7, 1e-7, /* attitude roll, pitch, yaw */
-    3e-3, 3e-3, 3e-3, /* angular velocity roll, pitch, yaw */
-    1e-3, 1e-3, 1e-3, /* angular acceleration roll, pitch, yaw */
+    1e-2, 1e-2, 1e-2, /* angular velocity roll, pitch, yaw */
+    1e-1, 1e-1, 1e-1, /* angular acceleration roll, pitch, yaw */
     1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
-    1.5e-12, 1.5e-12, 1.5e-12 /* gyro bias x, y, z */
+    3e-12, 3e-12, 3e-12 /* gyro bias x, y, z */
 };
 static double ahrs_wmm_field[3];
 static uint64_t ahrs_solution_time;
@@ -164,10 +164,8 @@ void fcs_ahrs_tick(void) {
     /* Read pitot-derived airspeed */
     if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_AIRSPEED, v,
                               &params.pitot_covariance, 1u)) {
-        //ukf_sensor_set_pitot_tas(v[0]);
+        ukf_sensor_set_pitot_tas(v[0]);
     }
-    ukf_sensor_set_pitot_tas(0);
-    params.pitot_covariance = 1.0;
 
     /* Read barometer-derived altitude */
     if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_PRESSURE_ALTITUDE, v,
@@ -208,7 +206,7 @@ void fcs_ahrs_tick(void) {
         fcs_assert(measurement_log);
 
         got_result = fcs_parameter_find_by_type_and_device(
-        	measurement_log, FCS_PARAMETER_CONTROL_POS, 0, &parameter);
+        	measurement_log, FCS_PARAMETER_CONTROL_POS, 1u, &parameter);
         if (got_result) {
             fcs_parameter_get_values_d(&parameter, v, 4u);
             ukf_iterate((float)AHRS_DELTA, v);
@@ -600,12 +598,12 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             ukf_choose_dynamics(UKF_MODEL_NONE);
             /* Trust attitude and gyro bias predictors less. */
             vector_set_d(&ahrs_process_noise[9], 1e-5, 3u);
-            vector_set_d(&ahrs_process_noise[21], 1e-7, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-5, 3u);
             break;
         case FCS_MODE_SAFE:
             ukf_choose_dynamics(UKF_MODEL_NONE);
             vector_set_d(&ahrs_process_noise[9], 1e-7, 3u);
-            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
+            vector_set_d(&ahrs_process_noise[21], 3e-12, 3u);
             break;
         case FCS_MODE_ARMED:
             break;

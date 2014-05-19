@@ -314,7 +314,7 @@ assign cpu_pmic_pwron = (c66x_state == 4'b1001) ? 1'bZ : 1'b1;
 assign cpu_reset_INV = 1'bZ;
 assign cpu_wreset_INV = 1'bZ;
 assign cpu_usbhub_reset_INV = (cpu_pwron_timer[23] & cpu_pwron_timer[22]) ? 1'b0 : 1'b1;
-assign cpu_bootmode = 6'b000101; /* 6'b101001 for eMMC on SD4,
+assign cpu_bootmode = 6'b101001; /* 6'b101001 for eMMC on SD4,
                                     6'b100111 for eMMC on SD0,
                                     6'b000101 for MicroSD */
 

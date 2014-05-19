@@ -221,7 +221,7 @@ void fcs_control_tick(void) {
     it's present, otherwise default to auto (safer).
     */
     if (fcs_parameter_find_by_type_and_device(
-            measurement_log, FCS_PARAMETER_CONTROL_MODE, 0, &param)) {
+            measurement_log, FCS_PARAMETER_CONTROL_MODE, 1u, &param)) {
         if (param.data.u8[0] == 1u) {
             control_state.mode = FCS_CONTROL_MODE_AUTO;
         } else {
@@ -237,29 +237,29 @@ void fcs_control_tick(void) {
     */
     if (control_state.mode == FCS_CONTROL_MODE_MANUAL &&
             fcs_parameter_find_by_type_and_device(
-                measurement_log, FCS_PARAMETER_CONTROL_POS, 0, &param)) {
+                measurement_log, FCS_PARAMETER_CONTROL_POS, 1u, &param)) {
         memcpy(manual_setpoint, param.data.u16, sizeof(manual_setpoint));
     }
 
     /* Handle navigation state updates */
     if (fcs_parameter_find_by_type_and_device(
-            measurement_log, FCS_PARAMETER_NAV_VERSION, 0, &param) &&
+            measurement_log, FCS_PARAMETER_NAV_VERSION, 1u, &param) &&
             param.data.u32[0] == nav_state.version + 1u) {
         /* Look for path and waypoint updates */
         if (fcs_parameter_find_by_type_and_device(
-                    measurement_log, FCS_PARAMETER_NAV_PATH_ID, 0, &param) &&
+                    measurement_log, FCS_PARAMETER_NAV_PATH_ID, 1u, &param) &&
                 fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_PATH, 0, &param2)) {
+                    measurement_log, FCS_PARAMETER_KEY_PATH, 1u, &param2)) {
             /* Update path */
             (void)fcs_parameter_get_key_value(
                 param_key, (uint8_t*)&nav_state.paths[param.data.u16[0]],
                 sizeof(struct fcs_path_t), &param2);
             nav_state.version++;
         } else if (fcs_parameter_find_by_type_and_device(
-                    measurement_log, FCS_PARAMETER_NAV_WAYPOINT_ID, 0,
+                    measurement_log, FCS_PARAMETER_NAV_WAYPOINT_ID, 1u,
                     &param) &&
                 fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_WAYPOINT, 0,
+                    measurement_log, FCS_PARAMETER_KEY_WAYPOINT, 1u,
                     &param2)) {
             /* Update waypoint */
             (void)fcs_parameter_get_key_value(
@@ -267,7 +267,7 @@ void fcs_control_tick(void) {
                 sizeof(struct fcs_waypoint_t), &param2);
             nav_state.version++;
         } else if (fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_NAV_BOUNDARY, 0,
+                    measurement_log, FCS_PARAMETER_KEY_NAV_BOUNDARY, 1u,
                     &param)) {
             /* Update mission boundary */
             (void)fcs_parameter_get_key_value(

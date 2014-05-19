@@ -727,9 +727,9 @@ def send_state_to_xplane(s):
 
 
 def send_control_to_xplane(s, controls):
-    update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % controls[0]
-    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 2.0)
-    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 2.0)
+    update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % (controls[0] - 0.15)
+    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 1.5)
+    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 1.5)
     s.sendall(update)
 
 
@@ -772,6 +772,9 @@ def ll_pt_line_direction(a, line):
     return 1.0 if direction > 0.0 else -1.0
 
 
+PATTERN_WIDTH = 240.0 # 130.0 # 150.0
+
+
 def generate_search_pattern(area):
     # Find the length and point indices of the longest side by checking each
     # in turn
@@ -805,7 +808,7 @@ def generate_search_pattern(area):
 
     # Determine the number of passes to be made (2 passes per cycle, so the
     # number must be even).
-    pass_distance = TURN_RADIUS * 2.0 + 10.0
+    pass_distance = PATTERN_WIDTH
     pass_direction = ll_pt_line_direction(
         area[furthest_point], (area[longest_side[0]], area[longest_side[1]]))
 

@@ -159,7 +159,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_ACCELEROMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.75f, /* 0.75m/s^2 */
+            .error = 1.5f, /* m/s^2 */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -176,7 +176,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_GYROSCOPE_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.03f, /* approx 2 degrees */
+            .error = 0.04f, /* approx 2 degrees */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -193,7 +193,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.05f, /* = 0.05 Gauss */
+            .error = 0.02f, /* Gauss */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -217,7 +217,7 @@ void fcs_board_init_platform(void) {
             .device = 0,
             .type = FCS_PARAMETER_GPS_VELOCITY_NED,
             .calibration_type = FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 1.0f,
+            .error = 0.5f,
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -231,12 +231,14 @@ void fcs_board_init_platform(void) {
             .device = 0,
             .type = FCS_PARAMETER_PITOT,
             .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
-            .error = 3.0f,
+            .error = 1.0f,
             /*
-            Scale pitot output voltage from -2000.0 to 2000.0Pa, with 0.2533
-            being 1.65V (=0kPa)
+            Pitot sensor is in the range +/- 1 psi from 1638 to 14746, with
+            zero being 8192.
+
+            Also convert to Pa.
             */
-            .params = { 0.2533f, 4000.0f / 0.5066f },
+            .params = { 8192.0f, 1.0f / 6554.0f * 6894.75729f },
             .scale_factor = 1.0f
         },
         {
@@ -383,9 +385,9 @@ void fcs_board_tick(void) {
     		                               FCS_MODE_WRITE);
     fcs_assert(measurement_log);
 
-    for (i = 1; i < FCS_IOBOARD_COUNT; i++){
+    for (i = 1; i < FCS_IOBOARD_COUNT; i++) {
         if (_fcs_read_log_packet(
-                (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), (1u - i), /* FIXME */
+                (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), i,
                 measurement_log)) {
             board_timeout[i] = FCS_IOBOARD_PACKET_TIMEOUT;
             fcs_global_counters.ioboard_packet_rx[i]++;
@@ -492,7 +494,7 @@ void fcs_board_tick(void) {
 
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf,
                                      out_buf_len);
-        // fcs_assert(out_buf_len == write_len);
+        /* fcs_assert(out_buf_len == write_len); */
 
         last_control_packet_frame_id = frame_id;
     } else {
@@ -560,8 +562,10 @@ void fcs_board_tick(void) {
 
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
 
-    //write_len = fcs_stream_write(FCS_STREAM_USB, out_buf, out_buf_len);
-    //fcs_assert(out_buf_len == write_len);
+    /*
+    write_len = fcs_stream_write(FCS_STREAM_USB, out_buf, out_buf_len);
+    fcs_assert(out_buf_len == write_len);
+    */
 
     /* Close all the logs */
     control_log = fcs_exports_log_close(control_log);
@@ -955,7 +959,7 @@ double static_pressure, double static_temp) {
     tas = airspeed_from_pressure_temp(static_pressure, v[0], static_temp);
 
     /* Allow for 2% scale factor error */
-    err += absval(v[0]) * 0.02;
+    err += absval(tas) * 0.02;
     err *= err;
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_AIRSPEED, &tas, &err,

@@ -27,6 +27,7 @@ import math
 import json
 import struct
 import binascii
+import traceback
 from enum import Enum
 from cobs import cobsr
 
@@ -212,10 +213,14 @@ class DataParameter(Parameter):
                                data[0:value_len])
         data = data[value_len:]
 
-        param = cls(device_id=device_id,
-                    parameter_type=ParameterType(parameter_type),
-                    value_type=value_type, value_precision=value_precision,
-                    values=list(values))
+        try:
+            param = cls(device_id=device_id,
+                        parameter_type=ParameterType(parameter_type),
+                        value_type=value_type, value_precision=value_precision,
+                        values=list(values))
+        except Exception:
+            traceback.print_exc()
+            param = None
 
         return param, data
 
@@ -256,9 +261,13 @@ class KeyValueParameter(Parameter):
         header, device_id, parameter_type = struct.unpack("<BBB", data[0:3])
         value_len = header & 0x7f
 
-        param = cls(device_id=device_id,
-                    parameter_type=ParameterType(parameter_type),
-                    key=data[3:7], value=data[7:value_len + 7])
+        try:
+            param = cls(device_id=device_id,
+                        parameter_type=ParameterType(parameter_type),
+                        key=data[3:7], value=data[7:value_len + 7])
+        except Exception:
+            traceback.print_exc()
+            param = None
 
         return param, data[value_len + 7:]
 
@@ -413,6 +422,7 @@ def print_estimate_log(data):
 
 
 if __name__ == "__main__":
+    n = 0
     in_packet = False
     got_data = False
     data = ''
@@ -427,16 +437,18 @@ if __name__ == "__main__":
             in_packet = True
             got_data = False
         elif c == '\x00' and got_data and in_packet:
-            try:
-                logf = ParameterLog.deserialize(data)
-                #print repr(logf)
-            except Exception:
-                print "Invalid packet: %s" % binascii.b2a_hex(data)
-            else:
+            n += 1
+            if n % 20 == 0:
                 try:
-                    print_estimate_log(logf)
+                    logf = ParameterLog.deserialize(data)
+                    #print repr(logf)
                 except Exception:
-                    print "Incomplete packet"
+                    print "Invalid packet: %s" % binascii.b2a_hex(data)
+                else:
+                    try:
+                        print_estimate_log(logf)
+                    except Exception:
+                        print "Incomplete packet"
             data = ''
             in_packet = False
             got_data = False
