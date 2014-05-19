@@ -106,11 +106,9 @@ set_location_assignment PIN_F19 -to en_1v8
 set_location_assignment PIN_J19 -to en_1v5
 set_location_assignment PIN_M2 -to en_1v0
 set_location_assignment PIN_B2 -to dsp_vid_oe_INV
-set_location_assignment PIN_C17 -to dsp_usb_reset_INV
-set_location_assignment PIN_C16 -to dsp_usb_irq_INV
-set_location_assignment PIN_C15 -to dsp_usb_eot
-set_location_assignment PIN_C14 -to dsp_usb_dreq
-set_location_assignment PIN_B12 -to dsp_usb_dack
+set_location_assignment PIN_C17 -to dsp_usb_oe_INV
+set_location_assignment PIN_M19 -to dsp_usb_reset_INV
+set_location_assignment PIN_L19 -to dsp_usb_siwu_INV
 set_location_assignment PIN_D6 -to dsp_spi_mosi
 set_location_assignment PIN_C6 -to dsp_spi_miso
 set_location_assignment PIN_B9 -to dsp_spi_cs1_INV
@@ -310,11 +308,9 @@ set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_cs0_INV
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_cs1_INV
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_miso
 set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_spi_mosi
-set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_dack
-set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_dreq
-set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_eot
-set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_irq_INV
-set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_reset_INV
+set_instance_assignment -name IO_STANDARD "1.8 V" -to dsp_usb_oe_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dsp_usb_siwu_INV
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to dsp_usb_reset_INV
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to en_1v0
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to cpu_ext_uart_en
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to ext_uart0_rx

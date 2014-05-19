@@ -88,11 +88,7 @@ module cpld_top(
 	input dsp_ext_uart0_int,
 	input dsp_ext_uart1_int,
 	output dsp_ext_uart_reset,
-	output dsp_usb_reset_INV,
-	input dsp_usb_irq_INV,
-	output reg dsp_usb_dack,
-	output reg dsp_usb_eot,
-	input dsp_usb_dreq,
+	output dsp_usb_oe_INV,
 	input dsp_int_uart0_tx,
 	output reg dsp_int_uart0_rx,
 	input dsp_int_uart1_tx,
@@ -111,6 +107,8 @@ module cpld_top(
 	input ext_uart0_rx,
 	output reg ext_uart1_tx,
 	input ext_uart1_rx,
+	output dsp_usb_reset_INV,
+	output dsp_usb_siwu_INV,
 	/* BANK 4 -- CPU 1V8 */
 	input cpu_spi0_1v8_mosi,
 	output reg cpu_spi0_1v8_miso,
@@ -136,8 +134,10 @@ module cpld_top(
 /* Defaults */
 assign dsp_i2c_1v8_scl = 1'bz;
 assign dsp_i2c_1v8_sda = 1'bz;
-assign dsp_usb_reset_INV = 1'b1;
 assign dsp_ext_uart_reset = ~dsp_bank_enable;
+assign dsp_usb_oe_INV = ~dsp_bank_enable;
+assign dsp_usb_reset_INV = ~dsp_bank_enable;
+assign dsp_usb_siwu_INV = 1'b1;
 assign dsp_ext_uart_en = 1'b1;
 assign cell_disable_INV = 1'b1;
 
