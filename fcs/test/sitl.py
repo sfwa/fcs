@@ -19,6 +19,7 @@
 # IN THE SOFTWARE.
 
 import os
+import fcs
 import sys
 import plog
 import copy
@@ -39,53 +40,6 @@ X-Plane simulation.
 Does not currently simulate FCS comms or AHRS functionality.
 """
 
-
-_fcs = None
-
-
-FCS_STREAM_UART_INT0 = 0
-FCS_STREAM_UART_INT1 = 1
-FCS_STREAM_UART_EXT0 = 2
-FCS_STREAM_UART_EXT1 = 3
-FCS_STREAM_USB = 4
-FCS_STREAM_NUM_DEVICES = 5
-
-
-FCS_STREAM_OK = 0
-FCS_STREAM_ERROR = 1
-
-
-FCS_MODE_INITIALIZING = ord("I")
-FCS_MODE_CALIBRATING = ord("C")
-FCS_MODE_SAFE = ord("S")
-FCS_MODE_ARMED = ord("R")
-FCS_MODE_ACTIVE = ord("A")
-FCS_MODE_HOLDING = ord("H")
-FCS_MODE_ABORT = ord("F")
-
-
-FCS_CONTROL_MODE_AUTO = ord("F")
-FCS_CONTROL_MODE_MANUAL = ord("R")
-
-
-FCS_PATH_LINE = ord("L")
-FCS_PATH_DUBINS_CURVE = ord("D")
-FCS_PATH_FIGURE_EIGHT = ord("8")
-FCS_PATH_INVALID = 0
-
-
-FCS_CONTROL_INVALID_PATH_ID = 0xFFFF
-FCS_CONTROL_HOLD_PATH_ID = 500 - 1
-FCS_CONTROL_INTERPOLATE_PATH_ID = 500 - 2
-FCS_CONTROL_RESUME_PATH_ID = 500 - 3
-FCS_CONTROL_HOLD_WAYPOINT_ID = 1000 - 1
-FCS_CONTROL_INTERPOLATE_WAYPOINT_ID = 1000 - 2
-FCS_CONTROL_RESUME_WAYPOINT_ID = 1000 - 3
-
-
-ahrs_state = None
-control_state = None
-nav_state = None
 ahrs_tick = 0
 
 
@@ -128,212 +82,13 @@ def socket_readlines(socket):
             break
 
 
-def euler_to_q(yaw, pitch, roll):
-    return (vectors.Q.rotate("X", -roll) *
-            vectors.Q.rotate("Y", -pitch) *
-            vectors.Q.rotate("Z", -yaw))
-
-
-class TRICALInstance(Structure):
-    _fields_ = [
-        ("field_norm", c_float),
-        ("measurement_noise", c_float),
-        ("state", c_float * 12),
-        ("state_covariance", c_float * 12 * 12),
-        ("measurement_count", c_uint)
-    ]
-
-
-class AHRSCalibrationEntry(Structure):
-    _fields_ = [
-        ("header", c_ubyte),
-        ("sensor", c_ubyte),
-        ("type", c_ubyte),
-        ("reserved", c_ubyte),
-        ("error", c_float),
-        ("params", c_float * 12),
-        ("orientation", c_float * 4),
-        ("offset", c_float * 3),
-        ("scale_factor", c_float)
-    ]
-
-
-class AHRSCalibrationMap(Structure):
-    _fields_ = [
-        ("sensor_calibration", AHRSCalibrationEntry * 128)
-    ]
-
-
-class AHRSMeasurementLog(Structure):
-    _fields_ = [
-        ("data", c_ubyte * 256),
-        ("length", c_uint)
-    ]
-
-
-class AHRSState(Structure):
-    _fields_ = [
-        ("solution_time", c_ulonglong),
-        ("measurements", AHRSMeasurementLog),
-
-        # UKF state + control input
-        ("lat", c_double),
-        ("lon", c_double),
-        ("alt", c_double),
-        ("velocity", c_double * 3),
-        ("acceleration", c_double * 3),
-        ("attitude", c_double * 4),
-        ("angular_velocity", c_double * 3),
-        ("angular_acceleration", c_double * 3),
-        ("wind_velocity", c_double * 3),
-        ("gyro_bias", c_double * 3),
-        ("control_pos", c_double * 4),
-
-        # UKF error estimate
-        ("lat_error", c_double),
-        ("lon_error", c_double),
-        ("alt_error", c_double),
-        ("velocity_error", c_double * 3),
-        ("acceleration_error", c_double * 3),
-        ("attitude_error", c_double * 3),
-        ("angular_velocity_error", c_double * 3),
-        ("angular_acceleration_error", c_double * 3),
-        ("wind_velocity_error", c_double * 3),
-        ("gyro_bias_error", c_double * 3),
-
-        # Configuration
-        ("wmm_field_dir", c_double * 3),
-        ("wmm_field_norm", c_double),
-        ("ukf_process_noise", c_double * 24),
-        ("ukf_dynamics_model", c_uint),
-        ("calibration", AHRSCalibrationMap),
-        ("trical_instances", TRICALInstance * 4),
-        ("trical_update_attitude", c_double * 4 * 4),
-
-        # Aerodynamics
-        ("reference_alt", c_double),
-        ("reference_pressure", c_double),
-        ("aero_static_pressure", c_double),
-        ("aero_static_temp", c_double),
-        ("aero_dynamic_pressure", c_double),
-
-        # Sensor health
-        ("last_accelerometer_time", c_ulonglong),
-        ("last_gyroscope_time", c_ulonglong),
-        ("last_magnetometer_time", c_ulonglong),
-        ("last_barometer_time", c_ulonglong),
-        ("last_pitot_time", c_ulonglong),
-        ("last_gps_time", c_ulonglong),
-        ("gps_num_svs", c_uint * 2),
-        ("gps_pdop", c_double * 2),
-
-        # Mode
-        ("mode_start_time", c_ulonglong),
-        ("mode", c_uint),
-
-        # Payload
-        ("payload_present", c_ubyte)
-    ]
-
-
-class ControlChannel(Structure):
-    _fields_ = [
-        ("setpoint", c_float),
-        ("rate", c_float)
-    ]
-
-
-class ControlState(Structure):
-    _fields_ = [
-        ("controls", ControlChannel * 4),
-        ("mode", c_uint),
-        ("gpio_state", c_ubyte)
-    ]
-
-
-class NavPath(Structure):
-    _fields_ = [
-        ("start_waypoint_id", c_ushort),
-        ("end_waypoint_id", c_ushort),
-        ("type", c_uint),
-        ("flags", c_ushort),
-        ("next_path_id", c_ushort)
-    ]
-
-
-class NavWaypoint(Structure):
-    _fields_ = [
-        ("lat", c_double),
-        ("lon", c_double),
-        ("alt", c_float),
-        ("airspeed", c_float),
-        ("yaw", c_float),
-        ("pitch", c_float),
-        ("roll", c_float),
-        ("flags", c_uint)
-    ]
-
-    def __repr__(self):
-        return ("Waypoint(lat=%12.9f, lon=%12.9f, alt=%6.2f, airspeed=%4.1f, "
-                + "yaw=%5.2f, pitch=%5.2f, roll=%5.2f, flags=%x)") % (
-                self.lat, self.lon, self.alt, self.airspeed,
-                math.degrees(self.yaw), math.degrees(self.pitch),
-                math.degrees(self.roll), self.flags)
-
-
-class NavBoundary(Structure):
-    _fields_ = [
-        ("num_waypoint_ids", c_ushort),
-        ("waypoint_ids", c_ushort * 64),
-        ("flags", c_ubyte)
-    ]
-
-
-class NavState(Structure):
-    _fields_ = [
-        ("version", c_uint),
-        ("paths", NavPath * 500),
-        ("waypoints", NavWaypoint * 1000),
-        ("boundary", NavBoundary),
-        ("reference_trajectory", NavWaypoint * 101),
-        ("reference_path_id", c_ushort * 101)
-    ]
-
-
-class AHRSStateEstimate(Structure):
-    _fields_ = [
-        ("lat", c_double),
-        ("lon", c_double),
-        ("alt", c_float),
-        ("velocity", c_float * 3),
-        ("attitude", c_float * 4),
-        ("angular_velocity", c_float * 3),
-        ("wind_velocity", c_float * 3),
-        ("mode", c_ubyte),
-        ("reserved", c_ubyte * 55)
-    ]
-
-
-def reset():
-    """
-    (Re-)initializes all FCS modules.
-    """
-    if not _fcs:
-        raise RuntimeError("Please call init()")
-
-    _fcs.fcs_board_init_platform()
-    _fcs.fcs_exports_init()
-    _fcs.fcs_ahrs_init()
-    _fcs.fcs_control_init()
-
-
 def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
          angular_velocity=None, wind_velocity=None):
     """
     Runs the FCS control and comms tasks with the state data provided as
     though it came from the AHRS, and returns the control output.
     """
-    if not _fcs:
+    if not fcs._fcs:
         raise RuntimeError("Please call init()")
 
     estimate_log = plog.ParameterLog(
@@ -393,18 +148,18 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
         )
     )
 
-    write(3, estimate_log.serialize())
+    fcs.write(3, estimate_log.serialize())
     #print binascii.b2a_hex(estimate_log.serialize())
 
-    _fcs.fcs_board_tick()
-    _fcs.fcs_ahrs_tick()
-    _fcs.fcs_control_tick()
+    fcs._fcs.fcs_board_tick()
+    fcs._fcs.fcs_ahrs_tick()
+    fcs._fcs.fcs_control_tick()
 
     # Read out ignored streams
-    read(0, 1023)
-    read(1, 1023)
-    read(2, 1023)
-    read(4, 1023)
+    fcs.read(0, 1023)
+    fcs.read(1, 1023)
+    fcs.read(2, 1023)
+    fcs.read(4, 1023)
 
     try:
         control_log = plog.ParameterLog.deserialize(read(3, 1023))
@@ -413,105 +168,6 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
         return map(lambda x: float(x) / float(2**16), control_param.values)
     except Exception:
         return [0.0, 0.5, 0.5]
-
-
-def write(stream_id, value):
-    """
-    Writes the character array `value` (up to 255 bytes) to the stream
-    identified by `stream_id`. Returns the number of bytes written.
-    """
-    if not _fcs:
-        raise RuntimeError("Please call init()")
-    if stream_id < 0 or stream_id > FCS_STREAM_NUM_DEVICES:
-        raise ValueError("Invalid stream ID")
-    if len(value) >= 1024:
-        raise ValueError(
-            "Input value is too long (got %d bytes, max is 1023)" % len(value))
-
-    bytes_written = _fcs._fcs_stream_write_to_rx_buffer(
-        stream_id, value, len(value))
-
-    return bytes_written
-
-
-def read(stream_id, max_len):
-    """
-    Reads up to `max_len` bytes (which must be equal to or smaller than 255)
-    from the stream identified by `stream_id`.
-    """
-    if not _fcs:
-        raise RuntimeError("Please call init()")
-    if stream_id < 0 or stream_id > FCS_STREAM_NUM_DEVICES:
-        raise ValueError("Invalid stream ID")
-    if max_len >= 1024:
-        raise ValueError(
-            "Too many bytes requested (got %d, max is 1023)" % max_len)
-    elif max_len < 1:
-        raise ValueError(
-            "Can't request fewer than 1 bytes (got %d)" % max_len)
-
-    buf = create_string_buffer(1024)
-    bytes_read = _fcs._fcs_stream_read_from_tx_buffer(
-        stream_id, buf, max_len)
-
-    return buf[0:bytes_read]
-
-
-def init(dll_path):
-    """
-    Loads the FCS dynamic library at `dll_path` and sets up the ctypes
-    interface. Must be called before any other functions from this module.
-    """
-    global _fcs, nav_state, control_state
-    # Load the library
-    _fcs = cdll.LoadLibrary(dll_path)
-
-    # Get a reference to the required globals
-    nav_state = NavState.in_dll(_fcs, "nav_state")
-    control_state = ControlState.in_dll(_fcs, "control_state")
-
-    # From ahrs/ahrs.h
-    _fcs.fcs_ahrs_init.argtypes = []
-    _fcs.fcs_ahrs_init.restype = None
-
-    _fcs.fcs_ahrs_tick.argtypes = []
-    _fcs.fcs_ahrs_tick.restype = None
-
-    # From drivers/stream.c
-    _fcs._fcs_stream_write_to_rx_buffer.argtypes = [c_ubyte, c_char_p,
-                                                    c_ulong]
-    _fcs._fcs_stream_write_to_rx_buffer.restype = c_ulong
-
-    _fcs._fcs_stream_read_from_tx_buffer.argtypes = [c_ubyte, c_char_p,
-                                                     c_ulong]
-    _fcs._fcs_stream_read_from_tx_buffer.restype = c_ulong
-
-    # From hardware/platform/cpuv1-ioboardv1.c
-    _fcs.fcs_board_init_platform.argtypes = []
-    _fcs.fcs_board_init_platform.restype = None
-
-    _fcs.fcs_board_tick.argtypes = []
-    _fcs.fcs_board_tick.restype = None
-
-    # From control/control.h
-    _fcs.fcs_control_init.argtypes = []
-    _fcs.fcs_control_init.restype = None
-
-    _fcs.fcs_control_tick.argtypes = []
-    _fcs.fcs_control_tick.restype = None
-
-    _fcs.fcs_control_reset.argtypes = []
-    _fcs.fcs_control_reset.restype = None
-
-    # From exports/exports.h
-    _fcs.fcs_exports_init.argtypes = []
-    _fcs.fcs_exports_init.restype = None
-
-    # From control/trajectory.h
-    _fcs._get_next_reference_point.argtypes = [POINTER(c_float * 13), c_ulong]
-    _fcs._get_next_reference_point.restype = None
-
-    reset()
 
 
 def connect_to_xplane():
@@ -703,16 +359,16 @@ def recv_state_from_xplane(s):
 
 def send_state_to_xplane(s):
     state = (c_float * 13)()
-    _fcs._get_next_reference_point(state, 0)
+    fcs._fcs._get_next_reference_point(state, 0)
 
     velocity = state[3:6]
     attitude = state[6:10]
     angular_velocity = state[10:13]
 
     s.sendall("world-set %f %f %f\n" % (
-        math.degrees(nav_state.reference_trajectory[0].lat),
-        math.degrees(nav_state.reference_trajectory[0].lon),
-        nav_state.reference_trajectory[0].alt))
+        math.degrees(fcs.nav_state.reference_trajectory[0].lat),
+        math.degrees(fcs.nav_state.reference_trajectory[0].lon),
+        fcs.nav_state.reference_trajectory[0].alt))
 
     q = (attitude[3], -attitude[0], -attitude[1], -attitude[2])
     yaw = math.atan2(2.0 * (q[0] * q[3] + q[1] * q[2]), 1.0 - 2.0 * (q[2] ** 2.0 + q[3] ** 2.0))
@@ -892,111 +548,111 @@ HOLD = (math.radians(-26.607212), math.radians(151.845389))
 
 
 if __name__ == "__main__":
-    init(sys.argv[1])
+    fcs.init(sys.argv[1])
     if len(sys.argv) > 2:
         max_t = int(sys.argv[2])
     else:
         max_t = -1
 
     # Curve from HOME to EL01
-    nav_state.waypoints[0].lat = HOME[0]
-    nav_state.waypoints[0].lon = HOME[1]
-    nav_state.waypoints[0].alt = HOME[2]
-    nav_state.waypoints[0].airspeed = 22.0
-    nav_state.waypoints[0].yaw = math.radians(180.0)
-    nav_state.waypoints[0].pitch = 0.0
-    nav_state.waypoints[0].roll = 0.0
+    fcs.nav_state.waypoints[0].lat = HOME[0]
+    fcs.nav_state.waypoints[0].lon = HOME[1]
+    fcs.nav_state.waypoints[0].alt = HOME[2]
+    fcs.nav_state.waypoints[0].airspeed = 22.0
+    fcs.nav_state.waypoints[0].yaw = math.radians(180.0)
+    fcs.nav_state.waypoints[0].pitch = 0.0
+    fcs.nav_state.waypoints[0].roll = 0.0
 
-    nav_state.waypoints[1].lat = EL[0][0]
-    nav_state.waypoints[1].lon = EL[0][1]
-    nav_state.waypoints[1].alt = EL[0][2]
-    nav_state.waypoints[1].airspeed = 22.0
-    nav_state.waypoints[1].yaw = math.radians(180.0)
-    nav_state.waypoints[1].pitch = 0.0
-    nav_state.waypoints[1].roll = 0.0
+    fcs.nav_state.waypoints[1].lat = EL[0][0]
+    fcs.nav_state.waypoints[1].lon = EL[0][1]
+    fcs.nav_state.waypoints[1].alt = EL[0][2]
+    fcs.nav_state.waypoints[1].airspeed = 22.0
+    fcs.nav_state.waypoints[1].yaw = math.radians(180.0)
+    fcs.nav_state.waypoints[1].pitch = 0.0
+    fcs.nav_state.waypoints[1].roll = 0.0
 
-    nav_state.paths[0].start_waypoint_id = 0
-    nav_state.paths[0].end_waypoint_id = 1
-    nav_state.paths[0].type = FCS_PATH_LINE
-    nav_state.paths[0].next_path_id = 1
+    fcs.nav_state.paths[0].start_waypoint_id = 0
+    fcs.nav_state.paths[0].end_waypoint_id = 1
+    fcs.nav_state.paths[0].type = FCS_PATH_LINE
+    fcs.nav_state.paths[0].next_path_id = 1
 
     # Another curve to EL02
-    nav_state.waypoints[2].lat = EL[1][0]
-    nav_state.waypoints[2].lon = EL[1][1]
-    nav_state.waypoints[2].alt = EL[1][2]
-    nav_state.waypoints[2].airspeed = 22.0
-    nav_state.waypoints[2].yaw = math.radians(180.0)
-    nav_state.waypoints[2].pitch = 0.0
-    nav_state.waypoints[2].roll = 0.0
+    fcs.nav_state.waypoints[2].lat = EL[1][0]
+    fcs.nav_state.waypoints[2].lon = EL[1][1]
+    fcs.nav_state.waypoints[2].alt = EL[1][2]
+    fcs.nav_state.waypoints[2].airspeed = 22.0
+    fcs.nav_state.waypoints[2].yaw = math.radians(180.0)
+    fcs.nav_state.waypoints[2].pitch = 0.0
+    fcs.nav_state.waypoints[2].roll = 0.0
 
-    nav_state.paths[1].start_waypoint_id = 1
-    nav_state.paths[1].end_waypoint_id = 2
-    nav_state.paths[1].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[1].next_path_id = 2
+    fcs.nav_state.paths[1].start_waypoint_id = 1
+    fcs.nav_state.paths[1].end_waypoint_id = 2
+    fcs.nav_state.paths[1].type = FCS_PATH_DUBINS_CURVE
+    fcs.nav_state.paths[1].next_path_id = 2
 
-    nav_state.paths[2].start_waypoint_id = 2
-    nav_state.paths[2].end_waypoint_id = 3
-    nav_state.paths[2].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[2].next_path_id = 3
+    fcs.nav_state.paths[2].start_waypoint_id = 2
+    fcs.nav_state.paths[2].end_waypoint_id = 3
+    fcs.nav_state.paths[2].type = FCS_PATH_DUBINS_CURVE
+    fcs.nav_state.paths[2].next_path_id = 3
 
     pattern_points, heading = generate_search_pattern(SA)
     for i in range(len(pattern_points)):
-        nav_state.waypoints[3 + i].lat = pattern_points[i][0]
-        nav_state.waypoints[3 + i].lon = pattern_points[i][1]
-        nav_state.waypoints[3 + i].alt = SA[0][2]
-        nav_state.waypoints[3 + i].airspeed = 22.0
+        fcs.nav_state.waypoints[3 + i].lat = pattern_points[i][0]
+        fcs.nav_state.waypoints[3 + i].lon = pattern_points[i][1]
+        fcs.nav_state.waypoints[3 + i].alt = SA[0][2]
+        fcs.nav_state.waypoints[3 + i].airspeed = 22.0
         if int(i / 2) % 2 == 0:
-            nav_state.waypoints[3 + i].yaw = heading
+            fcs.nav_state.waypoints[3 + i].yaw = heading
         else:
-            nav_state.waypoints[3 + i].yaw = heading + math.pi
-        nav_state.waypoints[3 + i].pitch = 0.0
-        nav_state.waypoints[3 + i].roll = 0.0
+            fcs.nav_state.waypoints[3 + i].yaw = heading + math.pi
+        fcs.nav_state.waypoints[3 + i].pitch = 0.0
+        fcs.nav_state.waypoints[3 + i].roll = 0.0
 
         #print "[%.9f, %.9f]," % (math.degrees(nav_state.waypoints[3 + i].lon), math.degrees(nav_state.waypoints[3 + i].lat))
 
         if i % 2 == 0:
-            nav_state.paths[3 + i].start_waypoint_id = 3 + i
-            nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
-            nav_state.paths[3 + i].type = FCS_PATH_LINE
-            nav_state.paths[3 + i].next_path_id = 3 + i + 1
+            fcs.nav_state.paths[3 + i].start_waypoint_id = 3 + i
+            fcs.nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
+            fcs.nav_state.paths[3 + i].type = FCS_PATH_LINE
+            fcs.nav_state.paths[3 + i].next_path_id = 3 + i + 1
         else:
-            nav_state.paths[3 + i].start_waypoint_id = 3 + i
-            nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
-            nav_state.paths[3 + i].type = FCS_PATH_DUBINS_CURVE
-            nav_state.paths[3 + i].next_path_id = 3 + i + 1
+            fcs.nav_state.paths[3 + i].start_waypoint_id = 3 + i
+            fcs.nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
+            fcs.nav_state.paths[3 + i].type = FCS_PATH_DUBINS_CURVE
+            fcs.nav_state.paths[3 + i].next_path_id = 3 + i + 1
 
     # Exit pattern to EL03
-    nav_state.waypoints[3 + len(pattern_points)].lat = EL[2][0]
-    nav_state.waypoints[3 + len(pattern_points)].lon = EL[2][1]
-    nav_state.waypoints[3 + len(pattern_points)].alt = EL[2][2]
-    nav_state.waypoints[3 + len(pattern_points)].airspeed = 22.0
-    nav_state.waypoints[3 + len(pattern_points)].yaw = 0.0
-    nav_state.waypoints[3 + len(pattern_points)].pitch = 0.0
-    nav_state.waypoints[3 + len(pattern_points)].roll = 0.0
+    fcs.nav_state.waypoints[3 + len(pattern_points)].lat = EL[2][0]
+    fcs.nav_state.waypoints[3 + len(pattern_points)].lon = EL[2][1]
+    fcs.nav_state.waypoints[3 + len(pattern_points)].alt = EL[2][2]
+    fcs.nav_state.waypoints[3 + len(pattern_points)].airspeed = 22.0
+    fcs.nav_state.waypoints[3 + len(pattern_points)].yaw = 0.0
+    fcs.nav_state.waypoints[3 + len(pattern_points)].pitch = 0.0
+    fcs.nav_state.waypoints[3 + len(pattern_points)].roll = 0.0
 
     # Curve from EL03 to EL04
-    nav_state.waypoints[4 + len(pattern_points)].lat = EL[3][0]
-    nav_state.waypoints[4 + len(pattern_points)].lon = EL[3][1]
-    nav_state.waypoints[4 + len(pattern_points)].alt = EL[3][2]
-    nav_state.waypoints[4 + len(pattern_points)].airspeed = 22.0
-    nav_state.waypoints[4 + len(pattern_points)].yaw = 0.0
-    nav_state.waypoints[4 + len(pattern_points)].pitch = 0.0
-    nav_state.waypoints[4 + len(pattern_points)].roll = 0.0
+    fcs.nav_state.waypoints[4 + len(pattern_points)].lat = EL[3][0]
+    fcs.nav_state.waypoints[4 + len(pattern_points)].lon = EL[3][1]
+    fcs.nav_state.waypoints[4 + len(pattern_points)].alt = EL[3][2]
+    fcs.nav_state.waypoints[4 + len(pattern_points)].airspeed = 22.0
+    fcs.nav_state.waypoints[4 + len(pattern_points)].yaw = 0.0
+    fcs.nav_state.waypoints[4 + len(pattern_points)].pitch = 0.0
+    fcs.nav_state.waypoints[4 + len(pattern_points)].roll = 0.0
 
-    nav_state.paths[3 + len(pattern_points)].start_waypoint_id = 3 + len(pattern_points)
-    nav_state.paths[3 + len(pattern_points)].end_waypoint_id = 4 + len(pattern_points)
-    nav_state.paths[3 + len(pattern_points)].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[3 + len(pattern_points)].next_path_id = 4 + len(pattern_points)
+    fcs.nav_state.paths[3 + len(pattern_points)].start_waypoint_id = 3 + len(pattern_points)
+    fcs.nav_state.paths[3 + len(pattern_points)].end_waypoint_id = 4 + len(pattern_points)
+    fcs.nav_state.paths[3 + len(pattern_points)].type = FCS_PATH_DUBINS_CURVE
+    fcs.nav_state.paths[3 + len(pattern_points)].next_path_id = 4 + len(pattern_points)
 
     # Curve to home and hold
-    nav_state.paths[4 + len(pattern_points)].start_waypoint_id = 4 + len(pattern_points)
-    nav_state.paths[4 + len(pattern_points)].end_waypoint_id = 0
-    nav_state.paths[4 + len(pattern_points)].type = FCS_PATH_DUBINS_CURVE
-    nav_state.paths[4 + len(pattern_points)].next_path_id = 0xFFFF
+    fcs.nav_state.paths[4 + len(pattern_points)].start_waypoint_id = 4 + len(pattern_points)
+    fcs.nav_state.paths[4 + len(pattern_points)].end_waypoint_id = 0
+    fcs.nav_state.paths[4 + len(pattern_points)].type = FCS_PATH_DUBINS_CURVE
+    fcs.nav_state.paths[4 + len(pattern_points)].next_path_id = 0xFFFF
 
     # Register the path with the FCS
-    nav_state.reference_path_id[0] = 0
-    _fcs.fcs_control_reset()
+    fcs.nav_state.reference_path_id[0] = 0
+    fcs._fcs.fcs_control_reset()
 
     sock = connect_to_xplane()
     reset_xplane_state(sock)
@@ -1036,13 +692,13 @@ if __name__ == "__main__":
 
             print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
                 t * 0.02,
-                math.degrees(nav_state.reference_trajectory[0].lat),
-                math.degrees(nav_state.reference_trajectory[0].lon),
-                nav_state.reference_trajectory[0].alt,
-                nav_state.reference_trajectory[0].airspeed,
-                math.degrees(nav_state.reference_trajectory[0].yaw),
-                math.degrees(nav_state.reference_trajectory[0].pitch),
-                math.degrees(nav_state.reference_trajectory[0].roll),
+                math.degrees(fcs.nav_state.reference_trajectory[0].lat),
+                math.degrees(fcs.nav_state.reference_trajectory[0].lon),
+                fcs.nav_state.reference_trajectory[0].alt,
+                fcs.nav_state.reference_trajectory[0].airspeed,
+                math.degrees(fcs.nav_state.reference_trajectory[0].yaw),
+                math.degrees(fcs.nav_state.reference_trajectory[0].pitch),
+                math.degrees(fcs.nav_state.reference_trajectory[0].roll),
                 math.degrees(sim_state["lat"]),
                 math.degrees(sim_state["lon"]),
                 sim_state["alt"],
@@ -1066,7 +722,7 @@ if __name__ == "__main__":
                 sim_state["velocity"][0]**2 + sim_state["velocity"][1]**2 +
                 sim_state["velocity"][2]**2) * 0.02
 
-            if nav_state.reference_path_id[0] == 499:
+            if fcs.nav_state.reference_path_id[0] == 499:
                 print "COMPLETED"
                 print "Time taken: %.0f min %.0f sec" % (
                     int(t * 0.02) / 60, (t * 0.02) % 60.0)
@@ -1080,7 +736,7 @@ if __name__ == "__main__":
             if sim_state["alt"] < 50.0:
                 print "LOST CONTROL"
                 print "Reference trajectory was:"
-                print "\n".join(("    " + repr(w)) for w in list(nav_state.reference_trajectory))
+                print "\n".join(("    " + repr(w)) for w in list(fcs.nav_state.reference_trajectory))
                 raise StopIteration()
 
             slack_time = 0.02 - (time.time() - iter_start)

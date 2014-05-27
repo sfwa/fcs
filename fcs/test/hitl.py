@@ -41,33 +41,6 @@ Driver for HITL testing of the FCS navigation and control algorithms in an
 X-Plane simulation, with the DSP connected via a USB-serial adapter
 """
 
-FCS_MODE_INITIALIZING = ord("I")
-FCS_MODE_CALIBRATING = ord("C")
-FCS_MODE_SAFE = ord("S")
-FCS_MODE_ARMED = ord("R")
-FCS_MODE_ACTIVE = ord("A")
-FCS_MODE_HOLDING = ord("H")
-FCS_MODE_ABORT = ord("F")
-
-
-FCS_PATH_LINE = ord("L")
-FCS_PATH_DUBINS_CURVE = ord("D")
-FCS_PATH_FIGURE_EIGHT = ord("8")
-FCS_PATH_INVALID = 0
-
-
-FCS_CONTROL_INVALID_PATH_ID = 0xFFFF
-FCS_CONTROL_HOLD_PATH_ID = 500 - 1
-FCS_CONTROL_INTERPOLATE_PATH_ID = 500 - 2
-FCS_CONTROL_RESUME_PATH_ID = 500 - 3
-FCS_CONTROL_HOLD_WAYPOINT_ID = 1000 - 1
-FCS_CONTROL_INTERPOLATE_WAYPOINT_ID = 1000 - 2
-FCS_CONTROL_RESUME_WAYPOINT_ID = 1000 - 3
-
-
-ahrs_state = None
-control_state = None
-nav_state = None
 ahrs_tick = 0
 
 
