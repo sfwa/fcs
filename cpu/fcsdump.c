@@ -6,68 +6,108 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <getopt.h>
+#include <signal.h>
+#include <errno.h>
+#include <ftdi.h>
 
-#define RD_BUFSIZE 256u
-#define WR_BUFSIZE 256u
+static FILE *outputFile;
+static int exitRequested = 0;
 
-int set_interface_attribs(int fd, int speed) {
-    struct termios2 tty;
-    memset(&tty, 0, sizeof tty);
-
-    ioctl(fd, TCGETS2, &tty);
-    tty.c_cflag &= ~CBAUD;
-    tty.c_cflag |= BOTHER;
-    tty.c_ispeed = speed;
-    tty.c_ospeed = speed;
-
-    tty.c_cflag &= ~PARENB;
-    tty.c_cflag &= ~CSTOPB;
-    tty.c_cflag &= ~CSIZE;
-    tty.c_cflag |= CS8;
-    tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls, enable reading
-    tty.c_cflag &= ~CRTSCTS;
-
-    tty.c_iflag &= ~(IGNBRK | ICRNL | IMAXBEL | BRKINT);         // ignore break signal
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
-
-    tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
-    tty.c_oflag &= ~OPOST;
-    tty.c_cc[VMIN] = 255u;
-    tty.c_cc[VTIME] = 0u;
-
-    ioctl(fd, TCSETS2, &tty);
-    return 0;
+static void sigintHandler(int signum) {
+    exitRequested = 1;
 }
 
-int main(int argc, char** argv) {
+static int readCallback(uint8_t *buffer, int length,
+FTDIProgressInfo *progress, void *userdata) {
+    if (length) {
+        if (fwrite(buffer, length, 1, outputFile) != 1) {
+            perror("Write error");
+            return 1;
+        }
+   }
+   if (progress) {
+       fprintf(stderr, "%10.02fs total time %9.3f MiB captured %7.1f kB/s curr rate %7.1f kB/s totalrate %d dropouts\n",
+               progress->totalTime,
+               progress->current.totalBytes / (1024.0 * 1024.0),
+               progress->currentRate / 1024.0,
+               progress->totalRate / 1024.0);
+   }
+   return exitRequested ? 1 : 0;
+}
+
+int main(int argc, char **argv) {
+    struct ftdi_context *ftdi;
+    int err, c;
+    FILE *of = NULL;
+    char const *outfile  = 0;
+    outputFile =0;
+    exitRequested = 0;
+    char *descstring = NULL;
+
     if (argc < 2) {
         printf("Usage: fcsdump /PATH/TO/DIR");
         return 1;
     }
 
+    if ((ftdi = ftdi_new()) == 0) {
+        fprintf(stderr, "ftdi_new failed\n");
+        return EXIT_FAILURE;
+    }
+
+    if (ftdi_set_interface(ftdi, INTERFACE_A) < 0) {
+        fprintf(stderr, "ftdi_set_interface failed\n");
+        ftdi_free(ftdi);
+        return EXIT_FAILURE;
+    }
+
+    if (ftdi_usb_open_desc(ftdi, 0x0403, 0x6014, descstring, NULL) < 0) {
+        fprintf(stderr, "Can't open ftdi device: %s\n",
+                ftdi_get_error_string(ftdi));
+        ftdi_free(ftdi);
+        return EXIT_FAILURE;
+    }
+
+    /* A timeout value of 1 results in may skipped blocks */
+    if (ftdi_set_latency_timer(ftdi, 2)) {
+        fprintf(stderr, "Can't set latency, Error %s\n",
+               ftdi_get_error_string(ftdi));
+        ftdi_usb_close(ftdi);
+        ftdi_free(ftdi);
+        return EXIT_FAILURE;
+    }
+
     char *fname = tempnam(argv[1], "fcs-");
-    FILE *f1;
-    f1 = fopen(fname, "wb");
+    of = fopen(fname, "wb");
 
-    int ifd1 = open("/dev/ttySAC0", O_RDWR | O_NOCTTY | O_NDELAY);
-    if (ifd1 < 0) {
-        printf("error %d opening /dev/ttySAC0: %s", errno, strerror(errno));
-        return 1;
+    setvbuf(of, NULL, _IOFBF , 1 << 16);
+    outputFile = of;
+    signal(SIGINT, sigintHandler);
+
+    err = ftdi_readstream(ftdi, readCallback, NULL, 8, 256);
+    if (err < 0 && !exitRequested) {
+        exit(1);
     }
 
-    set_interface_attribs(ifd1, 921600);
+    fclose(outputFile);
+    outputFile = NULL;
 
-    uint64_t n_written = 0;
-    char *buf = malloc(RD_BUFSIZE);
+    fprintf(stderr, "Capture ended.\n");
 
-    while (1) {
-        int n = read(ifd1, buf, RD_BUFSIZE);
-        if (n > 0) {
-            fwrite(buf, 1, n, f1);
-            n_written += n;
-        }
-        if (n_written > 1024) {
-            fflush(f1);
-        }
+    if (ftdi_set_bitmode(ftdi,  0xff, BITMODE_RESET) < 0) {
+        fprintf(stderr, "Can't set RESET mode, Error %s\n",
+                ftdi_get_error_string(ftdi));
+        ftdi_usb_close(ftdi);
+        ftdi_free(ftdi);
+        return EXIT_FAILURE;
     }
+    ftdi_usb_close(ftdi);
+    ftdi_free(ftdi);
+    signal(SIGINT, SIG_DFL);
+    exit (0);
 }

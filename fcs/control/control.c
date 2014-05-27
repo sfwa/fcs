@@ -195,7 +195,7 @@ void fcs_control_tick(void) {
     int32_t ms_since_last_gps, ms_since_last_data;
     uint16_t manual_setpoint[NMPC_CONTROL_DIM];
     uint8_t param_key[4];
-    bool control_timeout = false;
+    bool control_timeout = false, needs_path_reset = false;
 
     fcs_assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
 
@@ -249,7 +249,8 @@ void fcs_control_tick(void) {
         if (fcs_parameter_find_by_type_and_device(
                     measurement_log, FCS_PARAMETER_NAV_PATH_ID, 1u, &param) &&
                 fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_PATH, 1u, &param2)) {
+                    measurement_log, FCS_PARAMETER_KEY_PATH, 1u, &param2) &&
+                param.data.u16[0] < FCS_CONTROL_MAX_PATHS) {
             /* Update path */
             (void)fcs_parameter_get_key_value(
                 param_key, (uint8_t*)&nav_state.paths[param.data.u16[0]],
@@ -260,12 +261,24 @@ void fcs_control_tick(void) {
                     &param) &&
                 fcs_parameter_find_by_key_and_device(
                     measurement_log, FCS_PARAMETER_KEY_WAYPOINT, 1u,
-                    &param2)) {
+                    &param2) &&
+                param.data.u16[0] < FCS_CONTROL_MAX_WAYPOINTS) {
             /* Update waypoint */
             (void)fcs_parameter_get_key_value(
                 param_key, (uint8_t*)&nav_state.waypoints[param.data.u16[0]],
                 sizeof(struct fcs_waypoint_t), &param2);
             nav_state.version++;
+        } else if (fcs_parameter_find_by_type_and_device(
+                    measurement_log, FCS_PARAMETER_NAV_PATH_ID, 1u, &param) &&
+                fcs_parameter_find_by_key_and_device(
+                    measurement_log, FCS_PARAMETER_KEY_REROUTE, 1u,
+                    &param2) &&
+                param.data.u16[0] < FCS_CONTROL_MAX_PATHS &&
+                 nav_state.reference_path_id[0] != param.data.u16[0]) {
+            /* Re-route to the new path */
+            nav_state.reference_path_id[0] = param.data.u16[0];
+            nav_state.version++;
+            needs_path_reset = true;
         } else if (fcs_parameter_find_by_key_and_device(
                     measurement_log, FCS_PARAMETER_KEY_NAV_BOUNDARY, 1u,
                     &param)) {
@@ -396,7 +409,7 @@ void fcs_control_tick(void) {
         fcs_trajectory_start_hold(&nav_state, &state_estimate);
         fcs_trajectory_recalculate(&nav_state, &state_estimate);
         fcs_trajectory_timestep(&nav_state, &state_estimate);
-    } else if (!control_timeout && is_navigating() &&
+    } else if (!control_timeout && !needs_path_reset && is_navigating() &&
                is_position_error_ok(alt_diff)) {
         fcs_trajectory_timestep(&nav_state, &state_estimate);
     } else if (is_path_valid()) {

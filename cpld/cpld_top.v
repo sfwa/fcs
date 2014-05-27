@@ -135,8 +135,6 @@ module cpld_top(
 assign dsp_i2c_1v8_scl = 1'bz;
 assign dsp_i2c_1v8_sda = 1'bz;
 assign dsp_ext_uart_reset = ~dsp_bank_enable;
-assign dsp_usb_oe_INV = ~dsp_bank_enable;
-assign dsp_usb_reset_INV = ~dsp_bank_enable;
 assign dsp_usb_siwu_INV = 1'b1;
 assign dsp_ext_uart_en = 1'b1;
 assign cell_disable_INV = 1'b1;
@@ -272,8 +270,8 @@ always @(*) begin
 		dsp_ext_uart_rx = ext_uart1_rx;
 		ext_uart1_tx = dsp_ext_uart_tx;
 
-		cpu_ext_uart0_rx = dsp_int_uart1_tx;
-		cpu_ext_uart1_rx = dsp_int_uart1_tx;
+		cpu_ext_uart0_rx = ioboard_uart0_rx;
+		cpu_ext_uart1_rx = ioboard_uart1_rx;
 		ext_uart0_tx = dsp_int_uart1_tx;
 
 		spi_flash_cs_INV = dsp_spi_cs0_INV;
@@ -314,6 +312,8 @@ assign cpu_pmic_pwron = (c66x_state == 4'b1001) ? 1'bZ : 1'b1;
 assign cpu_reset_INV = 1'bZ;
 assign cpu_wreset_INV = 1'bZ;
 assign cpu_usbhub_reset_INV = (cpu_pwron_timer[23] & cpu_pwron_timer[22]) ? 1'b0 : 1'b1;
+assign dsp_usb_oe_INV = dsp_bank_enable;
+assign dsp_usb_reset_INV = cpu_usbhub_reset_INV;
 assign cpu_bootmode = 6'b101001; /* 6'b101001 for eMMC on SD4,
                                     6'b100111 for eMMC on SD0,
                                     6'b000101 for MicroSD */

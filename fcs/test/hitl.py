@@ -453,7 +453,7 @@ def send_control_to_xplane(s, controls):
 
 
 if __name__ == "__main__":
-    conn = serial.Serial("/dev/tty.usbserial-FTVONZXS", 921600, timeout=0)
+    conn = serial.Serial("/dev/tty.usbserial-FTXP1CI7", 921600, timeout=0)
     conn.read(1024)  # Clear out the read buffer
 
     sock = connect_to_xplane()

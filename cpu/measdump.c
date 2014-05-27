@@ -45,7 +45,8 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    char *fname = tempnam(argv[1], "meas-");
+    /* I/O board 1 */
+    char *fname1 = tempnam(argv[1], "meas1-");
     FILE *f1;
     f1 = fopen(fname, "wb");
 
@@ -57,6 +58,32 @@ int main(int argc, char** argv) {
 
     set_interface_attribs(ifd1, 2604168);
 
+    /* I/O board 2 */
+    char *fname2 = tempnam(argv[1], "meas2-");
+    FILE *f2;
+    f2 = fopen(fname2, "wb");
+
+    int ifd2 = open("/dev/ttySAC3", O_RDWR | O_NOCTTY | O_NDELAY);
+    if (ifd2 < 0) {
+        printf("error %d opening /dev/ttySAC3: %s", errno, strerror(errno));
+        return 1;
+    }
+
+    set_interface_attribs(ifd2, 2604168);
+
+    /* DSP */
+    char *fname3 = tempnam(argv[1], "meas3-");
+    FILE *f3;
+    f3 = fopen(fname3, "wb");
+
+    int ifd3 = open("/dev/ttySAC0", O_RDWR | O_NOCTTY | O_NDELAY);
+    if (ifd3 < 0) {
+        printf("error %d opening /dev/ttySAC0: %s", errno, strerror(errno));
+        return 1;
+    }
+
+    set_interface_attribs(ifd3, 921600);
+
     uint64_t n_written = 0;
     char *buf = malloc(RD_BUFSIZE);
 
@@ -66,8 +93,20 @@ int main(int argc, char** argv) {
             fwrite(buf, 1, n, f1);
             n_written += n;
         }
-        if (n_written > 65536) {
+        n = read(ifd2, buf, RD_BUFSIZE);
+        if (n > 0) {
+            fwrite(buf, 1, n, f2);
+            n_written += n;
+        }
+        n = read(ifd3, buf, RD_BUFSIZE);
+        if (n > 0) {
+            fwrite(buf, 1, n, f3);
+            n_written += n;
+        }
+        if (n_written > 65535) {
             fflush(f1);
+            fflush(f2);
+            fflush(f3);
         }
     }
 }

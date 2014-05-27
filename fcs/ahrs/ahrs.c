@@ -45,7 +45,7 @@ static double ahrs_process_noise[] = {
     7e-4, 7e-4, 7e-4, /* velocity N, E, D */
     2e-6, 2e-6, 2e-6, /* acceleration x, y, z */
     1e-7, 1e-7, 1e-7, /* attitude roll, pitch, yaw */
-    1e-2, 1e-2, 1e-2, /* angular velocity roll, pitch, yaw */
+    1e-4, 1e-4, 1e-4, /* angular velocity roll, pitch, yaw */
     1e-1, 1e-1, 1e-1, /* angular acceleration roll, pitch, yaw */
     1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
     3e-12, 3e-12, 3e-12 /* gyro bias x, y, z */
@@ -109,7 +109,7 @@ void fcs_ahrs_tick(void) {
     While copying measurement data to the UKF, get sensor error and geometry
     information so the sensor model parameters can be updated.
     */
-    double v[3], speed, wmm_field_inv;
+    double v[3], control_pos[4] = {0.0, 0.0, 0.0, 0.0}, speed, wmm_field_inv;
     bool got_result, got_gps = false, got_reference_alt = true; /* FIXME */
     struct ukf_ioboard_params_t params;
     struct fcs_parameter_t parameter;
@@ -208,8 +208,9 @@ void fcs_ahrs_tick(void) {
         got_result = fcs_parameter_find_by_type_and_device(
         	measurement_log, FCS_PARAMETER_CONTROL_POS, 1u, &parameter);
         if (got_result) {
-            fcs_parameter_get_values_d(&parameter, v, 4u);
-            ukf_iterate((float)AHRS_DELTA, v);
+            fcs_parameter_get_values_d(&parameter, control_pos, 4u);
+            vector3_scale_d(control_pos, 1.0 / 65535.0);
+            ukf_iterate((float)AHRS_DELTA, control_pos);
         }
 
         measurement_log = fcs_exports_log_close(measurement_log);
@@ -272,6 +273,11 @@ void fcs_ahrs_tick(void) {
         /* Transition out of calibration mode after 30s */
         if (ahrs_solution_time - ahrs_mode_start_time > 30000) {
             fcs_ahrs_set_mode(FCS_MODE_SAFE);
+        }
+    } else if (ahrs_mode == FCS_MODE_SAFE) {
+        /* Transition out of safe mode once throttle exceeds 50% */
+        if (control_pos[0] > 0.5) {
+            fcs_ahrs_set_mode(FCS_MODE_ARMED);
         }
     } else if (ahrs_mode == FCS_MODE_ARMED) {
         /* Transition to active once speed exceeds 8m/s */
@@ -597,13 +603,13 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
             /* Trust attitude and gyro bias predictors less. */
-            vector_set_d(&ahrs_process_noise[9], 1e-5, 3u);
-            vector_set_d(&ahrs_process_noise[21], 1e-5, 3u);
+            vector_set_d(&ahrs_process_noise[9], 1e-7, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-6, 3u);
             break;
         case FCS_MODE_SAFE:
             ukf_choose_dynamics(UKF_MODEL_NONE);
             vector_set_d(&ahrs_process_noise[9], 1e-7, 3u);
-            vector_set_d(&ahrs_process_noise[21], 3e-12, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-9, 3u);
             break;
         case FCS_MODE_ARMED:
             break;

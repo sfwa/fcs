@@ -324,16 +324,16 @@ void fcs_emif_uart_reset(uint8_t uart_idx) {
     (Note that all cycle counts above are based on the EMIF16 clock rate,
     which is 1/6th the CPU clock rate.)
 
-    We're using ASIZE=0 (8-bit), TA=0, R_HOLD=11, R_STROBE=7, R_SETUP=0,
+    We're using ASIZE=0 (8-bit), TA=5, R_HOLD=11, R_STROBE=7, R_SETUP=0,
     write setup/strobe/hold the same.
     */
     volatile CSL_Emif16Regs *const emif16 = (CSL_Emif16Regs*)CSL_EMIF16_REGS;
     if (uart_idx == 0) {
         emif16->A1CR = (0x7u << 4u) + (0xAu << 7u) + (0x7u << 17u) +
-                       (0xAu << 20u);
+                       (0xAu << 20u) + (0xAu << 2u);
     } else {
         emif16->A2CR = (0x7u << 4u) + (0xAu << 7u) + (0x7u << 17u) +
-                       (0xAu << 20u);
+                       (0xAu << 20u) + (0xAu << 2u);
     }
 
 

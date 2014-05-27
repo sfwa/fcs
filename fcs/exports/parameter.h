@@ -142,6 +142,7 @@ struct fcs_parameter_t {
 #define FCS_PARAMETER_KEY_WAYPOINT (uint8_t*)"WAYP"
 #define FCS_PARAMETER_KEY_REFERENCE_POINT (uint8_t*)"REFP"
 #define FCS_PARAMETER_KEY_NAV_BOUNDARY (uint8_t*)"BDRY"
+#define FCS_PARAMETER_KEY_REROUTE (uint8_t*)"RRTE"
 
 /* Parameter field accessors */
 enum fcs_parameter_type_t fcs_parameter_get_type(

@@ -466,18 +466,45 @@ static void _fcs_ddr3_emif_setup(void) {
     /***************** 3.4 Basic Controller and DRAM Configuration **********/
     ddr3->SDRAM_REF_CTRL = 0x0000515C;    /* enable configuration */
 
-    ddr3->SDRAM_TIM_1 = 0x1333780C;
-    ddr3->SDRAM_TIM_2 = 0x30717FE3;
-    ddr3->SDRAM_TIM_3 = 0x559F86AF;
     ddr3->DDR_PHY_CTRL_1 = 0x0010010F;
     ddr3->ZQ_CONFIG = 0x70074C1F;
     ddr3->PWR_MGMT_CTRL = 0;
-    ddr3->SDRAM_CONFIG = 0x62477AB2;
+
+    /* See SPRUGV8D section 3.2.1 */
+    ddr3->SDRAM_CONFIG = (0x03 << 29) + /* SDRAM Type Select = DDR3 */
+                         (0x01 << 14) + /* NM = 32-bit data bus */
+                         (0x10 << 4) + /* IBANK = 8 internal DDR3 banks */
+                         (0x00 << 3) + /* EBANK = only DCE0z used */
+                         (0x02 << 0) + /* PAGESIZE = 1024 words (2KiB) */
+                         (0x02 << 24) + /* DDR_TERM = RZQ/2 */
+                         (0x02 << 21) + /* DYN_ODT = RZQ/2 */
+                         (0x01 << 18) + /* SDRAM_DRIVE = RZQ/7 */
+                         (0x02 << 16) + /* CWL = 7 */
+                         (0x0A << 10) + /* CL = 9 */
+                         (0x04 << 7); /* ROWSIZE = 11 row bits */
+
+    ddr3->SDRAM_TIM_1 = (0x08 << 25) + /* T_RP = 13.5ns / 9 cycles */
+                        (0x08 << 21) + /* T_RCD = 13.5ns / 9 cycles */
+                        (0x03 << 17) + /* T_WR = 6ns / 4 cycles */
+                        (0x17 << 12) + /* T_RAS = 36ns / 17 cycles */
+                        (0x20 << 6) + /* T_RC = 49.5ns / 20 cycles */
+                        (0x04 << 3) + /* T_RRD = 30ns / 4 cycles */
+                        (0x03 << 0); /* T_WTR = 6ns / 3 cycles */
+    ddr3->SDRAM_TIM_2 = (0x03 << 3) + /* T_RTP = 6ns / 3 cycles */
+                        (0x02 << 0) + /* T_CKE = 3 tck cycles */
+                        (0x04 << 28) + /* T_XP = 5 tck cycles */
+                        (0x04 << 16) + /* T_XSNR = 5 tck cycles */
+                        (0x1FF << 6); /* T_XSDLL = 512 tck cycles */
+    ddr3->SDRAM_TIM_3 = (0x05 << 24) + /* T_CSTA = 5 */
+                        (0x49 << 4) + /* T_RFC = 110 ns */
+                        (0x3F << 15) + /* T_ZQCS = 64 tck cycles */
+                        (0x05 << 28) + /* T_PDLL_UL always 5 */
+                        (0x0F << 0); /* T_RAS_MAX always 0xF */
 
     /* Wait 600us for HW init to complete */
     _fcs_delay_cycles(600000);
 
-    ddr3->SDRAM_REF_CTRL = 0x0000144F;       /* Refresh rate = (7.8*666MHz) */
+    ddr3->SDRAM_REF_CTRL = 0x00001450;       /* Refresh rate = (7.8*666MHz) */
 
     /**************** 4.2.1 Executing Partial Automatic Leveling ************/
 
@@ -586,15 +613,15 @@ static void _fcs_enable_edc(void) {
     /* L1P EDC enable */
     cgem->L1PEDCMD = 1u;
     /*
-    FIXME -- this doesn't work on the repaired board:
-    assert(cgem->L1PEDSTAT);
+    This fails for some reason -- do we need to wait a while?
+    fcs_assert(cgem->L1PEDSTAT);
     */
 
     /* L2 EDC enable */
     cgem->L2EDCMD = 1u;
     /*
-    FIXME -- this doesn't work on the repaired board:
-    assert(cgem->L2EDSTAT);
+    This fails for some reason -- do we need to wait a while?
+    fcs_assert(cgem->L2EDSTAT);
     */
 
     cgem->L2EDCEN |= 0x1Fu;
@@ -668,12 +695,7 @@ uint32_t _fcs_init_core0(void) {
     } while (!_fcs_ddr3_test(1048576) && tries < 10u);
     /* TODO: skip/reduce extent of memory test on restart */
 
-    /*
-    FIXME: allow DDR3 to fail for now since it's broken on the second
-    prototype board.
-    assert(tries < 10u);
-    */
-
+    fcs_assert(tries < 10u);
 
     /*
     Clear PFX bits in MAR registers to work around Advisory 14 in SPRZ381A.

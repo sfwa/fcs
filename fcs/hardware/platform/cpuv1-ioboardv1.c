@@ -135,9 +135,17 @@ void fcs_board_init_platform(void) {
     result = fcs_stream_open(FCS_STREAM_UART_INT1);
     fcs_assert(result == FCS_STREAM_OK);
 
+    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 921600u);
+    fcs_assert(result == FCS_STREAM_OK);
+    result = fcs_stream_open(FCS_STREAM_UART_EXT0);
+    fcs_assert(result == FCS_STREAM_OK);
+
     result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
     fcs_assert(result == FCS_STREAM_OK);
     result = fcs_stream_open(FCS_STREAM_UART_EXT1);
+    fcs_assert(result == FCS_STREAM_OK);
+
+    result = fcs_stream_open(FCS_STREAM_USB);
     fcs_assert(result == FCS_STREAM_OK);
 
 #ifdef __TI_COMPILER_VERSION__
@@ -385,7 +393,7 @@ void fcs_board_tick(void) {
     		                               FCS_MODE_WRITE);
     fcs_assert(measurement_log);
 
-    for (i = 1; i < FCS_IOBOARD_COUNT; i++) {
+    for (i = 0; i < FCS_IOBOARD_COUNT; i++) {
         if (_fcs_read_log_packet(
                 (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i), i,
                 measurement_log)) {
@@ -534,11 +542,18 @@ void fcs_board_tick(void) {
         fcs_assert(stream_result == FCS_STREAM_OK);
     }
 
+    /* Write the estimate log to the CPU UART */
+    //out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), estimate_log);
+
+    //write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, out_buf, out_buf_len);
+    /* fcs_assert(out_buf_len == write_len); */
+
     /*
     Copy control log then merge estimate log so that if there's not enough
     space for whatever reason, the control output still gets through.
     */
-    memcpy(&out_log, control_log, sizeof(struct fcs_log_t));
+    fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
+    //(void)fcs_log_merge(&out_log, control_log);
     (void)fcs_log_merge(&out_log, estimate_log);
 
     /*
@@ -558,14 +573,12 @@ void fcs_board_tick(void) {
     CPU via the USB stream.
     */
     (void)fcs_log_merge(&out_log, measurement_log);
-    (void)fcs_log_merge(&out_log, hal_log);
+    //(void)fcs_log_merge(&out_log, hal_log);
 
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
 
-    /*
     write_len = fcs_stream_write(FCS_STREAM_USB, out_buf, out_buf_len);
-    fcs_assert(out_buf_len == write_len);
-    */
+    /* fcs_assert(out_buf_len == write_len); */
 
     /* Close all the logs */
     control_log = fcs_exports_log_close(control_log);

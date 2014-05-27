@@ -235,8 +235,6 @@ buffer.
 Returns the number of bytes actually written, in the range [0, nbytes].
 Assuming the caller is writing at a rate lower than the maximum send rate of
 the device, the return value will always be equal to "nbytes".
-
-TODO: support write buffering
 */
 size_t fcs_stream_write(enum fcs_stream_device_t dev,
 const uint8_t *restrict buf, size_t nbytes) {

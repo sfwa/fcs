@@ -141,6 +141,11 @@ class DataParameter(Parameter):
         (ValueType.FCS_VALUE_FLOAT, 16): None,
         (ValueType.FCS_VALUE_FLOAT, 32): 'f',
         (ValueType.FCS_VALUE_FLOAT, 64): 'd',
+        # Shouldn't be needed!
+        (ValueType.FCS_VALUE_RESERVED, 8): 'B',
+        (ValueType.FCS_VALUE_RESERVED, 16): 'H',
+        (ValueType.FCS_VALUE_RESERVED, 32): 'L',
+        (ValueType.FCS_VALUE_RESERVED, 64): 'Q'
     }
 
     value_type = None
@@ -301,6 +306,12 @@ class ParameterLog(list):
     def deserialize(cls, data):
         data = cobsr.decode(data.strip('\x00'))
 
+        data_crc = struct.pack("<L" , binascii.crc32(data[:-4]) & 0xFFFFFFFF)
+        if data[-4:] != data_crc:
+            raise ValueError("CRC mismatch: provided %s, calculated %s" %
+                             (binascii.b2a_hex(data[-4:]),
+                              binascii.b2a_hex(data_crc)))
+
         log_type, _, tick = struct.unpack("<BHH", data[0:5])
         data = data[5:]
 
@@ -417,11 +428,96 @@ def print_estimate_log(data):
            "vn=%5.2f, ve=%5.2f, vd=%5.2f, " + \
            "yaw=%5.1f, pitch=%5.1f, roll=%6.1f, " + \
            "yaw_rate=%5.1f, pitch_rate=%5.1f, roll_rate=%5.1f, " + \
-           "wind_vn=%5.2f, wind_ve=%5.2f, wind_vd=%5.2f, mode=%s") % \
+           "wind_vn=%5.2f, wind_ve=%5.2f, wind_vd=%5.2f, mode=%s ") % \
           tuple(pos + v + att_ypr + angular_v + wind_v + [mode])
 
 
+def print_measurement_log(data):
+    for device_id in range(2):
+        try:
+            tmp = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_GPS_POSITION_LLA).values
+            gps_pos = "%.8f,%.8f,%.2f" % (tmp[0] * 1e-7, tmp[1] * 1e-7, tmp[2] * 1e-3)
+        except Exception:
+            gps_pos = ",,"
+
+        try:
+            tmp = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_GPS_VELOCITY_NED).values
+            gps_v = "%.2f,%.2f,%.2f" % (tmp[0] * 1e-3, tmp[1] * 1e-3, tmp[2] * 1e-3)
+        except Exception:
+            gps_v = ",,"
+
+        try:
+            accel = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_ACCELEROMETER_XYZ).values
+            accel = "%d,%d,%d" % tuple(accel)
+        except Exception:
+            accel = ",,"
+
+        try:
+            gyro = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_GYROSCOPE_XYZ).values
+            gyro = "%d,%d,%d" % tuple(gyro)
+        except Exception:
+            gyro = ",,"
+
+        try:
+            mag = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_ACCELEROMETER_XYZ).values
+            mag = "%d,%d,%d" % tuple(mag)
+        except Exception:
+            mag = ",,"
+
+        try:
+            pitot = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_PITOT).values
+            pitot = "%d" % pitot[0]
+        except Exception:
+            pitot = ""
+
+        try:
+            baro = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_PRESSURE_TEMP).values
+            baro = "%d" % baro[0]
+        except Exception:
+            baro = ""
+
+        try:
+            iv = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_IV).values
+            iv = "%d,%d" % tuple(iv)
+        except Exception:
+            iv = ","
+
+        try:
+            control_pos = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_CONTROL_POS).values
+            control_pos = "%d,%d,%d" % tuple(control_pos)
+        except Exception:
+            control_pos = ",,"
+
+        sys.stdout.write(",".join([gps_pos, gps_v, accel, gyro, mag, pitot, baro, iv, control_pos]) + ("," if device_id == 0 else "\n"))
+
+
 if __name__ == "__main__":
+    print "gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
+          "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
+          "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
+          "control_rail_1,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
+          "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
+          "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
+          "control_lail_2,control_rail_2"
+
     n = 0
     in_packet = False
     got_data = False
@@ -438,17 +534,19 @@ if __name__ == "__main__":
             got_data = False
         elif c == '\x00' and got_data and in_packet:
             n += 1
-            if n % 20 == 0:
+            try:
+                logf = ParameterLog.deserialize(data)
+                #print repr(logf)
+            except Exception:
+                raise
+                print "Invalid packet: %s" % binascii.b2a_hex(data)
+            else:
                 try:
-                    logf = ParameterLog.deserialize(data)
-                    #print repr(logf)
+                    #print_estimate_log(logf)
+                    print_measurement_log(logf)
                 except Exception:
-                    print "Invalid packet: %s" % binascii.b2a_hex(data)
-                else:
-                    try:
-                        print_estimate_log(logf)
-                    except Exception:
-                        print "Incomplete packet"
+                    raise
+                    print "Incomplete packet"
             data = ''
             in_packet = False
             got_data = False

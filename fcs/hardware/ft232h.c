@@ -51,7 +51,7 @@ EMIF signal         FT232H signal      Description
 D[7:0]              DBUS[7:0]          8-bit parallel data bus
 /OE                 RD#
 /WE                 WR#
-/CS3                CS#                Chip select (active low)
+/CS0                CS#                Chip select (active low)
 GPIOn               RESET              FT232H reset (active high)
 
 Interface implementation follows the example for 8-bit ASRAM/NOR interface
@@ -92,7 +92,7 @@ void fcs_ft232h_reset(void) {
     Prior to accessing the EMIF16 we need to configure its cacheability in the
     appropriate MAR (see SPRUGW0C section 4.4.4).
 
-    The MAR for the FT232H is 124 (for locations 7C00 0000 - 7CFF FFFF).
+    The MAR for the FT232H is 112 (for locations 7000 0000 - 70FF FFFF).
 
     MARn: Memory Attribute Register (SPRUGW0C section 4.4.5)
 
@@ -114,7 +114,7 @@ void fcs_ft232h_reset(void) {
     */
     volatile CSL_CgemRegs *const cgem =
         (CSL_CgemRegs*)CSL_CGEM0_5_LOCAL_L2_SRAM_REGS;
-    cgem->MAR[124] = 0;
+    cgem->MAR[112] = 0;
 
     /*
     Configure the EMIF CE0 via A0CR.
@@ -163,7 +163,9 @@ void fcs_ft232h_reset(void) {
     write setup/strobe/hold the same.
     */
     volatile CSL_Emif16Regs *const emif16 = (CSL_Emif16Regs*)CSL_EMIF16_REGS;
-    emif16->A0CR = (0x5u << 7u) + (0x5u << 20u);
+    emif16->A0CR = (0x1u << 26u) + (0x4u << 20u) + (0x1u << 17u) +
+                   (0x1u << 13u) + (0x4u << 7u) + (0x1u << 4u) +
+                   (0xAu << 2u);
 
     /*
     PMCR is the Page Mode Control Register. We're not using NOR flash, so set
