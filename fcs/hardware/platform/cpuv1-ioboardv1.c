@@ -73,7 +73,7 @@ inline static bool _vec_hasnan_f(const float *vec, size_t n) {
 static struct fcs_calibration_map_t board_calibration;
 static TRICAL_instance_t board_accel_trical_instances[FCS_IOBOARD_COUNT];
 static TRICAL_instance_t board_mag_trical_instances[FCS_IOBOARD_COUNT];
-static double board_mag_trical_update_attitude[FCS_IOBOARD_COUNT];
+static double board_mag_trical_update_attitude[FCS_IOBOARD_COUNT][4];
 static int16_t board_timeout[FCS_IOBOARD_COUNT] = { 5u, 5u };
 static double board_reference_pressure, board_reference_alt;
 static uint8_t
@@ -167,7 +167,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_ACCELEROMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 1.5f, /* m/s^2 */
+            .error = 2.5f, /* m/s^2 */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -175,7 +175,7 @@ void fcs_board_init_platform(void) {
                 0.0f, 0.0f, 0.0f
             },
             .orientation = { 0.0f, 0.0f, 0.0f, 1.0f },
-            .offset = { 0.0f, 0.0f, 0.0f },
+            .offset = { 0.3f, 0.0f, -0.05f },
             .scale_factor = 1.0f / ACCEL_SENSITIVITY
         },
         {
@@ -184,9 +184,9 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_GYROSCOPE_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.04f, /* approx 2 degrees */
+            .error = 0.02f, /* approx 1 degrees */
             .params = {
-                0.0f, 0.0f, 0.0f,
+                0.1f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f
@@ -201,7 +201,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.02f, /* Gauss */
+            .error = 0.15f, /* Gauss */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -225,7 +225,7 @@ void fcs_board_init_platform(void) {
             .device = 0,
             .type = FCS_PARAMETER_GPS_VELOCITY_NED,
             .calibration_type = FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.5f,
+            .error = 0.4f,
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -254,7 +254,7 @@ void fcs_board_init_platform(void) {
             .device = 0,
             .type = FCS_PARAMETER_PRESSURE_TEMP,
             .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
-            .error = 0.5f,
+            .error = 8.0f,
             /*
             0.02 is the sensor scale factor for conversion to mbar; multiply
             by 100 for Pa.
@@ -308,11 +308,11 @@ void fcs_board_init_platform(void) {
         vectors.
         */
         TRICAL_norm_set(&board_mag_trical_instances[i], 1.0f);
-        TRICAL_noise_set(&board_mag_trical_instances[i], 1e-3f);
+        TRICAL_noise_set(&board_mag_trical_instances[i], 1e-4f);
 
         TRICAL_init(&board_accel_trical_instances[i]);
         TRICAL_norm_set(&board_accel_trical_instances[i], 1.0f);
-        TRICAL_noise_set(&board_accel_trical_instances[i], 1.0f);
+        TRICAL_noise_set(&board_accel_trical_instances[i], 1e-3f);
     }
 
     /* Update reference values */
@@ -420,7 +420,7 @@ void fcs_board_tick(void) {
             _update_magnetometer_calibration(
                 measurement_log, &board_calibration,
                 &board_mag_trical_instances[i], attitude,
-                &board_mag_trical_update_attitude[i], wmm_field,
+                board_mag_trical_update_attitude[i], wmm_field,
                 wmm_field_norm, i);
 
             /*
@@ -553,7 +553,7 @@ void fcs_board_tick(void) {
     space for whatever reason, the control output still gets through.
     */
     fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
-    //(void)fcs_log_merge(&out_log, control_log);
+    (void)fcs_log_merge(&out_log, control_log);
     (void)fcs_log_merge(&out_log, estimate_log);
 
     /*
@@ -572,7 +572,9 @@ void fcs_board_tick(void) {
     Now merge in the measurement log and HAL log, then send everything to the
     CPU via the USB stream.
     */
+    fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
     (void)fcs_log_merge(&out_log, measurement_log);
+    (void)fcs_log_merge(&out_log, estimate_log);
     //(void)fcs_log_merge(&out_log, hal_log);
 
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
@@ -682,10 +684,11 @@ struct fcs_calibration_map_t *cmap, size_t i) {
     Update bias based on current sensor value, assuming the true
     reading should be 0. This is just a weighted moving average, with
     convergence taking a few seconds.
-    */
+
     calibration->params[0] +=
         0.001 * ((pitot_value * calibration->scale_factor) -
                  calibration->params[0]);
+    */
 }
 
 static void _update_barometer_calibration(const struct fcs_log_t *plog,
@@ -770,7 +773,7 @@ double wmm_field_norm, size_t i) {
     Copy the current sensor calibration to the TRICAL instance state
     so that any external changes to the calibration are captured.
     */
-    vector_copy_f(instance->state, calibration->params, 9u);
+    vector_copy_f(instance->state, calibration->params, 12u);
 
     scale_factor = calibration->scale_factor / wmm_field_norm;
     vector3_scale_d(mag_value, scale_factor);
@@ -788,7 +791,7 @@ double wmm_field_norm, size_t i) {
     Copy the TRICAL calibration estimate to the magnetometer
     calibration
     */
-    vector_copy_f(calibration->params, instance->state, 9u);
+    vector_copy_f(calibration->params, instance->state, 12u);
 
     /*
     Record the attitude at which this TRICAL instance was last updated
@@ -802,7 +805,7 @@ struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
     struct fcs_calibration_t *calibration;
     struct fcs_parameter_t parameter;
     double accel_value[3];
-    float accel_value_f[3], g_field[] = { 0.0, 0.0, -1.0 };
+    float accel_value_f[3]; //, g_field[] = { 0.0, 0.0, -1.0 };
 
     if (!fcs_parameter_find_by_type_and_device(
             plog, FCS_PARAMETER_ACCELEROMETER_XYZ, (uint8_t)i, &parameter)) {
@@ -820,7 +823,7 @@ struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
     state so that any external changes to the calibration are
     captured.
     */
-    vector_copy_f(instance->state, calibration->params, 9u);
+    vector_copy_f(instance->state, calibration->params, 12u);
 
     vector3_scale_d(accel_value, calibration->scale_factor);
     vector_f_from_d(accel_value_f, accel_value, 3u);
@@ -835,17 +838,11 @@ struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
     Since we're level, we can also set the expected field
     direction to straight down.
     */
-    if (instance->state[0] == 0.0 || instance->state[1] == 0.0 ||
-            instance->state[2] == 0.0) {
-        /*
-        TODO: average this out over a few ticks to avoid sensitivity
-        to noise on startup
-        */
-        vector_copy_f(instance->state, accel_value_f, 3u);
-        instance->state[2] += 1.0f;
-    }
+    instance->state[0] += (accel_value_f[0] - instance->state[0]) * 0.3f;
+    instance->state[1] += (accel_value_f[1] - instance->state[1]) * 0.3f;
+    instance->state[2] += ((accel_value_f[2] + 1.0f) - instance->state[2]) * 0.3f;
 
-    TRICAL_estimate_update(instance, accel_value_f, g_field);
+    //TRICAL_estimate_update(instance, accel_value_f, g_field);
 
     if (_vec_hasnan_f(instance->state, 12u)) {
         /* TRICAL has blown up -- reset this instance. */
@@ -857,7 +854,7 @@ struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
     Copy the TRICAL calibration estimate to the accelerometer
     calibration
     */
-    vector_copy_f(calibration->params, instance->state, 9u);
+    vector_copy_f(calibration->params, instance->state, 12u);
 }
 
 static void _apply_accelerometer_calibration(const struct fcs_log_t *plog,
@@ -893,13 +890,13 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     This isn't the right way to do it as the UKF assumes zero-mean error,
     but in practice it's OK.
     */
-    variance[X] = err + absval(v[X] * 0.1);
+    variance[X] = err + absval(v[X] * 0.05);
     variance[X] *= variance[X];
 
-    variance[Y] = err + absval(v[Y] * 0.1);
+    variance[Y] = err + absval(v[Y] * 0.05);
     variance[Y] *= variance[Y];
 
-    variance[Z] = err + absval(v[Z] * 0.1 + G_ACCEL * 0.1);
+    variance[Z] = err + absval(v[Z] * 0.05 + G_ACCEL * 0.05);
     variance[Z] *= variance[Z];
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_ACCELEROMETER_XYZ, v,
@@ -919,13 +916,13 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     Add a relative error term, as above. Remove this if gyro scale factor
     error is included in the process model.
     */
-    variance[X] = err + absval(v[X] * 0.1);
+    variance[X] = err;
     variance[X] *= variance[X];
 
-    variance[Y] = err + absval(v[Y] * 0.1);
+    variance[Y] = err;
     variance[Y] *= variance[Y];
 
-    variance[Z] = err + absval(v[Z] * 0.1);
+    variance[Z] = err;
     variance[Z] *= variance[Z];
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_GYROSCOPE_XYZ, v,

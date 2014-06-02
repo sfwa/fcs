@@ -41,14 +41,15 @@ SOFTWARE.
 
 /* Global FCS state structure */
 static double ahrs_process_noise[] = {
-    1e-15, 1e-15, 1e-3, /* lat, lon, alt */
-    7e-4, 7e-4, 7e-4, /* velocity N, E, D */
-    2e-6, 2e-6, 2e-6, /* acceleration x, y, z */
-    1e-7, 1e-7, 1e-7, /* attitude roll, pitch, yaw */
-    1e-4, 1e-4, 1e-4, /* angular velocity roll, pitch, yaw */
-    1e-1, 1e-1, 1e-1, /* angular acceleration roll, pitch, yaw */
-    1e-5, 1e-5, 1e-5, /* wind velocity N, E, D */
-    3e-12, 3e-12, 3e-12 /* gyro bias x, y, z */
+    1e-17, 1e-17, 1e-4, /* lat, lon, alt */
+    2e-3, 2e-3, 2e-3, /* velocity N, E, D */
+    2e-2, 2e-2, 2e-2, /* acceleration x, y, z */
+    1e-10, 7e-8, 7e-8, /* attitude roll, pitch, yaw */
+    1e-3, 1e-3, 1e-3, /* angular velocity roll, pitch, yaw */
+    1e-3, 1e-3, 1e-3, /* angular acceleration roll, pitch, yaw */
+    3e-4, 3e-4, 3e-4, /* wind velocity N, E, D */
+    1e-12, 1e-12, 1e-12 /* gyro bias x, y, z --
+                           NOTE: overridden in fcs_ahrs_set_mode */
 };
 static double ahrs_wmm_field[3];
 static uint64_t ahrs_solution_time;
@@ -63,8 +64,9 @@ Check a vector for NaN values; return true if any are found, and false
 otherwise
 */
 inline static bool _vec_hasnan_d(const double *vec, size_t n) {
-    for (; n; n--) {
-        if (isnan(vec[n])) {
+    size_t i;
+    for (i = 0; i < n; i++) {
+        if (isnan(vec[i])) {
             return true;
         }
     }
@@ -79,7 +81,8 @@ static void _reset_state(void);
 static void _set_estimate_value_i32(struct fcs_log_t *elog,
 enum fcs_parameter_type_t param_type, uint8_t value_size,
 const int32_t *restrict v, size_t n);
-static void _populate_estimate_log(const double *restrict state_values,
+static void _populate_estimate_log(
+const struct ukf_state_t *restrict state,
 const double *restrict error, const double *restrict field,
 enum fcs_mode_t mode, double static_pressure, double static_temp);
 
@@ -114,6 +117,8 @@ void fcs_ahrs_tick(void) {
     struct ukf_ioboard_params_t params;
     struct fcs_parameter_t parameter;
     struct fcs_log_t *hal_log, *measurement_log;
+    struct ukf_state_t state_values;
+    double error[24];
 
     /* Increment solution time */
     ahrs_solution_time++;
@@ -175,7 +180,7 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Read GPS position and velocity */
-   if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_POSITION_LAT_LON, v,
+    if (_get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_POSITION_LAT_LON, v,
                              params.gps_position_covariance, 2u) &&
            _get_hal_sensor_value(hal_log, FCS_PARAMETER_HAL_POSITION_ALT,
                                  &v[2], &params.gps_position_covariance[2],
@@ -191,6 +196,14 @@ void fcs_ahrs_tick(void) {
 
     hal_log = fcs_exports_log_close(hal_log);
     fcs_assert(!hal_log);
+
+    /*
+    Clear accelerometer offset during calibration and safe mode; the vehicle
+    shouldn't be moving so it's not needed, and can cause convergence issues
+    */
+    if (ahrs_mode != FCS_MODE_ACTIVE && ahrs_mode != FCS_MODE_ARMED) {
+        vector_set_d(params.accel_offset, 0.0, 3u);
+    }
 
     /*
     Run the UKF, taking sensor readings and current control position into
@@ -218,24 +231,23 @@ void fcs_ahrs_tick(void) {
     }
 
     /* Copy the state out of the UKF */
-    double state_values[25], error[24];
-    ukf_get_state((struct ukf_state_t*)state_values);
+    ukf_get_state(&state_values);
     ukf_get_state_error(error);
 
     /* Validate the UKF state; if any values are NaN, reset it */
-    if (_vec_hasnan_d(state_values, 25u) || _vec_hasnan_d(error, 24u)) {
+    if (_vec_hasnan_d(state_values.position, 25u) ||
+            _vec_hasnan_d(error, 24u)) {
         _reset_state();
     } else {
-        /*
-        Clear the wind speed estimate if we're not in active mode, or just the
-        downward component of the wind if we are.
-        */
-        if (ahrs_mode != FCS_MODE_ACTIVE) {
-            vector_set_d(&state_values[19], 0.0, 3u);
-        } else {
-            state_values[21] = 0.0;
+        /* Clear the downward component of wind.
+        if (ahrs_mode != FCS_MODE_ACTIVE && ahrs_mode != FCS_MODE_ARMED) {
+            state_values.wind_velocity[0] = 0.0;
+            state_values.wind_velocity[1] = 0.0;
         }
-        ukf_set_state((struct ukf_state_t*)state_values);
+        */
+
+        state_values.wind_velocity[2] = 0.0;
+        ukf_set_state(&state_values);
     }
 
     /*
@@ -244,10 +256,10 @@ void fcs_ahrs_tick(void) {
     */
     if (ahrs_mode != FCS_MODE_SIMULATING) {
         /* Get a new WMM field estimate */
-        _update_wmm(state_values, ahrs_wmm_field);
+        _update_wmm((double*)state_values.position, ahrs_wmm_field);
 
-        _populate_estimate_log(state_values, error, ahrs_wmm_field, ahrs_mode,
-                               STANDARD_PRESSURE, STANDARD_TEMP);
+        _populate_estimate_log(&state_values, error, ahrs_wmm_field,
+                               ahrs_mode, STANDARD_PRESSURE, STANDARD_TEMP);
     }
 
     /* Check the current mode and transition if necessary */
@@ -281,7 +293,7 @@ void fcs_ahrs_tick(void) {
         }
     } else if (ahrs_mode == FCS_MODE_ARMED) {
         /* Transition to active once speed exceeds 8m/s */
-        speed = vector3_norm_d(&state_values[3]);
+        speed = vector3_norm_d((double*)&state_values.velocity);
         if (speed > 8.0) {
             fcs_ahrs_set_mode(FCS_MODE_ACTIVE);
         }
@@ -342,7 +354,8 @@ static void _update_wmm(double lla[3], double field[3]) {
     }
 }
 
-static void _populate_estimate_log(const double *restrict state_values,
+static void _populate_estimate_log(
+const struct ukf_state_t *restrict state,
 const double *restrict error, const double *restrict field,
 enum fcs_mode_t mode, double static_pressure, double static_temp) {
     struct fcs_parameter_t param;
@@ -354,46 +367,52 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     fcs_assert(estimate_log);
 
     /* Lat/lon in (INT32_MAX/PI); alt in cm */
-    tmp[0] = (int32_t)(state_values[0] * ((double)INT32_MAX / M_PI));
-    tmp[1] = (int32_t)(state_values[1] * ((double)INT32_MAX / M_PI));
-    tmp[2] = (int32_t)(state_values[2] * 1e2);
+    tmp[0] = (int32_t)(state->position[0] * ((double)INT32_MAX / M_PI));
+    tmp[1] = (int32_t)(state->position[1] * ((double)INT32_MAX / M_PI));
+    tmp[2] = (int32_t)(state->position[2] * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_LLA, 4u, tmp, 3u);
 
     /* Velocity in cm/s */
-    tmp[0] = (int32_t)(state_values[3] * 1e2);
-    tmp[1] = (int32_t)(state_values[4] * 1e2);
-    tmp[2] = (int32_t)(state_values[5] * 1e2);
+    tmp[0] = (int32_t)(state->velocity[0] * 1e2);
+    tmp[1] = (int32_t)(state->velocity[1] * 1e2);
+    tmp[2] = (int32_t)(state->velocity[2] * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_NED, 2u, tmp, 3u);
 
     /* Quaternion values with [-1, 1] scaled to [-32767, 32767] */
-    tmp[0] = (int32_t)(state_values[9] * (double)INT16_MAX);
-    tmp[1] = (int32_t)(state_values[10] * (double)INT16_MAX);
-    tmp[2] = (int32_t)(state_values[11] * (double)INT16_MAX);
-    tmp[3] = (int32_t)(state_values[12] * (double)INT16_MAX);
+    tmp[0] = (int32_t)(state->attitude[0] * (double)INT16_MAX);
+    tmp[1] = (int32_t)(state->attitude[1] * (double)INT16_MAX);
+    tmp[2] = (int32_t)(state->attitude[2] * (double)INT16_MAX);
+    tmp[3] = (int32_t)(state->attitude[3] * (double)INT16_MAX);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 2u, tmp, 4u);
 
     /* Angular velocity with +/- 4pi rad/s scaled to [-32767, 32767] */
-    tmp[0] = (int32_t)(state_values[13] * ((double)INT16_MAX / M_PI) * 0.25);
-    tmp[1] = (int32_t)(state_values[14] * ((double)INT16_MAX / M_PI) * 0.25);
-    tmp[2] = (int32_t)(state_values[15] * ((double)INT16_MAX / M_PI) * 0.25);
+    tmp[0] = (int32_t)(state->angular_velocity[0] *
+                       ((double)INT16_MAX / M_PI) * 0.25);
+    tmp[1] = (int32_t)(state->angular_velocity[1] *
+                       ((double)INT16_MAX / M_PI) * 0.25);
+    tmp[2] = (int32_t)(state->angular_velocity[2] *
+                       ((double)INT16_MAX / M_PI) * 0.25);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ, 2u, tmp,
         3u);
 
     /* Wind velocity in cm/s */
-    tmp[0] = (int32_t)(state_values[19] * 1e2);
-    tmp[1] = (int32_t)(state_values[20] * 1e2);
-    tmp[2] = (int32_t)(state_values[21] * 1e2);
+    tmp[0] = (int32_t)(state->wind_velocity[0] * 1e2);
+    tmp[1] = (int32_t)(state->wind_velocity[1] * 1e2);
+    tmp[2] = (int32_t)(state->wind_velocity[2] * 1e2);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED, 2u, tmp, 3u);
 
     /* Gyro bias with +/- pi/2 rad/s scaled to [-32767, 32767] */
-    tmp[0] = (int32_t)(state_values[22] * ((double)INT16_MAX / M_PI) * 2.0);
-    tmp[1] = (int32_t)(state_values[23] * ((double)INT16_MAX / M_PI) * 2.0);
-    tmp[2] = (int32_t)(state_values[24] * ((double)INT16_MAX / M_PI) * 2.0);
+    tmp[0] = (int32_t)(state->gyro_bias[0] *
+                       ((double)INT16_MAX / M_PI) * 2.0);
+    tmp[1] = (int32_t)(state->gyro_bias[1] *
+                       ((double)INT16_MAX / M_PI) * 2.0);
+    tmp[2] = (int32_t)(state->gyro_bias[2] *
+                       ((double)INT16_MAX / M_PI) * 2.0);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_ESTIMATED_GYRO_BIAS_XYZ, 2u, tmp, 3u);
 
@@ -602,14 +621,12 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             /* Start up clean */
             _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
-            /* Trust attitude and gyro bias predictors less. */
-            vector_set_d(&ahrs_process_noise[9], 1e-7, 3u);
-            vector_set_d(&ahrs_process_noise[21], 1e-6, 3u);
+            /* Trust gyro bias predictor less. */
+            vector_set_d(&ahrs_process_noise[21], 1e-5, 3u);
             break;
         case FCS_MODE_SAFE:
             ukf_choose_dynamics(UKF_MODEL_NONE);
-            vector_set_d(&ahrs_process_noise[9], 1e-7, 3u);
-            vector_set_d(&ahrs_process_noise[21], 1e-9, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             break;
         case FCS_MODE_ARMED:
             break;

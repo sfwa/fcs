@@ -89,7 +89,7 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     though it came from the AHRS, and returns the control output.
     """
     if not fcs._fcs:
-        raise RuntimeError("Please call init()")
+        raise RuntimeError("Please call fcs.init()")
 
     estimate_log = plog.ParameterLog(
         log_type=plog.LogType.FCS_LOG_TYPE_ESTIMATE)
@@ -162,7 +162,7 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     fcs.read(4, 1023)
 
     try:
-        control_log = plog.ParameterLog.deserialize(read(3, 1023))
+        control_log = plog.ParameterLog.deserialize(fcs.read(3, 1023))
 
         control_param = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
         return map(lambda x: float(x) / float(2**16), control_param.values)
@@ -348,7 +348,7 @@ def recv_state_from_xplane(s):
     sim_state["wind_velocity"][2] += (sim_ref["wind_d"] - sim_state["wind_velocity"][2]) * 0.01
 
     # Recalculate quaternion in case euler angles have been updated.
-    sim_state["attitude"] = euler_to_q(
+    sim_state["attitude"] = plog.euler_to_q(
         sim_ref["attitude_yaw"], sim_ref["attitude_pitch"],
         sim_ref["attitude_roll"]
     )

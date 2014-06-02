@@ -60,12 +60,6 @@ control_state = None
 nav_state = None
 
 
-def euler_to_q(yaw, pitch, roll):
-    return (vectors.Q.rotate("X", -roll) *
-            vectors.Q.rotate("Y", -pitch) *
-            vectors.Q.rotate("Z", -yaw))
-
-
 class TRICALInstance(Structure):
     _fields_ = [
         ("field_norm", c_float),

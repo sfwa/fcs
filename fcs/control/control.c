@@ -42,11 +42,11 @@ SOFTWARE.
 #include <c6x.h>
 #include "../c66x-csl/ti/csl/cslr_device.h"
 #include "../c66x-csl/ti/csl/cslr_gpio.h"
-inline uint32_t cycle_count(void) {
+inline static uint32_t cycle_count(void) {
     return TSCL;
 }
 #else
-inline uint32_t cycle_count(void) {
+inline static uint32_t cycle_count(void) {
     uint64_t result;
     __asm__ __volatile__ ("rdtsc" : "=A" (result));
     return (uint32_t)(result & UINT32_MAX);

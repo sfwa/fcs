@@ -4,8 +4,15 @@ PROJECT(unittest)
 # Enable ExternalProject CMake module
 INCLUDE(ExternalProject)
 
+
 set(CMAKE_CXX_FLAGS "-O3 -mssse3 -oaddmul")
 set(CMAKE_C_FLAGS "-O3 -mssse3 -oaddmul -Weverything -Wno-documentation -Wno-padded -Wno-packed -Wno-float-equal -Wno-unknown-pragmas -Werror")
+
+# For ASAN/UBSAN
+# set(CMAKE_C_COMPILER "/usr/local/bin/clang")
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -O0 -mssse3 -oaddmul -Weverything -Wno-documentation -Wno-padded -Wno-packed -Wno-float-equal -Wno-unknown-pragmas -Werror")
+# set(CMAKE_LDFLAGS "${LDFLAGS} -L/usr/local/lib/llvm-3.4/usr/lib")
+
 
 # Set default ExternalProject root directory
 SET_DIRECTORY_PROPERTIES(PROPERTIES EP_PREFIX .)
@@ -150,3 +157,6 @@ TARGET_LINK_LIBRARIES(fcs
 
 TARGET_LINK_LIBRARIES(fcs
     ${binary_dir}/../../../nmpc_build/ccs-c66x/libfcsnmpc.a)
+
+TARGET_LINK_LIBRARIES(fcs /usr/local/lib/clang/3.3/lib/darwin/libclang_rt.asan_osx.a)
+TARGET_LINK_LIBRARIES(fcs /usr/local/lib/clang/3.3/lib/darwin/libclang_rt.ubsan_osx.a)

@@ -93,12 +93,8 @@ temperature in K.
 */
 static inline double airspeed_from_pressure_temp(double pstatic,
 double pdynamic, double temp) {
-#ifndef __TI_COMPILER_VERSION__
-#pragma unused(temp)
-#endif
-
     return STANDARD_C *
-           sqrt((5.0 / STANDARD_TEMP) *
+           sqrt((5.0 / STANDARD_TEMP) * temp *
                 (pow(absval(pdynamic / pstatic) + 1.0, 2.0 / 7.0) - 1.0));
 }
 
