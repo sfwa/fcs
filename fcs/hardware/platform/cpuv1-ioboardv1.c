@@ -53,8 +53,9 @@ Check a vector for NaN values; return true if any are found, and false
 otherwise
 */
 inline static bool _vec_hasnan_f(const float *vec, size_t n) {
-    for (; n; n--) {
-        if (isnan(vec[n])) {
+    size_t i;
+    for (i = 0; i < n; i++) {
+        if (isnan(vec[i])) {
             return true;
         }
     }
@@ -71,7 +72,6 @@ inline static bool _vec_hasnan_f(const float *vec, size_t n) {
 #define FCS_IOBOARD_PACKET_TIMEOUT 10u
 
 static struct fcs_calibration_map_t board_calibration;
-static TRICAL_instance_t board_accel_trical_instances[FCS_IOBOARD_COUNT];
 static TRICAL_instance_t board_mag_trical_instances[FCS_IOBOARD_COUNT];
 static double board_mag_trical_update_attitude[FCS_IOBOARD_COUNT][4];
 static int16_t board_timeout[FCS_IOBOARD_COUNT] = { 5u, 5u };
@@ -94,7 +94,7 @@ struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance,
 const double *attitude, double *last_update_attitude, const double *wmm_field,
 double wmm_field_norm, size_t i);
 static void _update_accelerometer_calibration(const struct fcs_log_t *plog,
-struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i);
+struct fcs_calibration_map_t *cmap, size_t i);
 static void _apply_accelerometer_calibration(const struct fcs_log_t *plog,
 struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap);
 static void _apply_gyroscope_calibration(const struct fcs_log_t *plog,
@@ -308,11 +308,7 @@ void fcs_board_init_platform(void) {
         vectors.
         */
         TRICAL_norm_set(&board_mag_trical_instances[i], 1.0f);
-        TRICAL_noise_set(&board_mag_trical_instances[i], 1e-4f);
-
-        TRICAL_init(&board_accel_trical_instances[i]);
-        TRICAL_norm_set(&board_accel_trical_instances[i], 1.0f);
-        TRICAL_noise_set(&board_accel_trical_instances[i], 1e-3f);
+        TRICAL_noise_set(&board_mag_trical_instances[i], 1e-3f);
     }
 
     /* Update reference values */
@@ -320,6 +316,7 @@ void fcs_board_init_platform(void) {
     board_reference_alt = 0.0;
 }
 
+#include <stdio.h>
 void fcs_board_tick(void) {
     uint8_t out_buf[FCS_LOG_SERIALIZED_LENGTH];
     size_t out_buf_len, write_len, i;
@@ -344,6 +341,10 @@ void fcs_board_tick(void) {
         estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 0, &param);
     if (got_result) {
         fcs_parameter_get_values_d(&param, attitude, 4u);
+        attitude[X] *= (1.0 / (double)INT16_MAX);
+        attitude[Y] *= (1.0 / (double)INT16_MAX);
+        attitude[Z] *= (1.0 / (double)INT16_MAX);
+        attitude[W] *= (1.0 / (double)INT16_MAX);
     } else {
         attitude[X] = attitude[Y] = attitude[Z] = 0.0;
         attitude[W] = 1.0;
@@ -417,11 +418,14 @@ void fcs_board_tick(void) {
             }
 
             /* Continuously update the magnetometer calibration */
-            _update_magnetometer_calibration(
-                measurement_log, &board_calibration,
-                &board_mag_trical_instances[i], attitude,
-                board_mag_trical_update_attitude[i], wmm_field,
-                wmm_field_norm, i);
+            if (ahrs_mode != FCS_MODE_INITIALIZING &&
+                    ahrs_mode != FCS_MODE_CALIBRATING) {
+                _update_magnetometer_calibration(
+                    measurement_log, &board_calibration,
+                    &board_mag_trical_instances[i], attitude,
+                    board_mag_trical_update_attitude[i], wmm_field,
+                    wmm_field_norm, i);
+            }
 
             /*
             Run TRICAL on the current accelerometer results when in
@@ -434,8 +438,7 @@ void fcs_board_tick(void) {
                     measurement_log, &board_calibration,
                     board_reference_pressure, i);
                 _update_accelerometer_calibration(
-                    measurement_log, &board_calibration,
-                    &board_accel_trical_instances[i], i);
+                    measurement_log, &board_calibration, i);
             }
         }
 
@@ -779,12 +782,30 @@ double wmm_field_norm, size_t i) {
     vector3_scale_d(mag_value, scale_factor);
     vector_f_from_d(mag_value_f, mag_value, 3u);
 
+    //printf("TRICAL %d pre-update: %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f\n",
+    //       (int)i, instance->state[0], instance->state[1], instance->state[2],
+    //       instance->state[3], instance->state[4], instance->state[5],
+    //       instance->state[6], instance->state[7], instance->state[8],
+    //       instance->state[9], instance->state[10], instance->state[11]);
+
+    //printf("TRICAL %d update: %10.6f / %10.6f %10.6f %10.6f / %10.6f %10.6f %10.6f\n",
+    //       (int)i, scale_factor, mag_value_f[0], mag_value_f[1], mag_value_f[2],
+    //       expected_field_f[0], expected_field_f[1], expected_field_f[2]);
+
     TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
+
+    //printf("TRICAL %d post-update: %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f\n",
+    //       (int)i, instance->state[0], instance->state[1], instance->state[2],
+    //       instance->state[3], instance->state[4], instance->state[5],
+    //       instance->state[6], instance->state[7], instance->state[8],
+    //       instance->state[9], instance->state[10], instance->state[11]);
 
     if (_vec_hasnan_f(instance->state, 12u)) {
         /* TRICAL has blown up -- reset this instance. */
         TRICAL_reset(instance);
         fcs_global_counters.trical_resets[i + 2u]++;
+
+        //printf("TRICAL %d RESET\n", (int)i);
     }
 
     /*
@@ -801,11 +822,11 @@ double wmm_field_norm, size_t i) {
 }
 
 static void _update_accelerometer_calibration(const struct fcs_log_t *plog,
-struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
+struct fcs_calibration_map_t *cmap, size_t i) {
     struct fcs_calibration_t *calibration;
     struct fcs_parameter_t parameter;
     double accel_value[3];
-    float accel_value_f[3]; //, g_field[] = { 0.0, 0.0, -1.0 };
+    float accel_value_f[3];
 
     if (!fcs_parameter_find_by_type_and_device(
             plog, FCS_PARAMETER_ACCELEROMETER_XYZ, (uint8_t)i, &parameter)) {
@@ -817,13 +838,6 @@ struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
 
     /* Find the calibration parameters */
     calibration = fcs_parameter_get_calibration(cmap, &parameter);
-
-    /*
-    Copy the current sensor calibration to the TRICAL instance
-    state so that any external changes to the calibration are
-    captured.
-    */
-    vector_copy_f(instance->state, calibration->params, 12u);
 
     vector3_scale_d(accel_value, calibration->scale_factor);
     vector_f_from_d(accel_value_f, accel_value, 3u);
@@ -838,23 +852,12 @@ struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance, size_t i) {
     Since we're level, we can also set the expected field
     direction to straight down.
     */
-    instance->state[0] += (accel_value_f[0] - instance->state[0]) * 0.3f;
-    instance->state[1] += (accel_value_f[1] - instance->state[1]) * 0.3f;
-    instance->state[2] += ((accel_value_f[2] + 1.0f) - instance->state[2]) * 0.3f;
-
-    //TRICAL_estimate_update(instance, accel_value_f, g_field);
-
-    if (_vec_hasnan_f(instance->state, 12u)) {
-        /* TRICAL has blown up -- reset this instance. */
-        TRICAL_reset(instance);
-        fcs_global_counters.trical_resets[i + 2u]++;
-    }
-
-    /*
-    Copy the TRICAL calibration estimate to the accelerometer
-    calibration
-    */
-    vector_copy_f(calibration->params, instance->state, 12u);
+    calibration->params[0] +=
+        (accel_value_f[0] - calibration->params[0]) * 0.3f;
+    calibration->params[1] +=
+        (accel_value_f[1] - calibration->params[1]) * 0.3f;
+    calibration->params[2] +=
+        ((accel_value_f[2] + 1.0f) - calibration->params[2]) * 0.3f;
 }
 
 static void _apply_accelerometer_calibration(const struct fcs_log_t *plog,

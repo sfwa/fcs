@@ -38,7 +38,7 @@ def euler_to_q(yaw, pitch, roll):
 
 
 VIDEO_START_FRAME = 273.687
-CAMERA_Q = euler_to_q(-1.5, -1.2, -6.7)
+CAMERA_Q = euler_to_q(0.0, -3.15, 1.0)
 
 CAMERA_INTRINSICS = [
     [ 429.39646639,    0.,          424.96165812],
