@@ -272,7 +272,7 @@ always @(*) begin
 
 		cpu_ext_uart0_rx = ioboard_uart0_rx;
 		cpu_ext_uart1_rx = ioboard_uart1_rx;
-		ext_uart0_tx = dsp_int_uart1_tx;
+		ext_uart0_tx = dsp_int_uart0_tx;
 
 		spi_flash_cs_INV = dsp_spi_cs0_INV;
 		spi_flash_mosi = dsp_spi_mosi;

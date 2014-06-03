@@ -186,7 +186,7 @@ void fcs_board_init_platform(void) {
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
             .error = 0.02f, /* approx 1 degrees */
             .params = {
-                0.1f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f
@@ -201,7 +201,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.15f, /* Gauss */
+            .error = 0.12f, /* Gauss */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -246,7 +246,7 @@ void fcs_board_init_platform(void) {
 
             Also convert to Pa.
             */
-            .params = { 8192.0f, 1.0f / 6554.0f * 6894.75729f },
+            .params = { 8192.0f, 1.0f / 6554.0f * 6894.75729f * 2.0f },
             .scale_factor = 1.0f
         },
         {
@@ -425,13 +425,7 @@ void fcs_board_tick(void) {
                     &board_mag_trical_instances[i], attitude,
                     board_mag_trical_update_attitude[i], wmm_field,
                     wmm_field_norm, i);
-            }
-
-            /*
-            Run TRICAL on the current accelerometer results when in
-            calibration mode, and call the other sensor calibration handlers.
-            */
-            if (ahrs_mode == FCS_MODE_CALIBRATING) {
+            } else if (ahrs_mode == FCS_MODE_CALIBRATING) {
                 _update_pitot_calibration(
                     measurement_log, &board_calibration, i);
                 _update_barometer_calibration(
@@ -568,9 +562,6 @@ void fcs_board_tick(void) {
     write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, out_buf_len);
     fcs_assert(out_buf_len == write_len);
 
-    write_len = fcs_stream_write(FCS_STREAM_UART_INT1, out_buf, out_buf_len);
-    fcs_assert(out_buf_len == write_len);
-
     /*
     Now merge in the measurement log and HAL log, then send everything to the
     CPU via the USB stream.
@@ -687,11 +678,11 @@ struct fcs_calibration_map_t *cmap, size_t i) {
     Update bias based on current sensor value, assuming the true
     reading should be 0. This is just a weighted moving average, with
     convergence taking a few seconds.
+    */
 
     calibration->params[0] +=
-        0.001 * ((pitot_value * calibration->scale_factor) -
-                 calibration->params[0]);
-    */
+        0.1 * ((pitot_value * calibration->scale_factor) -
+                calibration->params[0]);
 }
 
 static void _update_barometer_calibration(const struct fcs_log_t *plog,
@@ -722,8 +713,8 @@ struct fcs_calibration_map_t *cmap, double reference_pressure, size_t i) {
     automatically.
     */
     calibration->params[0] +=
-        0.001 * ((barometer_value * calibration->scale_factor) -
-                 reference_pressure - calibration->params[0]);
+        0.1 * ((barometer_value * calibration->scale_factor) -
+                reference_pressure - calibration->params[0]);
 }
 
 static void _update_magnetometer_calibration(const struct fcs_log_t *plog,
@@ -750,7 +741,7 @@ double wmm_field_norm, size_t i) {
     */
     delta_angle = quaternion_quaternion_angle_d(attitude,
                                                 last_update_attitude);
-    if (delta_angle < 3.0 * M_PI / 180.0) {
+    if (delta_angle < 2.0 * M_PI / 180.0) {
         return;
     }
 
@@ -782,30 +773,12 @@ double wmm_field_norm, size_t i) {
     vector3_scale_d(mag_value, scale_factor);
     vector_f_from_d(mag_value_f, mag_value, 3u);
 
-    //printf("TRICAL %d pre-update: %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f\n",
-    //       (int)i, instance->state[0], instance->state[1], instance->state[2],
-    //       instance->state[3], instance->state[4], instance->state[5],
-    //       instance->state[6], instance->state[7], instance->state[8],
-    //       instance->state[9], instance->state[10], instance->state[11]);
-
-    //printf("TRICAL %d update: %10.6f / %10.6f %10.6f %10.6f / %10.6f %10.6f %10.6f\n",
-    //       (int)i, scale_factor, mag_value_f[0], mag_value_f[1], mag_value_f[2],
-    //       expected_field_f[0], expected_field_f[1], expected_field_f[2]);
-
     TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
-
-    //printf("TRICAL %d post-update: %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f %10.6f\n",
-    //       (int)i, instance->state[0], instance->state[1], instance->state[2],
-    //       instance->state[3], instance->state[4], instance->state[5],
-    //       instance->state[6], instance->state[7], instance->state[8],
-    //       instance->state[9], instance->state[10], instance->state[11]);
 
     if (_vec_hasnan_f(instance->state, 12u)) {
         /* TRICAL has blown up -- reset this instance. */
         TRICAL_reset(instance);
         fcs_global_counters.trical_resets[i + 2u]++;
-
-        //printf("TRICAL %d RESET\n", (int)i);
     }
 
     /*
@@ -853,11 +826,11 @@ struct fcs_calibration_map_t *cmap, size_t i) {
     direction to straight down.
     */
     calibration->params[0] +=
-        (accel_value_f[0] - calibration->params[0]) * 0.3f;
+        (accel_value_f[0] - calibration->params[0]) * 0.1f;
     calibration->params[1] +=
-        (accel_value_f[1] - calibration->params[1]) * 0.3f;
+        (accel_value_f[1] - calibration->params[1]) * 0.1f;
     calibration->params[2] +=
-        ((accel_value_f[2] + 1.0f) - calibration->params[2]) * 0.3f;
+        ((accel_value_f[2] + 1.0f) - calibration->params[2]) * 0.1f;
 }
 
 static void _apply_accelerometer_calibration(const struct fcs_log_t *plog,
@@ -1063,8 +1036,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
         return;
     }
 
-    variance[X] = variance[Y] = err * err;
-    variance[Z] = 9.0;
+    variance[X] = variance[Y] = variance[Z] = err * err;
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_VELOCITY_NED, v,
                               variance, 3u);

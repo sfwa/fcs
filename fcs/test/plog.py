@@ -457,6 +457,14 @@ def iterlogs_raw(stream):
 
 
 def print_estimate_log(data):
+    pos = [0, 0, 0]
+    v = [0, 0, 0]
+    att_q = [0, 0, 0, 0]
+    att_ypr = [0, 0, 0]
+    angular_v = [0, 0, 0]
+    wind_v = [0, 0, 0]
+    mode = 'X'
+
     for param in data:
         pt = param.parameter_type
         pv = param.values
@@ -577,19 +585,21 @@ def print_measurement_log(data):
 
 
 if __name__ == "__main__":
-    #print "gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
-    #      "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
-    #      "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
-    #      "control_rail_1,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
-    #      "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
-    #      "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
-    #      "control_lail_2,control_rail_2"
+    print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode"
+
+    print "gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
+          "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
+          "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
+          "control_rail_1,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
+          "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
+          "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
+          "control_lail_2,control_rail_2"
 
     n = 0
     for logf in iterlogs(sys.stdin):
         try:
-            if n % 100 == 0:
-                print_estimate_log(logf)
+            #if n % 100 == 0:
+            print_estimate_log(logf)
             #print_measurement_log(logf)
             n += 1
         except Exception:

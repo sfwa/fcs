@@ -44,10 +44,11 @@ static double ahrs_process_noise[] = {
     1e-17, 1e-17, 1e-4, /* lat, lon, alt */
     2e-3, 2e-3, 2e-3, /* velocity N, E, D */
     2e-2, 2e-2, 2e-2, /* acceleration x, y, z */
-    1e-10, 7e-8, 7e-8, /* attitude roll, pitch, yaw */
+    7e-8, 7e-8, 7e-8, /* attitude roll, pitch, yaw */
     1e-3, 1e-3, 1e-3, /* angular velocity roll, pitch, yaw */
     1e-3, 1e-3, 1e-3, /* angular acceleration roll, pitch, yaw */
-    3e-4, 3e-4, 3e-4, /* wind velocity N, E, D */
+    3e-4, 3e-4, 3e-4, /* wind velocity N, E, D --
+                         NOTE: overridden in fcs_ahrs_set_mode */
     1e-12, 1e-12, 1e-12 /* gyro bias x, y, z --
                            NOTE: overridden in fcs_ahrs_set_mode */
 };
@@ -107,6 +108,7 @@ void fcs_ahrs_init(void) {
     fcs_ahrs_set_mode(FCS_MODE_INITIALIZING);
 }
 
+#include <stdio.h>
 void fcs_ahrs_tick(void) {
     /*
     While copying measurement data to the UKF, get sensor error and geometry
@@ -621,14 +623,24 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             /* Start up clean */
             _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
-            /* Trust gyro bias predictor less. */
+            /* Trust gyro bias and attitude predictor less. */
             vector_set_d(&ahrs_process_noise[21], 1e-5, 3u);
+            vector_set_d(&ahrs_process_noise[9], 1e-5, 3u);
+            /* And wind velocity more. */
+            vector_set_d(&ahrs_process_noise[18], 1e-9, 3u);
             break;
         case FCS_MODE_SAFE:
+            /* Clear out any issues that accumulated during startup */
+            _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
             vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
+            vector_set_d(&ahrs_process_noise[9], 7e-8, 3u);
+            vector_set_d(&ahrs_process_noise[18], 1e-9, 3u);
             break;
         case FCS_MODE_ARMED:
+            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
+            vector_set_d(&ahrs_process_noise[9], 7e-8, 3u);
+            vector_set_d(&ahrs_process_noise[18], 1e-4, 3u);
             break;
         case FCS_MODE_ACTIVE:
             ukf_choose_dynamics(ahrs_dynamics_model);
