@@ -67,16 +67,16 @@ void _get_next_reference_point(float *restrict state);
 
 
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
-    2e-4f, 2e-4f, 5e-5f, /* position */
-    1e0f, 1e0f, 1e-1f, /* velocity */
-    1e-1f, 1e1f, 1e1f, /* attitude */
-    1e0f, 1e1f, 1e1f /* angular velocity */
+    2e-4f, 2e-4f, 5e-3f, /* position */
+    1e0f, 1e0f, 1e0f, /* velocity */
+    1e0f, 1e0f, 1e0f, /* attitude */
+    2e0f, 2e0f, 2e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
-    5e0f, 5e0f, 3e1f,  /* position */
+    1e-1f, 1e-1f, 1e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
-    1.0f, 1.0f, 1.0f,  /* attitude */
-    1e1f, 1e1f, 1e1f /* angular velocity */
+    1e-1f, 1e0f, 1e0f,  /* attitude */
+    2e0f, 2e0f, 2e0f /* angular velocity */
 };
 
 
@@ -506,8 +506,12 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     fcs_assert(out_waypoint_id != FCS_CONTROL_INVALID_WAYPOINT_ID);
 
     struct fcs_waypoint_t *waypoint, *out_waypoint;
-    float stabilise_delta, stabilise_heading, alt;
+    float stabilise_delta, stabilise_heading, alt, yaw, pitch, roll;
     float airflow[3];
+
+    /* Work out state yaw, pitch and roll */
+    yaw_pitch_roll_from_quaternion_f(&yaw, &pitch, &roll,
+                                     state_estimate->attitude);
 
     /* Start with actual airspeed if it's lower than the reference */
     airflow[0] = state_estimate->wind_velocity[0] -
@@ -527,7 +531,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
                             FCS_CONTROL_DEFAULT_AIRSPEED ?
                          nav->reference_trajectory[0].airspeed :
                          FCS_CONTROL_DEFAULT_AIRSPEED;
-    waypoint->yaw = (float)atan2(-airflow[1], -airflow[0]);
+    waypoint->yaw = yaw; //(float)atan2(-airflow[1], -airflow[0]);
     waypoint->pitch = 0.0f;
     waypoint->roll = 0.0f;
 

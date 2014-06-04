@@ -485,8 +485,8 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
         t_since_last_sensor = 0;
     }
 
-    tmp[0] = (int32_t)(t_since_last_sensor > INT32_MAX ?
-                       INT32_MAX : t_since_last_sensor);
+    tmp[0] = (int16_t)(t_since_last_sensor > INT16_MAX ?
+                       INT16_MAX : t_since_last_sensor);
 
     /*
     AHRS status 1 is the time since the last reference pressure/GCS update --
@@ -624,14 +624,12 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
             /* Trust gyro bias and attitude predictor less. */
-            vector_set_d(&ahrs_process_noise[21], 1e-5, 3u);
-            vector_set_d(&ahrs_process_noise[9], 1e-5, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-6, 3u);
+            vector_set_d(&ahrs_process_noise[9], 1e-6, 3u);
             /* And wind velocity more. */
             vector_set_d(&ahrs_process_noise[18], 1e-9, 3u);
             break;
         case FCS_MODE_SAFE:
-            /* Clear out any issues that accumulated during startup */
-            _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
             vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             vector_set_d(&ahrs_process_noise[9], 7e-8, 3u);
@@ -640,7 +638,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
         case FCS_MODE_ARMED:
             vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             vector_set_d(&ahrs_process_noise[9], 7e-8, 3u);
-            vector_set_d(&ahrs_process_noise[18], 1e-4, 3u);
+            vector_set_d(&ahrs_process_noise[18], 1e-6, 3u);
             break;
         case FCS_MODE_ACTIVE:
             ukf_choose_dynamics(ahrs_dynamics_model);

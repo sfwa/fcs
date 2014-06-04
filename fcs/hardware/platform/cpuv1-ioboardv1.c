@@ -569,6 +569,7 @@ void fcs_board_tick(void) {
     fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
     (void)fcs_log_merge(&out_log, measurement_log);
     (void)fcs_log_merge(&out_log, estimate_log);
+    (void)fcs_log_merge(&out_log, control_log);
     //(void)fcs_log_merge(&out_log, hal_log);
 
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);

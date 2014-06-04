@@ -113,7 +113,7 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 3e2, 5e2, 5e2 };
+    float control_weights[NMPC_CONTROL_DIM] = { 3e1, 5e1, 5e1 };
     float lower_control_bound[NMPC_CONTROL_DIM] = { 0.15f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
@@ -186,7 +186,9 @@ void fcs_control_init(void) {
 
 void fcs_control_tick(void) {
     enum nmpc_result_t result;
-    struct fcs_state_estimate_t state_estimate;
+    static struct fcs_state_estimate_t state_estimate;
+    static bool state_estimate_inited = false;
+    struct fcs_state_estimate_t new_state_estimate;
     struct fcs_log_t *control_log, *measurement_log;
     struct fcs_path_t *path;
     struct fcs_parameter_t param, param2;
@@ -297,8 +299,12 @@ void fcs_control_tick(void) {
     Read the relevant parts of the AHRS output and convert them to a format
     usable by the control system.
     */
-    _read_estimate_log(&state_estimate, &ms_since_last_gps,
+    _read_estimate_log(&new_state_estimate, &ms_since_last_gps,
                        &ms_since_last_data);
+    if (!state_estimate_inited) {
+        state_estimate = new_state_estimate;
+        state_estimate_inited = true;
+    }
 
     alt_diff = absval(state_estimate.alt -
                       nav_state.reference_trajectory[0].alt);
@@ -488,7 +494,7 @@ void fcs_control_tick(void) {
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 1u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_NAV_PATH_ID);
     fcs_parameter_set_device_id(&param, 0);
-    param.data.u16[0] = nav_state.reference_path_id[100];
+    param.data.u16[0] = nav_state.reference_path_id[0];
     fcs_log_add_parameter(control_log, &param);
 
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 32u, 1u);
@@ -499,14 +505,15 @@ void fcs_control_tick(void) {
 
     fcs_parameter_set_key_value(
         &param, FCS_PARAMETER_KEY_REFERENCE_POINT,
-        (uint8_t*)&nav_state.reference_trajectory[100],
-        sizeof(nav_state.reference_trajectory[100]));
+        (uint8_t*)&nav_state.reference_trajectory[0],
+        sizeof(nav_state.reference_trajectory[0]));
     fcs_parameter_set_device_id(&param, 0);
-    param.data.u32[0] = nav_state.version;
     fcs_log_add_parameter(control_log, &param);
 
     control_log = fcs_exports_log_close(control_log);
     fcs_assert(!control_log);
+
+    state_estimate = new_state_estimate;
 }
 
 void fcs_control_reset(void) {
@@ -532,8 +539,8 @@ int32_t *time_since_last_gps, int32_t *time_since_last_data) {
 
     if (fcs_parameter_find_by_type_and_device(
             estimate_log, FCS_PARAMETER_AHRS_STATUS, 0, &param)) {
-        *time_since_last_gps = param.data.i32[0];
-        *time_since_last_data = param.data.i32[1];
+        *time_since_last_gps = param.data.i16[0];
+        *time_since_last_data = param.data.i16[1];
     } else {
         *time_since_last_gps = 0;
         *time_since_last_data = 0;

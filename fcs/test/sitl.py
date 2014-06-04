@@ -45,7 +45,13 @@ ahrs_tick = 0
 
 START_LAT = -26.584781
 START_LON = 151.842325
-START_ALT = 460
+START_ALT = 480
+
+
+FCS_PATH_LINE = ord('L')
+FCS_PATH_DUBINS_CURVE = ord('D')
+FCS_PATH_FIGURE_EIGHT = ord('8')
+FCS_PATH_INVALID = 0
 
 
 sim_state = {
@@ -164,10 +170,30 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     try:
         control_log = plog.ParameterLog.deserialize(fcs.read(3, 1023))
 
-        control_param = control_log.find_by(device_id=0, parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
-        return map(lambda x: float(x) / float(2**16), control_param.values)
+        # print control_log
+
+        control_param = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
+        path = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID).values[0]
+        refp = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_KEY_VALUE)
+        cycles, obj_val, errors, resets = control_log.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_STATUS).values
+
+        last_control = (
+            map(lambda x: float(x) / float(2**16), control_param.values),
+            plog.extract_waypoint(refp.value),
+            obj_val, cycles, errors, resets, control_log.tick, path
+        )
+
+        return last_control
     except Exception:
-        return [0.0, 0.5, 0.5]
+        return ([0.0, 0.5, 0.5], {}, 0, 0, 0, 0, 0, 0xFFFF)
 
 
 def connect_to_xplane():
@@ -543,7 +569,7 @@ EL = [
     (math.radians(-26.618365), math.radians(151.849788), 573.0),
     (math.radians(-26.608092), math.radians(151.851646), 573.0)
 ]
-HOME = (math.radians(-26.584781), math.radians(151.842325), 460.0)
+HOME = (math.radians(-26.584781), math.radians(151.842325), 480.0)
 HOLD = (math.radians(-26.607212), math.radians(151.845389))
 
 
@@ -663,7 +689,7 @@ if __name__ == "__main__":
 
     time.sleep(0.1)
 
-    print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
+    print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,yaw_rate,pitch_rate,roll_rate,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
 
     controls = [0.0, 0.5, 0.5]
     t = 0
@@ -683,35 +709,43 @@ if __name__ == "__main__":
 
             sim_state_delay.popleft()
 
-            controls = tick(
+            controls, ref_point, obj_val, cycles, nmpc_errors, nmpc_resets, \
+            update_tick, path = tick(
                 lat=sim_state_delay[0]["lat"], lon=sim_state_delay[0]["lon"],
                 alt=sim_state_delay[-1]["alt"], velocity=sim_state_delay[0]["velocity"],
                 attitude=sim_state_delay[-2]["attitude"],
                 angular_velocity=sim_state_delay[-1]["angular_velocity"],
                 wind_velocity=sim_state_delay[0]["wind_velocity"])
 
-            print "%.2f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.9f,%.9f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f" % (
-                t * 0.02,
-                math.degrees(fcs.nav_state.reference_trajectory[0].lat),
-                math.degrees(fcs.nav_state.reference_trajectory[0].lon),
-                fcs.nav_state.reference_trajectory[0].alt,
-                fcs.nav_state.reference_trajectory[0].airspeed,
-                math.degrees(fcs.nav_state.reference_trajectory[0].yaw),
-                math.degrees(fcs.nav_state.reference_trajectory[0].pitch),
-                math.degrees(fcs.nav_state.reference_trajectory[0].roll),
-                math.degrees(sim_state["lat"]),
-                math.degrees(sim_state["lon"]),
-                sim_state["alt"],
-                sim_ref["airspeed"],
-                math.degrees(sim_ref["attitude_yaw"]),
-                math.degrees(sim_ref["attitude_pitch"]),
-                math.degrees(sim_ref["attitude_roll"]),
-                sim_ref["wind_n"],
-                sim_ref["wind_e"],
-                sim_ref["wind_d"],
-                controls[0],
-                controls[1],
-                controls[2]
+            print (
+                "t=%6.2f, " +
+                "n=%6.2f, e=%6.2f, d=%6.2f, " +
+                "tas=%5.2f, tas_ref=%5.2f, " +
+                "yaw=%3.0f, yaw_ref=%3.0f, " +
+                "pitch=%4.0f, pitch_ref=%4.0f, " +
+                "roll=%4.0f, roll_ref=%4.0f, " +
+                "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
+                "t=%.3f, l=%.3f, r=%.3f, " +
+                "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
+                "path=%4d"
+            ) % (
+                (time.time() - t, ) +
+                plog.lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
+                           ref_point.get("alt", 0)), (sim_state["lat"],
+                           sim_state["lon"], sim_state["alt"])) +
+                (sim_ref["airspeed"], ref_point.get("airspeed", 0)) +
+                (math.degrees(sim_ref["attitude_yaw"]),
+                    math.degrees(ref_point.get("yaw", 0))) +
+                (math.degrees(sim_ref["attitude_pitch"]),
+                    math.degrees(ref_point.get("pitch", 0))) +
+                (math.degrees(sim_ref["attitude_roll"]),
+                    math.degrees(ref_point.get("roll", 0))) +
+                (math.degrees(sim_state["angular_velocity"][2]),
+                        math.degrees(sim_state["angular_velocity"][1]),
+                        math.degrees(sim_state["angular_velocity"][0])) +
+                (controls[0], controls[1], controls[2]) +
+                (obj_val, cycles, nmpc_errors, nmpc_resets) +
+                (path, )
             )
 
             send_control_to_xplane(sock, controls)

@@ -512,6 +512,7 @@ if __name__ == "__main__":
                     "yaw=%3.0f, yaw_ref=%3.0f, " +
                     "pitch=%4.0f, pitch_ref=%4.0f, " +
                     "roll=%4.0f, roll_ref=%4.0f, " +
+                    "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
                     "t=%.3f, l=%.3f, r=%.3f, " +
                     "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
                     "path=%4d"
@@ -527,6 +528,9 @@ if __name__ == "__main__":
                         math.degrees(ref_point.get("pitch", 0))) +
                     (math.degrees(sim_ref["attitude_roll"]),
                         math.degrees(ref_point.get("roll", 0))) +
+                    (math.degrees(sim_state["angular_velocity"][2]),
+                        math.degrees(sim_state["angular_velocity"][1]),
+                        math.degrees(sim_state["angular_velocity"][0])) +
                     (controls[0], controls[1], controls[2]) +
                     (obj_val, cycles, nmpc_errors, nmpc_resets) +
                     (path, )

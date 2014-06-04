@@ -9,7 +9,7 @@ User=root
 Group=root
 ExecStart=/root/fcsdump /root/log/
 TimeoutSec=10
-Restart=on-failure
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
