@@ -62,6 +62,12 @@ The number of control ticks (@ 50Hz) after which the path should be recomputed
 */
 #define FCS_CONTROL_INFEASIBILITY_TIMEOUT 1u
 
+/*
+The number of control ticks (@ 50Hz) during which the input control mode must
+be set to manual before the current path is interrupted.
+*/
+#define FCS_CONTROL_MANUAL_TRANSITION_TIMEOUT 10u
+
 enum fcs_path_type_t {
     FCS_PATH_LINE = 'L',
     FCS_PATH_DUBINS_CURVE = 'D',

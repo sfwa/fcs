@@ -256,6 +256,7 @@ uint8_t key[4], uint8_t *restrict value, size_t value_length) {
     fcs_assert(key);
     fcs_assert(value);
     fcs_assert(value_length < FCS_PARAMETER_DATA_LENGTH_MAX - 4u);
+    fcs_assert(parameter);
 
     parameter->data.u8[0] = key[0];
     parameter->data.u8[1] = key[1];

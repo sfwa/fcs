@@ -62,9 +62,19 @@ struct fcs_nav_state_t nav_state;
 static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
 static uint32_t control_hold_timer;
+static uint32_t control_manual_timer;
 
 
-inline static bool is_path_valid() {
+static void _read_estimate_log(struct fcs_state_estimate_t *estimate,
+int32_t *time_since_last_gps, int32_t *time_since_last_data);
+static bool is_latlng_in_poly(double pt_lat, double pt_lng, float pt_alt,
+size_t num_point_ids, uint16_t point_ids[], struct fcs_waypoint_t points[]);
+static bool is_path_valid();
+static bool is_stabilising();
+static bool is_position_error_ok(float err);
+
+
+static bool is_path_valid() {
     struct fcs_path_t *path;
     struct fcs_waypoint_t *start, *end;
 
@@ -87,24 +97,14 @@ inline static bool is_path_valid() {
     return false;
 }
 
-inline static bool is_navigating() {
-    return is_path_valid() && control_state.mode == FCS_CONTROL_MODE_AUTO;
-}
-
-inline static bool is_stabilising() {
+static bool is_stabilising() {
     return nav_state.reference_path_id[0] == FCS_CONTROL_STABILISE_PATH_ID;
 }
 
-inline static bool is_position_error_ok(float err) {
+static bool is_position_error_ok(float err) {
     return is_path_valid() &&
            (is_stabilising() || absval(err) < FCS_CONTROL_POSITION_TOLERANCE);
 }
-
-static void _read_estimate_log(struct fcs_state_estimate_t *estimate,
-int32_t *time_since_last_gps, int32_t *time_since_last_data);
-static bool is_latlng_in_poly(double pt_lat, double pt_lng, float pt_alt,
-size_t num_point_ids, uint16_t point_ids[], struct fcs_waypoint_t points[]);
-
 
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
@@ -113,7 +113,7 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 3e1, 5e1, 5e1 };
+    float control_weights[NMPC_CONTROL_DIM] = { 3e1, 6e1, 6e1 };
     float lower_control_bound[NMPC_CONTROL_DIM] = { 0.15f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
@@ -178,6 +178,7 @@ void fcs_control_init(void) {
         FCS_CONTROL_HOLD_PATH_ID;
 
     control_infeasibility_timer = 0;
+    control_manual_timer = 0;
     control_tick = 0;
 
     control_state.mode = FCS_CONTROL_MODE_MANUAL;
@@ -185,10 +186,9 @@ void fcs_control_init(void) {
 }
 
 void fcs_control_tick(void) {
+    uint16_t error_type_bits;
     enum nmpc_result_t result;
-    static struct fcs_state_estimate_t state_estimate;
-    static bool state_estimate_inited = false;
-    struct fcs_state_estimate_t new_state_estimate;
+    struct fcs_state_estimate_t state_estimate;
     struct fcs_log_t *control_log, *measurement_log;
     struct fcs_path_t *path;
     struct fcs_parameter_t param, param2;
@@ -201,18 +201,6 @@ void fcs_control_tick(void) {
 
     fcs_assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
 
-    /*
-    Check for multiple infeasible results in a row, and reset the trajectory
-    if necessary.
-    */
-    if (control_tick - control_infeasibility_timer
-            > FCS_CONTROL_INFEASIBILITY_TIMEOUT) {
-        control_timeout = true;
-        control_infeasibility_timer = control_tick;
-        fcs_global_counters.nmpc_resets++;
-    } else {
-        control_tick++;
-    }
 
     measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT,
                                            FCS_MODE_READ);
@@ -223,13 +211,14 @@ void fcs_control_tick(void) {
     it's present, otherwise default to auto (safer).
     */
     if (fcs_parameter_find_by_type_and_device(
-            measurement_log, FCS_PARAMETER_CONTROL_MODE, 1u, &param)) {
-        if (param.data.u8[0] == 1u) {
-            control_state.mode = FCS_CONTROL_MODE_AUTO;
-        } else {
+            measurement_log, FCS_PARAMETER_CONTROL_MODE, 1u, &param) &&
+            param.data.u8[0] == 0u) {
+        control_manual_timer++;
+        if (control_manual_timer > FCS_CONTROL_MANUAL_TRANSITION_TIMEOUT) {
             control_state.mode = FCS_CONTROL_MODE_MANUAL;
         }
     } else {
+        control_manual_timer = 0;
         control_state.mode = FCS_CONTROL_MODE_AUTO;
     }
 
@@ -244,6 +233,7 @@ void fcs_control_tick(void) {
     }
 
     /* Handle navigation state updates */
+    needs_path_reset = false;
     if (fcs_parameter_find_by_type_and_device(
             measurement_log, FCS_PARAMETER_NAV_VERSION, 1u, &param) &&
             param.data.u32[0] == nav_state.version + 1u) {
@@ -299,12 +289,8 @@ void fcs_control_tick(void) {
     Read the relevant parts of the AHRS output and convert them to a format
     usable by the control system.
     */
-    _read_estimate_log(&new_state_estimate, &ms_since_last_gps,
+    _read_estimate_log(&state_estimate, &ms_since_last_gps,
                        &ms_since_last_data);
-    if (!state_estimate_inited) {
-        state_estimate = new_state_estimate;
-        state_estimate_inited = true;
-    }
 
     alt_diff = absval(state_estimate.alt -
                       nav_state.reference_trajectory[0].alt);
@@ -386,6 +372,27 @@ void fcs_control_tick(void) {
     }
 
     /*
+    Check for multiple infeasible results in a row, and reset the trajectory
+    if necessary.
+    */
+    if (control_tick - control_infeasibility_timer
+            > FCS_CONTROL_INFEASIBILITY_TIMEOUT) {
+        control_timeout = true;
+        control_infeasibility_timer = control_tick;
+        fcs_global_counters.nmpc_resets++;
+    } else {
+        control_tick++;
+        control_timeout = false;
+    }
+
+    /* FIXME: for debug logging */
+    error_type_bits = (control_state.mode == FCS_CONTROL_MODE_MANUAL ? 0x1u : 0x0) +
+                      (control_timeout ? 0x2u : 0x0) +
+                      (needs_path_reset ? 0x4u : 0x0) +
+                      (!is_path_valid() ? 0x8u : 0x0) +
+                      (!is_position_error_ok(alt_diff) ? 0x10u : 0x0);
+
+    /*
     Four options here:
     1. We're in manual mode -- just recalculate the trajectory each time as
        though we were going through recovery to a holding pattern.
@@ -408,32 +415,24 @@ void fcs_control_tick(void) {
     three elements of `state`, since all positions are given in NED relative
     to the first point in the reference trajectory.
     */
-    if (control_state.mode == FCS_CONTROL_MODE_MANUAL) {
+    if (control_state.mode == FCS_CONTROL_MODE_MANUAL || !is_path_valid()) {
         /*
-        While in manual mode, continuously try to enter a holding pattern
+        If in manual mode or the path is uninitialized, enter a holding
+        pattern.
         */
         fcs_trajectory_start_hold(&nav_state, &state_estimate);
         fcs_trajectory_recalculate(&nav_state, &state_estimate);
-        fcs_trajectory_timestep(&nav_state, &state_estimate);
-    } else if (!control_timeout && !needs_path_reset && is_navigating() &&
-               is_position_error_ok(alt_diff)) {
-        fcs_trajectory_timestep(&nav_state, &state_estimate);
-    } else if (is_path_valid()) {
+    } else if (control_timeout || needs_path_reset ||
+               !is_position_error_ok(alt_diff)) {
         /*
         If we're not already stabilising, construct a path sequence that gets
         the vehicle back to the next point in the reference trajectory.
         */
         fcs_trajectory_start_recover(&nav_state, &state_estimate);
         fcs_trajectory_recalculate(&nav_state, &state_estimate);
-        fcs_trajectory_timestep(&nav_state, &state_estimate);
-    } else {
-        /*
-        Path uninitialized; enter a holding pattern.
-        */
-        fcs_trajectory_start_hold(&nav_state, &state_estimate);
-        fcs_trajectory_recalculate(&nav_state, &state_estimate);
-        fcs_trajectory_timestep(&nav_state, &state_estimate);
     }
+
+    fcs_trajectory_timestep(&nav_state, &state_estimate);
 
     /* If we're holding, increment the hold timer; otherwise reset it */
     if (nav_state.reference_path_id[0] == FCS_CONTROL_HOLD_PATH_ID) {
@@ -491,10 +490,11 @@ void fcs_control_tick(void) {
     Add navigation status to the control log -- path ID, nav state version,
     and a reference waypoint packet
     */
-    fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 1u);
+    fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 2u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_NAV_PATH_ID);
     fcs_parameter_set_device_id(&param, 0);
     param.data.u16[0] = nav_state.reference_path_id[0];
+    param.data.u16[1] = error_type_bits;
     fcs_log_add_parameter(control_log, &param);
 
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 32u, 1u);
@@ -512,8 +512,6 @@ void fcs_control_tick(void) {
 
     control_log = fcs_exports_log_close(control_log);
     fcs_assert(!control_log);
-
-    state_estimate = new_state_estimate;
 }
 
 void fcs_control_reset(void) {

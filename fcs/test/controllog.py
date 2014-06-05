@@ -31,6 +31,8 @@ def tick(t, data):
     control_values = (-1, -1, -1)
     control_mode = [-1, -1]
     control_nav_version = -1
+    control_pos = (-1, -1, -1)
+    control_error_type = 0
     last_gps = 0
     last_data = 0
 
@@ -64,8 +66,11 @@ def tick(t, data):
             control_mode[param.device_id] = pv[0]
         elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT:
             control_values = map(lambda x: float(x) / 65535.0, pv)
+        elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_POS:
+            control_pos = map(lambda x: float(x) / 65535.0, pv)
         elif pt == plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID:
             control_path = pv[0]
+            control_error_type = pv[1]
         elif pt == plog.ParameterType.FCS_PARAMETER_KEY_VALUE:
             control_refp = plog.extract_waypoint(pv)
         elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_STATUS:
@@ -82,10 +87,8 @@ def tick(t, data):
 
     control_data = (control_cycles, control_obj_val, control_errors,
                     control_resets)
-    #if (control_mode[1] == 0 and control_obj_val < 0.0) or not state_pos \
-    #        or not control_refp or LAST_CONTROL_DATA == control_data:
-    #    return ""
-    if t < 8608 or t > 16711:
+    if control_mode[1] != 1 or not state_pos \
+            or not control_refp or LAST_CONTROL_DATA == control_data:
         return ""
 
     LAST_CONTROL_DATA = control_data
@@ -104,8 +107,9 @@ def tick(t, data):
         "roll=%4.0f, roll_ref=%4.0f, " +
         "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
         "t=%.3f, l=%.3f, r=%.3f, " +
+        "tp=%.3f, lp=%.3f, rp=%.3f, " +
         "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
-        "path=%4d, last_gps=%4d, mode1=%d\n"
+        "path=%4d, last_gps=%4d, mode1=%d, flags=%08x, err=%04x\n"
     ) % (
         (t, ) +
         (state_pos[2], control_refp.get("alt", 0)) +
@@ -120,8 +124,10 @@ def tick(t, data):
         (state_angular_velocity[2], state_angular_velocity[1],
             state_angular_velocity[0]) +
         (control_values[0], control_values[1], control_values[2]) +
+        (control_pos[0], control_pos[1], control_pos[2]) +
         (control_obj_val, control_cycles, control_errors, control_resets) +
-        (control_path, last_gps, control_mode[1])
+        (control_path, last_gps, control_mode[1], control_refp["flags"],
+            control_error_type)
     )
 
 

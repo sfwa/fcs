@@ -625,6 +625,34 @@ def print_control_log(data):
         elif pt == ParameterType.FCS_PARAMETER_CONTROL_SETPOINT:
             setpoint = map(lambda x: x / 65535.0, pv)
 
+    print (
+        "t=%6.2f, " +
+        "n=%6.2f, e=%6.2f, d=%6.2f, " +
+        "tas=%5.2f, tas_ref=%5.2f, " +
+        "yaw=%3.0f, yaw_ref=%3.0f, " +
+        "pitch=%4.0f, pitch_ref=%4.0f, " +
+        "roll=%4.0f, roll_ref=%4.0f, " +
+        "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
+        "t=%.3f, l=%.3f, r=%.3f, " +
+        "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
+        "path=%4d"
+    ) % (
+        (time.time() - t, ) +
+        lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
+                   ref_point.get("alt", 0)), (sim_state["lat"],
+                   sim_state["lon"], sim_state["alt"])) +
+        (sim_ref["airspeed"], ref_point.get("airspeed", 0)) +
+        (math.degrees(sim_ref["attitude_yaw"]),
+            math.degrees(ref_point.get("yaw", 0))) +
+        (math.degrees(sim_ref["attitude_pitch"]),
+            math.degrees(ref_point.get("pitch", 0))) +
+        (math.degrees(sim_ref["attitude_roll"]),
+            math.degrees(ref_point.get("roll", 0))) +
+        (controls[0], controls[1], controls[2]) +
+        (obj_val, cycles, nmpc_errors, nmpc_resets) +
+        (path, )
+    )
+
     print "%.0f,%.1f,%.0f,%.0f,%d,%.6f,%.6f,%.6f" % tuple(status + [path] + setpoint)
 
 
@@ -641,19 +669,19 @@ if __name__ == "__main__":
 
     n = 0
     for logf in iterlogs(sys.stdin):
-        waypoint = None
-        result = logf.find_by(device_id=0, parameter_type=ParameterType.FCS_PARAMETER_KEY_VALUE)
-        if result:
-            waypoint = extract_waypoint(result.value)
+        #waypoint = None
+        #result = logf.find_by(device_id=0, parameter_type=ParameterType.FCS_PARAMETER_KEY_VALUE)
+        #if result:
+        #    waypoint = extract_waypoint(result.value)
 
         try:
             #if n % 100 == 0:
             result = print_estimate_log(logf)
-            if result[0]:
-                print_control_log(logf)
-                print "%.3f,%.3f,%.2f,%.3f W" % (lla_to_ned((waypoint["lat"], waypoint["lon"], waypoint["alt"]), result[1:]) + (math.degrees(waypoint["yaw"]), ))
-                print waypoint
-                #print_measurement_log(logf)
+            #if result[0]:
+            #    print_control_log(logf)
+            #    print "%.3f,%.3f,%.2f,%.3f W" % (lla_to_ned((waypoint["lat"], waypoint["lon"], waypoint["alt"]), result[1:]) + (math.degrees(waypoint["yaw"]), ))
+            #    print waypoint
+            #    #print_measurement_log(logf)
             n += 1
         except Exception:
             raise

@@ -33,6 +33,7 @@ import collections
 import datetime
 import binascii
 import traceback
+import random
 from cobs import cobsr
 
 
@@ -206,9 +207,9 @@ def read_control(conn):
         control_param = control_log.find_by(
             device_id=0,
             parameter_type=plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT)
-        path = control_log.find_by(
+        path, err_type = control_log.find_by(
             device_id=0,
-            parameter_type=plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID).values[0]
+            parameter_type=plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID).values
         refp = control_log.find_by(
             device_id=0,
             parameter_type=plog.ParameterType.FCS_PARAMETER_KEY_VALUE)
@@ -219,12 +220,12 @@ def read_control(conn):
         LAST_CONTROL = (
             map(lambda x: float(x) / float(2**16), control_param.values),
             plog.extract_waypoint(refp.value),
-            obj_val, cycles, errors, resets, control_log.tick, path
+            obj_val, cycles, errors, resets, control_log.tick, path, err_type
         )
 
         return LAST_CONTROL
     except Exception:
-        return LAST_CONTROL or ([0.0, 0.5, 0.5], {}, 0, 0, 0, 0, 0, 0xFFFF)
+        return LAST_CONTROL or ([0.0, 0.5, 0.5], {}, 0, 0, 0, 0, 0, 0xFFFF, 0x0)
 
 
 def connect_to_xplane():
@@ -373,25 +374,25 @@ def recv_state_from_xplane(s):
             elif fields[1] == "sim/flightmodel/position/longitude":
                 sim_state["lon"] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/elevation":
-                sim_state["alt"] = float(fields[2])
+                sim_state["alt"] = float(fields[2]) + random.uniform(-1.0, 1.0)
             elif fields[1] == "sim/flightmodel/position/local_vx":
-                sim_state["velocity"][1] = float(fields[2])
+                sim_state["velocity"][1] = float(fields[2]) + random.uniform(-2.0, 2.0)
             elif fields[1] == "sim/flightmodel/position/local_vy":
-                sim_state["velocity"][2] = -float(fields[2])
+                sim_state["velocity"][2] = -float(fields[2]) + random.uniform(-2.0, 2.0)
             elif fields[1] == "sim/flightmodel/position/local_vz":
-                sim_state["velocity"][0] = -float(fields[2])
+                sim_state["velocity"][0] = -float(fields[2]) + random.uniform(-2.0, 2.0)
             elif fields[1] == "sim/flightmodel/position/psi":
-                sim_ref["attitude_yaw"] = math.radians(float(fields[2]))
+                sim_ref["attitude_yaw"] = math.radians(float(fields[2])) + random.uniform(-0.1, 0.1)
             elif fields[1] == "sim/flightmodel/position/theta":
-                sim_ref["attitude_pitch"] = math.radians(float(fields[2]))
+                sim_ref["attitude_pitch"] = math.radians(float(fields[2])) + random.uniform(-0.1, 0.1)
             elif fields[1] == "sim/flightmodel/position/phi":
-                sim_ref["attitude_roll"] = math.radians(float(fields[2]))
+                sim_ref["attitude_roll"] = math.radians(float(fields[2])) + random.uniform(-0.1, 0.1)
             elif fields[1] == "sim/flightmodel/position/P":
-                sim_state["angular_velocity"][0] = math.radians(float(fields[2]))
+                sim_state["angular_velocity"][0] = math.radians(float(fields[2])) + random.uniform(-0.2, 0.2)
             elif fields[1] == "sim/flightmodel/position/Q":
-                sim_state["angular_velocity"][1] = math.radians(float(fields[2]))
+                sim_state["angular_velocity"][1] = math.radians(float(fields[2])) + random.uniform(-0.2, 0.2)
             elif fields[1] == "sim/flightmodel/position/R":
-                sim_state["angular_velocity"][2] = math.radians(float(fields[2]))
+                sim_state["angular_velocity"][2] = math.radians(float(fields[2])) + random.uniform(-0.2, 0.2)
             elif fields[1] == "sim/weather/wind_now_x_msc":
                 sim_ref["wind_e"] = float(fields[2])
             elif fields[1] == "sim/weather/wind_now_y_msc":
@@ -473,7 +474,7 @@ if __name__ == "__main__":
             )
 
             controls, ref_point, obj_val, cycles, nmpc_errors, nmpc_resets, \
-                tick, path = read_control(conn)
+                tick, path, control_error_type = read_control(conn)
 
             send_control_to_xplane(sock, controls)
 
@@ -515,7 +516,7 @@ if __name__ == "__main__":
                     "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
                     "t=%.3f, l=%.3f, r=%.3f, " +
                     "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
-                    "path=%4d"
+                    "path=%4d, err=%04x"
                 ) % (
                     (time.time() - t, ) +
                     lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
@@ -533,7 +534,7 @@ if __name__ == "__main__":
                         math.degrees(sim_state["angular_velocity"][0])) +
                     (controls[0], controls[1], controls[2]) +
                     (obj_val, cycles, nmpc_errors, nmpc_resets) +
-                    (path, )
+                    (path, control_error_type)
                 )
                 last_print_tick = tick
 

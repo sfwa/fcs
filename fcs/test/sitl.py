@@ -727,7 +727,7 @@ if __name__ == "__main__":
                 "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
                 "t=%.3f, l=%.3f, r=%.3f, " +
                 "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
-                "path=%4d"
+                "path=%4d, flags=%8x"
             ) % (
                 (time.time() - t, ) +
                 plog.lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
@@ -745,7 +745,7 @@ if __name__ == "__main__":
                         math.degrees(sim_state["angular_velocity"][0])) +
                 (controls[0], controls[1], controls[2]) +
                 (obj_val, cycles, nmpc_errors, nmpc_resets) +
-                (path, )
+                (path, ref_point.get("flags", 0xFFFFFFFF))
             )
 
             send_control_to_xplane(sock, controls)
