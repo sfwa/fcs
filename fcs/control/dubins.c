@@ -419,7 +419,7 @@ float t) {
     */
     new_point->airspeed = target_airspeed;
     new_point->yaw = out[2];
-    new_point->pitch = 4.0f * ((float)M_PI / 180.0f);
+    new_point->pitch = 6.0f * ((float)M_PI / 180.0f);
     new_point->roll = target_roll;
     new_point->lat = start->lat + (1.0/WGS84_A) * out[0];
     new_point->lon = start->lon +

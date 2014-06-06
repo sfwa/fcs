@@ -67,13 +67,13 @@ void _get_next_reference_point(float *restrict state);
 
 
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
-    2e-4f, 2e-4f, 5e-3f, /* position */
+    2e-4f, 2e-4f, 1e-2f, /* position */
     1e0f, 1e0f, 1e0f, /* velocity */
     1e0f, 1e0f, 1e0f, /* attitude */
     3e0f, 2e0f, 2e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
-    1e-1f, 1e-1f, 1e0f,  /* position */
+    1e-1f, 1e-1f, 3e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
     1e-1f, 1e0f, 1e0f,  /* attitude */
     3e0f, 2e0f, 2e0f /* angular velocity */
@@ -422,8 +422,8 @@ const float *restrict wind) {
     reference[12] = tmp2[2];
     /* FIXME: reference points should be specified in the control config. */
     reference[NMPC_STATE_DIM + 0] = 0.5f;
-    reference[NMPC_STATE_DIM + 1u] = 0.48f;
-    reference[NMPC_STATE_DIM + 2u] = 0.48f;
+    reference[NMPC_STATE_DIM + 1u] = 0.47f;
+    reference[NMPC_STATE_DIM + 2u] = 0.47f;
 }
 
 /*
@@ -533,7 +533,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
                          FCS_CONTROL_DEFAULT_AIRSPEED;
     waypoint->yaw = yaw; //(float)atan2(-airflow[1], -airflow[0]);
     waypoint->pitch = 0.0f;
-    waypoint->roll = 0.0f;
+    waypoint->roll = nav->reference_trajectory[0].roll;
 
     /*
     Set up the holding pattern waypoint (current position and yaw,

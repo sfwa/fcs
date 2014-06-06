@@ -624,21 +624,21 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             _reset_state();
             ukf_choose_dynamics(UKF_MODEL_NONE);
             /* Trust gyro bias and attitude predictor less. */
-            vector_set_d(&ahrs_process_noise[21], 1e-6, 3u);
             vector_set_d(&ahrs_process_noise[9], 1e-6, 3u);
             /* And wind velocity more. */
             vector_set_d(&ahrs_process_noise[18], 1e-9, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-6, 3u);
             break;
         case FCS_MODE_SAFE:
             ukf_choose_dynamics(UKF_MODEL_NONE);
-            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             vector_set_d(&ahrs_process_noise[9], 7e-8, 3u);
             vector_set_d(&ahrs_process_noise[18], 1e-9, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             break;
         case FCS_MODE_ARMED:
-            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             vector_set_d(&ahrs_process_noise[9], 7e-8, 3u);
             vector_set_d(&ahrs_process_noise[18], 1e-6, 3u);
+            vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             break;
         case FCS_MODE_ACTIVE:
             ukf_choose_dynamics(ahrs_dynamics_model);

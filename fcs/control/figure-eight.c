@@ -70,9 +70,14 @@ const struct fcs_waypoint_t *end, float t) {
     float yaw_rate, offset_n, offset_e, sd, cd, sy, cy, target_airspeed,
           target_yaw, target_roll, tangent_n,
           tangent_e, wind_dot, wind_yaw;
+    uint8_t last_direction, new_direction;
 
     /* Fly at the start speed. */
     target_airspeed = start->airspeed;
+
+    /* Work out the direction of the loop the last point belonged to */
+    new_direction = last_direction =
+        (uint8_t)(last_point->flags & FCS_WAYPOINT_FLAG_PARAM_MASK);
 
     /*
     Work out the wind correction for yaw rate -- project the wind vector onto
@@ -85,14 +90,6 @@ const struct fcs_waypoint_t *end, float t) {
     wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
     wind_yaw = t * wind_dot * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
 
-    /*
-    Roll angle is based on airspeed and turn radius (constant):
-    roll_deg = 90 - atan(9.8 * r / v^2)
-    */
-    target_roll =
-        (float)(M_PI * 0.5 - atan2(G_ACCEL * FCS_CONTROL_TURN_RADIUS,
-                                   (target_airspeed * target_airspeed)));
-
     /* If delta yaw > start yaw - last yaw, it's time to change direction. */
     target_yaw = start->yaw - last_point->yaw;
     if (target_yaw > M_PI) {
@@ -102,42 +99,55 @@ const struct fcs_waypoint_t *end, float t) {
     }
 
     /*
+    Roll angle is based on airspeed and turn radius (constant):
+    roll_deg = 90 - atan(9.8 * r / v^2)
+    */
+    target_roll =
+        (float)(M_PI * 0.5 - atan2(G_ACCEL * FCS_CONTROL_TURN_RADIUS,
+                                   (target_airspeed * target_airspeed)));
+
+    /* Scale roll angle to resolve discontinuity during direction change */
+    if (absval(target_yaw) < 0.333333f) {
+        target_roll *= absval(target_yaw) * 3.0f;
+    }
+
+    /*
     Determine yaw rate based on airspeed; whether it's left or right depends
-    on the current bank angle.
+    on the direction of the last point
     */
     yaw_rate = target_airspeed * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
 
-    if (last_point->roll > 0.0 && target_yaw > 0.0 &&
-            target_yaw < yaw_rate * t + wind_yaw) {
+    if (last_direction == FCS_WAYPOINT_FLAG_FIGURE8_RIGHT &&
+            target_yaw > 0.0 && target_yaw < yaw_rate * t + wind_yaw) {
+        new_direction = FCS_WAYPOINT_FLAG_FIGURE8_LEFT;
+    } else if (last_direction == FCS_WAYPOINT_FLAG_FIGURE8_LEFT &&
+               target_yaw < 0.0 && target_yaw > -yaw_rate * t - wind_yaw) {
+        new_direction = FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
+    } else if (last_direction != FCS_WAYPOINT_FLAG_FIGURE8_RIGHT &&
+               last_direction != FCS_WAYPOINT_FLAG_FIGURE8_LEFT) {
+        new_direction = FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
+    }
+
+    if (new_direction == FCS_WAYPOINT_FLAG_FIGURE8_LEFT) {
         target_roll = -target_roll;
-        yaw_rate = -target_airspeed * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
         wind_yaw = -wind_yaw;
-    } else if (last_point->roll < 0.0 && target_yaw < 0.0 &&
-               target_yaw > -yaw_rate * t - wind_yaw) {
-        yaw_rate = target_airspeed * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
-    } else if (last_point->roll < 0.0) {
-        target_roll = -target_roll;
         yaw_rate = -yaw_rate;
-        wind_yaw = -wind_yaw;
     }
 
     new_point->roll = target_roll;
 
-    /* Scale roll angle to resolve discontinuity during direction change */
-    if (absval(target_yaw) < 0.333333f) {
-        new_point->roll *=
-            max(0.01f, absval(target_yaw) * 3.0f);
-    }
-
     /* Work out next yaw value, constraining to 0..2*pi. */
     new_point->yaw = mod_2pi_f(last_point->yaw + yaw_rate * t + wind_yaw);
+    if (new_direction != last_direction) {
+        new_point->yaw = start->yaw;
+    }
 
     sy = (float)sin(start->yaw);
     cy = (float)cos(start->yaw);
     sd = (float)sin(new_point->yaw - start->yaw);
     cd = (float)cos(new_point->yaw - start->yaw);
 
-    if (last_point->roll < 0.0) {
+    if (new_direction == FCS_WAYPOINT_FLAG_FIGURE8_LEFT) {
         /* Bank to the left, so the circle origin is to port. */
         offset_n = sd * -cy + (cd - 1.0f) * -sy;
         offset_e = sd * -sy - (cd - 1.0f) * -cy;
@@ -158,7 +168,8 @@ const struct fcs_waypoint_t *end, float t) {
 
     new_point->alt = start->alt;
     new_point->airspeed = target_airspeed;
-    new_point->pitch = 4.0f * ((float)M_PI / 180.0f);
+    new_point->pitch = 6.0f * ((float)M_PI / 180.0f);
+    new_point->flags = new_direction;
 
     /* Always returning t means we never advance to the next path. */
     return t;

@@ -677,8 +677,8 @@ if __name__ == "__main__":
     fcs.nav_state.paths[4 + len(pattern_points)].next_path_id = 0xFFFF
 
     # Register the path with the FCS
-    fcs.nav_state.reference_path_id[0] = 0
-    fcs._fcs.fcs_control_reset()
+    #fcs.nav_state.reference_path_id[0] = 0
+    #fcs._fcs.fcs_control_reset()
 
     sock = connect_to_xplane()
     reset_xplane_state(sock)
@@ -756,16 +756,13 @@ if __name__ == "__main__":
                 sim_state["velocity"][0]**2 + sim_state["velocity"][1]**2 +
                 sim_state["velocity"][2]**2) * 0.02
 
-            if fcs.nav_state.reference_path_id[0] == 499:
-                print "COMPLETED"
-                print "Time taken: %.0f min %.0f sec" % (
-                    int(t * 0.02) / 60, (t * 0.02) % 60.0)
-                print "Air distance: %.1f km" % (dist_air * 0.001)
-                print "Ground distance: %.1f km" % (dist_gnd * 0.001)
-                raise StopIteration()
-
-            #if t % 500 == 499:
-            #    nav_state.reference_path_id[0] = 0xFFFF
+            #if fcs.nav_state.reference_path_id[0] == 499:
+            #    print "COMPLETED"
+            #    print "Time taken: %.0f min %.0f sec" % (
+            #        int(t * 0.02) / 60, (t * 0.02) % 60.0)
+            #    print "Air distance: %.1f km" % (dist_air * 0.001)
+            #    print "Ground distance: %.1f km" % (dist_gnd * 0.001)
+            #    raise StopIteration()
 
             if sim_state["alt"] < 50.0:
                 print "LOST CONTROL"

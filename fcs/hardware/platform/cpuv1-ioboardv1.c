@@ -101,7 +101,7 @@ static void _apply_gyroscope_calibration(const struct fcs_log_t *plog,
 struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap);
 static void _apply_magnetometer_calibration(const struct fcs_log_t *plog,
 struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
-double wmm_field_norm);
+double wmm_field_norm, enum fcs_mode_t ahrs_mode);
 static void _apply_pitot_calibration(const struct fcs_log_t *plog,
 struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
 double aero_static_pressure, double aero_static_temp);
@@ -418,8 +418,7 @@ void fcs_board_tick(void) {
             }
 
             /* Continuously update the magnetometer calibration */
-            if (ahrs_mode != FCS_MODE_INITIALIZING &&
-                    ahrs_mode != FCS_MODE_CALIBRATING) {
+            if (false && ahrs_mode == FCS_MODE_ACTIVE) {
                 _update_magnetometer_calibration(
                     measurement_log, &board_calibration,
                     &board_mag_trical_instances[i], attitude,
@@ -474,7 +473,8 @@ void fcs_board_tick(void) {
     _apply_gyroscope_calibration(measurement_log, hal_log,
                                  &board_calibration);
     _apply_magnetometer_calibration(measurement_log, hal_log,
-                                    &board_calibration, wmm_field_norm);
+                                    &board_calibration, wmm_field_norm,
+                                    ahrs_mode);
     _apply_pitot_calibration(measurement_log, hal_log, &board_calibration,
                              static_pressure, static_temp);
     _apply_barometer_calibration(measurement_log, hal_log, &board_calibration,
@@ -867,13 +867,13 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
     This isn't the right way to do it as the UKF assumes zero-mean error,
     but in practice it's OK.
     */
-    variance[X] = err + absval(v[X] * 0.05);
+    variance[X] = err + absval(v[X] * 0.00);
     variance[X] *= variance[X];
 
-    variance[Y] = err + absval(v[Y] * 0.05);
+    variance[Y] = err + absval(v[Y] * 0.00);
     variance[Y] *= variance[Y];
 
-    variance[Z] = err + absval(v[Z] * 0.05 + G_ACCEL * 0.05);
+    variance[Z] = err + absval(v[Z] * 0.00 + G_ACCEL * 0.00);
     variance[Z] *= variance[Z];
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_ACCELEROMETER_XYZ, v,
@@ -908,7 +908,7 @@ struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap) {
 
 static void _apply_magnetometer_calibration(const struct fcs_log_t *plog,
 struct fcs_log_t *hlog, struct fcs_calibration_map_t *cmap,
-double wmm_field_norm) {
+double wmm_field_norm, enum fcs_mode_t ahrs_mode) {
     double v[4], variance[3], err;
     double field_norm_inv = 1.0 / wmm_field_norm;
 
@@ -927,6 +927,10 @@ double wmm_field_norm) {
     Scale error by the same amount, so the units of error are Gauss.
     */
     err *= field_norm_inv;
+    if (ahrs_mode != FCS_MODE_ACTIVE || true) {
+        err *= 9.0;
+    }
+
     vector_set_d(variance, err * err, 3);
 
     _set_hal_sensor_value_f32(hlog, FCS_PARAMETER_HAL_MAGNETOMETER_XYZ, v,
