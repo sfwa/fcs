@@ -73,7 +73,7 @@ static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     3e0f, 2e0f, 2e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
-    1e-1f, 1e-1f, 3e0f,  /* position */
+    3e-1f, 3e-1f, 3e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
     1e-1f, 1e0f, 1e0f,  /* attitude */
     3e0f, 2e0f, 2e0f /* angular velocity */
@@ -421,7 +421,7 @@ const float *restrict wind) {
     reference[11] = tmp2[1];
     reference[12] = tmp2[2];
     /* FIXME: reference points should be specified in the control config. */
-    reference[NMPC_STATE_DIM + 0] = 0.35f;
+    reference[NMPC_STATE_DIM + 0] = 0.4f;
     reference[NMPC_STATE_DIM + 1u] = 0.45f;
     reference[NMPC_STATE_DIM + 2u] = 0.45f;
 }

@@ -52,15 +52,15 @@ SOFTWARE.
 Check a vector for NaN values; return true if any are found, and false
 otherwise
 */
-inline static bool _vec_hasnan_f(const float *vec, size_t n) {
-    size_t i;
-    for (i = 0; i < n; i++) {
-        if (isnan(vec[i])) {
-            return true;
-        }
-    }
-    return false;
-}
+//inline static bool _vec_hasnan_f(const float *vec, size_t n) {
+//    size_t i;
+//    for (i = 0; i < n; i++) {
+//        if (isnan(vec[i])) {
+//            return true;
+//        }
+//    }
+//    return false;
+//}
 
 
 #define ACCEL_SENSITIVITY 4096.0f /* LSB/g @ ±8g FS */
@@ -73,7 +73,7 @@ inline static bool _vec_hasnan_f(const float *vec, size_t n) {
 
 static struct fcs_calibration_map_t board_calibration;
 static TRICAL_instance_t board_mag_trical_instances[FCS_IOBOARD_COUNT];
-static double board_mag_trical_update_attitude[FCS_IOBOARD_COUNT][4];
+// static double board_mag_trical_update_attitude[FCS_IOBOARD_COUNT][4];
 static int16_t board_timeout[FCS_IOBOARD_COUNT] = { 5u, 5u };
 static double board_reference_pressure, board_reference_alt;
 static uint8_t
@@ -89,10 +89,10 @@ static void _update_pitot_calibration(const struct fcs_log_t *plog,
 struct fcs_calibration_map_t *cmap, size_t i);
 static void _update_barometer_calibration(const struct fcs_log_t *plog,
 struct fcs_calibration_map_t *cmap, double reference_pressure, size_t i);
-static void _update_magnetometer_calibration(const struct fcs_log_t *plog,
-struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance,
-const double *attitude, double *last_update_attitude, const double *wmm_field,
-double wmm_field_norm, size_t i);
+//static void _update_magnetometer_calibration(const struct fcs_log_t *plog,
+//struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance,
+//const double *attitude, double *last_update_attitude, const double *wmm_field,
+//double wmm_field_norm, size_t i);
 static void _update_accelerometer_calibration(const struct fcs_log_t *plog,
 struct fcs_calibration_map_t *cmap, size_t i);
 static void _apply_accelerometer_calibration(const struct fcs_log_t *plog,
@@ -418,13 +418,13 @@ void fcs_board_tick(void) {
             }
 
             /* Continuously update the magnetometer calibration */
-            if (false && ahrs_mode == FCS_MODE_ACTIVE) {
+            /* if (ahrs_mode == FCS_MODE_ACTIVE) {
                 _update_magnetometer_calibration(
                     measurement_log, &board_calibration,
                     &board_mag_trical_instances[i], attitude,
                     board_mag_trical_update_attitude[i], wmm_field,
                     wmm_field_norm, i);
-            } else if (ahrs_mode == FCS_MODE_CALIBRATING) {
+            } else */ if (ahrs_mode == FCS_MODE_CALIBRATING) {
                 _update_pitot_calibration(
                     measurement_log, &board_calibration, i);
                 _update_barometer_calibration(
@@ -718,82 +718,82 @@ struct fcs_calibration_map_t *cmap, double reference_pressure, size_t i) {
                 reference_pressure - calibration->params[0]);
 }
 
-static void _update_magnetometer_calibration(const struct fcs_log_t *plog,
-struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance,
-const double *attitude, double *last_update_attitude, const double *wmm_field,
-double wmm_field_norm, size_t i) {
-    /*
-    Handle magnetometer calibration update based on new readings -- we do this
-    regardless of calibration mode
-    */
-    struct fcs_calibration_t *calibration;
-    struct fcs_parameter_t parameter;
-    double mag_value[3], expected_field[3], scale_factor, delta_angle;
-    float mag_value_f[3], expected_field_f[3];
-
-    if (!fcs_parameter_find_by_type_and_device(
-            plog, FCS_PARAMETER_MAGNETOMETER_XYZ, (uint8_t)i, &parameter)) {
-        return;
-    }
-
-    /*
-    If the current attitude is too close to the attitude at which this
-    TRICAL instance was last updated, skip calibration this time
-    */
-    delta_angle = quaternion_quaternion_angle_d(attitude,
-                                                last_update_attitude);
-    if (delta_angle < 2.0 * M_PI / 180.0) {
-        return;
-    }
-
-    /*
-    Rotate the WMM field by the current attitude to get the expected field
-    direction for these readings
-    */
-    quaternion_vector3_multiply_d(expected_field, attitude, wmm_field);
-    vector_f_from_d(expected_field_f, expected_field, 3u);
-
-    /* Get the parameter value */
-    fcs_parameter_get_values_d(&parameter, mag_value, 3u);
-
-    /* Find the calibration parameters */
-    calibration = fcs_parameter_get_calibration(cmap, &parameter);
-
-    /*
-    Update TRICAL instance parameters with the latest results. Scale
-    the magnetometer reading such that the expected magnitude is the
-    unit vector, by dividing by the current WMM field strength in
-    Gauss.
-
-    Copy the current sensor calibration to the TRICAL instance state
-    so that any external changes to the calibration are captured.
-    */
-    vector_copy_f(instance->state, calibration->params, 12u);
-
-    scale_factor = calibration->scale_factor / wmm_field_norm;
-    vector3_scale_d(mag_value, scale_factor);
-    vector_f_from_d(mag_value_f, mag_value, 3u);
-
-    TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
-
-    if (_vec_hasnan_f(instance->state, 12u)) {
-        /* TRICAL has blown up -- reset this instance. */
-        TRICAL_reset(instance);
-        fcs_global_counters.trical_resets[i + 2u]++;
-    }
-
-    /*
-    Copy the TRICAL calibration estimate to the magnetometer
-    calibration
-    */
-    vector_copy_f(calibration->params, instance->state, 12u);
-
-    /*
-    Record the attitude at which this TRICAL instance was last updated
-    so that we can space out calibration updates
-    */
-    vector_copy_d(last_update_attitude, attitude, 4u);
-}
+//static void _update_magnetometer_calibration(const struct fcs_log_t *plog,
+//struct fcs_calibration_map_t *cmap, TRICAL_instance_t *instance,
+//const double *attitude, double *last_update_attitude, const double *wmm_field,
+//double wmm_field_norm, size_t i) {
+//    /*
+//    Handle magnetometer calibration update based on new readings -- we do this
+//    regardless of calibration mode
+//    */
+//    struct fcs_calibration_t *calibration;
+//    struct fcs_parameter_t parameter;
+//    double mag_value[3], expected_field[3], scale_factor, delta_angle;
+//    float mag_value_f[3], expected_field_f[3];
+//
+//    if (!fcs_parameter_find_by_type_and_device(
+//            plog, FCS_PARAMETER_MAGNETOMETER_XYZ, (uint8_t)i, &parameter)) {
+//        return;
+//    }
+//
+//    /*
+//    If the current attitude is too close to the attitude at which this
+//    TRICAL instance was last updated, skip calibration this time
+//    */
+//    delta_angle = quaternion_quaternion_angle_d(attitude,
+//                                                last_update_attitude);
+//    if (delta_angle < 2.0 * M_PI / 180.0) {
+//        return;
+//    }
+//
+//    /*
+//    Rotate the WMM field by the current attitude to get the expected field
+//    direction for these readings
+//    */
+//    quaternion_vector3_multiply_d(expected_field, attitude, wmm_field);
+//    vector_f_from_d(expected_field_f, expected_field, 3u);
+//
+//    /* Get the parameter value */
+//    fcs_parameter_get_values_d(&parameter, mag_value, 3u);
+//
+//    /* Find the calibration parameters */
+//    calibration = fcs_parameter_get_calibration(cmap, &parameter);
+//
+//    /*
+//    Update TRICAL instance parameters with the latest results. Scale
+//    the magnetometer reading such that the expected magnitude is the
+//    unit vector, by dividing by the current WMM field strength in
+//    Gauss.
+//
+//    Copy the current sensor calibration to the TRICAL instance state
+//    so that any external changes to the calibration are captured.
+//    */
+//    vector_copy_f(instance->state, calibration->params, 12u);
+//
+//    scale_factor = calibration->scale_factor / wmm_field_norm;
+//    vector3_scale_d(mag_value, scale_factor);
+//    vector_f_from_d(mag_value_f, mag_value, 3u);
+//
+//    TRICAL_estimate_update(instance, mag_value_f, expected_field_f);
+//
+//    if (_vec_hasnan_f(instance->state, 12u)) {
+//        /* TRICAL has blown up -- reset this instance. */
+//        TRICAL_reset(instance);
+//        fcs_global_counters.trical_resets[i + 2u]++;
+//    }
+//
+//    /*
+//    Copy the TRICAL calibration estimate to the magnetometer
+//    calibration
+//    */
+//    vector_copy_f(calibration->params, instance->state, 12u);
+//
+//    /*
+//    Record the attitude at which this TRICAL instance was last updated
+//    so that we can space out calibration updates
+//    */
+//    vector_copy_d(last_update_attitude, attitude, 4u);
+//}
 
 static void _update_accelerometer_calibration(const struct fcs_log_t *plog,
 struct fcs_calibration_map_t *cmap, size_t i) {
