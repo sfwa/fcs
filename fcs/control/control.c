@@ -63,6 +63,7 @@ static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
 static uint32_t control_hold_timer;
 static uint32_t control_manual_timer;
+static float control_last_throttle;
 
 
 static void _read_estimate_log(struct fcs_state_estimate_t *estimate,
@@ -114,7 +115,7 @@ void fcs_control_init(void) {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
     float control_weights[NMPC_CONTROL_DIM] = { 3e1, 6e1, 6e1 };
-    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.15f, 0.25f, 0.25f };
+    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.2f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
     /* Clear GPIO outs */
@@ -458,6 +459,8 @@ void fcs_control_tick(void) {
     fcs_parameter_set_device_id(&param, 0);
     if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
         /* Use auto setpoints */
+        controls[0] = control_last_throttle + (controls[0] - control_last_throttle) * 0.2f;
+        control_last_throttle = controls[0];
         param.data.u16[0] = (uint16_t)(controls[0] * (float)UINT16_MAX);
         param.data.u16[1] = (uint16_t)(controls[1] * (float)UINT16_MAX);
         param.data.u16[2] = (uint16_t)(controls[2] * (float)UINT16_MAX);

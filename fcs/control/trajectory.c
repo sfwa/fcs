@@ -421,7 +421,7 @@ const float *restrict wind) {
     reference[11] = tmp2[1];
     reference[12] = tmp2[2];
     /* FIXME: reference points should be specified in the control config. */
-    reference[NMPC_STATE_DIM + 0] = 0.4f;
+    reference[NMPC_STATE_DIM + 0] = 0.3f;
     reference[NMPC_STATE_DIM + 1u] = 0.45f;
     reference[NMPC_STATE_DIM + 2u] = 0.45f;
 }
