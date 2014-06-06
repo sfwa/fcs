@@ -459,7 +459,7 @@ void fcs_control_tick(void) {
     fcs_parameter_set_device_id(&param, 0);
     if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
         /* Use auto setpoints */
-        controls[0] = control_last_throttle + (controls[0] - control_last_throttle) * 0.2f;
+        controls[0] = control_last_throttle + (controls[0] - control_last_throttle) * 0.1f;
         control_last_throttle = controls[0];
         param.data.u16[0] = (uint16_t)(controls[0] * (float)UINT16_MAX);
         param.data.u16[1] = (uint16_t)(controls[1] * (float)UINT16_MAX);
