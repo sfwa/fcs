@@ -63,6 +63,7 @@ static uint32_t control_infeasibility_timer;
 static uint32_t control_tick;
 static uint32_t control_hold_timer;
 static uint32_t control_manual_timer;
+static uint32_t control_auto_timer;
 static float control_last_throttle;
 
 
@@ -114,8 +115,8 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 6e1, 6e1 };
-    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.25f, 0.25f, 0.25f };
+    float control_weights[NMPC_CONTROL_DIM] = { 3e1, 6e1, 6e1 };
+    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.15f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
     /* Clear GPIO outs */
@@ -214,13 +215,17 @@ void fcs_control_tick(void) {
     if (fcs_parameter_find_by_type_and_device(
             measurement_log, FCS_PARAMETER_CONTROL_MODE, 1u, &param) &&
             param.data.u8[0] == 0u) {
+        control_auto_timer = 0;
         control_manual_timer++;
         if (control_manual_timer > FCS_CONTROL_MANUAL_TRANSITION_TIMEOUT) {
             control_state.mode = FCS_CONTROL_MODE_MANUAL;
         }
     } else {
         control_manual_timer = 0;
-        control_state.mode = FCS_CONTROL_MODE_AUTO;
+        control_auto_timer++;
+        if (control_auto_timer > FCS_CONTROL_AUTO_TRANSITION_TIMEOUT) {
+            control_state.mode = FCS_CONTROL_MODE_AUTO;
+        }
     }
 
     /*

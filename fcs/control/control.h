@@ -67,6 +67,7 @@ The number of control ticks (@ 50Hz) during which the input control mode must
 be set to manual before the current path is interrupted.
 */
 #define FCS_CONTROL_MANUAL_TRANSITION_TIMEOUT 10u
+#define FCS_CONTROL_AUTO_TRANSITION_TIMEOUT 5u
 
 enum fcs_path_type_t {
     FCS_PATH_LINE = 'L',
