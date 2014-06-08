@@ -137,7 +137,7 @@ float t) {
         mod_2pi_f((float)atan2((end->lon - start->lon) * cos(last_point->lat),
                                end->lat - start->lat));
     new_point->pitch = start->pitch + x * (end->pitch - start->pitch) +
-                       6.0f * ((float)M_PI / 180.0f);
+                       3.0f * ((float)M_PI / 180.0f);
 
     /* Interpolate roll in whichever direction is the shortest. */
     target_roll = end->roll - start->roll;

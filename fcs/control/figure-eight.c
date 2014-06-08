@@ -168,7 +168,7 @@ const struct fcs_waypoint_t *end, float t) {
 
     new_point->alt = start->alt;
     new_point->airspeed = target_airspeed;
-    new_point->pitch = 6.0f * ((float)M_PI / 180.0f);
+    new_point->pitch = 3.0f * ((float)M_PI / 180.0f);
     new_point->flags = new_direction;
 
     /* Always returning t means we never advance to the next path. */

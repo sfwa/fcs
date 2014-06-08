@@ -114,8 +114,8 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 3e1, 6e1, 6e1 };
-    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.2f, 0.25f, 0.25f };
+    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 6e1, 6e1 };
+    float lower_control_bound[NMPC_CONTROL_DIM] = { 0.25f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
     /* Clear GPIO outs */
