@@ -374,25 +374,25 @@ def recv_state_from_xplane(s):
             elif fields[1] == "sim/flightmodel/position/longitude":
                 sim_state["lon"] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/elevation":
-                sim_state["alt"] = float(fields[2]) + random.uniform(-1.0, 1.0)
+                sim_state["alt"] = float(fields[2])
             elif fields[1] == "sim/flightmodel/position/local_vx":
-                sim_state["velocity"][1] = float(fields[2]) + random.uniform(-2.0, 2.0)
+                sim_state["velocity"][1] = float(fields[2])
             elif fields[1] == "sim/flightmodel/position/local_vy":
-                sim_state["velocity"][2] = -float(fields[2]) + random.uniform(-2.0, 2.0)
+                sim_state["velocity"][2] = -float(fields[2])
             elif fields[1] == "sim/flightmodel/position/local_vz":
-                sim_state["velocity"][0] = -float(fields[2]) + random.uniform(-2.0, 2.0)
+                sim_state["velocity"][0] = -float(fields[2])
             elif fields[1] == "sim/flightmodel/position/psi":
-                sim_ref["attitude_yaw"] = math.radians(float(fields[2])) + random.uniform(-0.1, 0.1)
+                sim_ref["attitude_yaw"] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/theta":
-                sim_ref["attitude_pitch"] = math.radians(float(fields[2])) + random.uniform(-0.1, 0.1)
+                sim_ref["attitude_pitch"] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/phi":
-                sim_ref["attitude_roll"] = math.radians(float(fields[2])) + random.uniform(-0.1, 0.1)
+                sim_ref["attitude_roll"] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/P":
-                sim_state["angular_velocity"][0] = math.radians(float(fields[2])) + random.uniform(-0.2, 0.2)
+                sim_state["angular_velocity"][0] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/Q":
-                sim_state["angular_velocity"][1] = math.radians(float(fields[2])) + random.uniform(-0.2, 0.2)
+                sim_state["angular_velocity"][1] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/R":
-                sim_state["angular_velocity"][2] = math.radians(float(fields[2])) + random.uniform(-0.2, 0.2)
+                sim_state["angular_velocity"][2] = math.radians(float(fields[2]))
             elif fields[1] == "sim/weather/wind_now_x_msc":
                 sim_ref["wind_e"] = float(fields[2])
             elif fields[1] == "sim/weather/wind_now_y_msc":
@@ -420,7 +420,7 @@ def recv_state_from_xplane(s):
 
 
 def send_control_to_xplane(s, controls):
-    update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % controls[0]
+    update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % (controls[0] - 0.15)
     update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 1.5)
     update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 1.5)
     s.sendall(update)
