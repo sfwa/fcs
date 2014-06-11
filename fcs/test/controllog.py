@@ -139,8 +139,11 @@ if __name__ == "__main__":
 
     i = 0
     for logf in plog.iterlogs(infile):
-        outfile.write(tick(i, logf))
-        outfile.flush()
+        try:
+            outfile.write(tick(i, logf))
+            outfile.flush()
+        except Exception:
+            pass
         i += 1
 
     infile.close()

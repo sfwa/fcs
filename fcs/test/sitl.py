@@ -677,8 +677,9 @@ if __name__ == "__main__":
     fcs.nav_state.paths[4 + len(pattern_points)].next_path_id = 0xFFFF
 
     # Register the path with the FCS
-    #fcs.nav_state.reference_path_id[0] = 0
-    #fcs._fcs.fcs_control_reset()
+    fcs.control_state.mode = 1
+    fcs.nav_state.reference_path_id[0] = 0
+    fcs._fcs.fcs_control_reset()
 
     sock = connect_to_xplane()
     reset_xplane_state(sock)
@@ -729,7 +730,7 @@ if __name__ == "__main__":
                 "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
                 "path=%4d, flags=%8x"
             ) % (
-                (time.time() - t, ) +
+                (t, ) +
                 plog.lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
                            ref_point.get("alt", 0)), (sim_state["lat"],
                            sim_state["lon"], sim_state["alt"])) +

@@ -93,9 +93,9 @@ const struct fcs_waypoint_t *end, float t) {
     /* If delta yaw > start yaw - last yaw, it's time to change direction. */
     target_yaw = start->yaw - last_point->yaw;
     if (target_yaw > M_PI) {
-        target_yaw -= M_PI * 2.0;
+        target_yaw -= (float)(M_PI * 2.0);
     } else if (target_yaw < -M_PI) {
-        target_yaw += M_PI * 2.0;
+        target_yaw += (float)(M_PI * 2.0);
     }
 
     /*
@@ -118,10 +118,10 @@ const struct fcs_waypoint_t *end, float t) {
     yaw_rate = target_airspeed * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
 
     if (last_direction == FCS_WAYPOINT_FLAG_FIGURE8_RIGHT &&
-            target_yaw > 0.0 && target_yaw < yaw_rate * t + wind_yaw) {
+            target_yaw > 0.0f && target_yaw < yaw_rate * t + wind_yaw) {
         new_direction = FCS_WAYPOINT_FLAG_FIGURE8_LEFT;
     } else if (last_direction == FCS_WAYPOINT_FLAG_FIGURE8_LEFT &&
-               target_yaw < 0.0 && target_yaw > -yaw_rate * t - wind_yaw) {
+               target_yaw < 0.0f && target_yaw > -yaw_rate * t - wind_yaw) {
         new_direction = FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
     } else if (last_direction != FCS_WAYPOINT_FLAG_FIGURE8_RIGHT &&
                last_direction != FCS_WAYPOINT_FLAG_FIGURE8_LEFT) {
@@ -137,9 +137,10 @@ const struct fcs_waypoint_t *end, float t) {
     new_point->roll = target_roll;
 
     /* Work out next yaw value, constraining to 0..2*pi. */
-    new_point->yaw = mod_2pi_f(last_point->yaw + yaw_rate * t + wind_yaw);
     if (new_direction != last_direction) {
         new_point->yaw = start->yaw;
+    } else {
+        new_point->yaw = mod_2pi_f(last_point->yaw + yaw_rate * t + wind_yaw);
     }
 
     sy = (float)sin(start->yaw);

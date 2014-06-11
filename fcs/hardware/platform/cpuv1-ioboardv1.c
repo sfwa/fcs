@@ -270,21 +270,22 @@ void fcs_board_init_platform(void) {
             .error = 1.0f,
             /*
             To convert from 16-bit unsigned ints to input voltage (ie. voltage
-            into the op-amp), divide by 65536 then multiply by (VCC*2). So,
-            for 5V VCC, divide by 65536 and multiply by 10.
+            into the op-amp), divide by 32752, then multiply by Vref (which is
+            VDDANA * 0.6 = 1.98V), then multiply by the op-amp scaling factor
+            of 3.
 
             Then, for the Attopilot 180A I/V sensor, the scaling factors are
             as follows:
             Voltage: 63.69mV/V (multiply by a factor of 15.70)
             Current: 18.3mV/A (multiply by a factor of 54.64)
 
-            So for a raw reading of 4114 for the voltage input with a 5V VCC,
-            divide by (65536 / 10) to get 0.628V in, and then multiply by the
+            So for a raw reading of 4114 for the voltage input, multiply by
+            (1.98 / 32752 * 3) to get 0.746V in, and then multiply by the
             I/V sensor voltage scale factor of 15.7 to get an input voltage of
-            9.86V.
+            11.7V.
             */
             .params = { 0.0, 15.70f, 0.0, 54.64f },
-            .scale_factor = 10.0f / 65535.0f
+            .scale_factor = 3.0f * 1.98f / 32752.0f
         }
     };
 

@@ -677,6 +677,7 @@ if __name__ == "__main__":
         try:
             #if n % 100 == 0:
             result = print_estimate_log(logf)
+            print repr(logf)
             #if result[0]:
             #    print_control_log(logf)
             #    print "%.3f,%.3f,%.2f,%.3f W" % (lla_to_ned((waypoint["lat"], waypoint["lon"], waypoint["alt"]), result[1:]) + (math.degrees(waypoint["yaw"]), ))
