@@ -10,8 +10,9 @@ mode: 2x uint8 = 5
 static pressure: 1x int32 = 7
 static temp: 1x int16 = 5
 wmm field: 3x float32 = 15
+status: 2x uint16 = 7
 
-total = 94 bytes
+total = 101 bytes
 
 AHRS error:
 
@@ -25,20 +26,18 @@ total = 28 bytes
 Control data:
 
 values: 3x uint16 = 9
-gpio: 1x uint8 = 4
-path ID: 1x uint16 = 5
-reference waypoint (packet): 40 + 7 = 47
+path ID: 2x uint16 = 7
 version: 1x uint32 = 7
+reference waypoint (packet): 40 + 7 = 47
+status: 4x float32 = 19
 
-total = 71 bytes
+total = 89 bytes
 
 Status data:
 
 I/O boards x2: 2x uint16 = 7
-AHRS/UKF: 1x float32 = 7
-NMPC: 4x float32 = 19
 
-total = 37 bytes
+total = 7 bytes
 
 -> 231 bytes + COBS-R + NUL + NUL + CRC32 = 238
 

@@ -150,8 +150,12 @@ const struct fcs_log_t *restrict src) {
                src->length <= FCS_LOG_MAX_LENGTH);
     fcs_assert(dst->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
     fcs_assert(dst->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
-    fcs_assert(src->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
-    fcs_assert(src->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
+
+    /* Make sure the source log is valid */
+    if (src->data[0] <= (uint8_t)FCS_LOG_TYPE_INVALID ||
+            src->data[0] >= FCS_LOG_TYPE_LAST) {
+        return false;
+    }
 
     /* Make sure there's enough room in dst */
     if (dst->length + src->length - 5u > FCS_LOG_MAX_LENGTH) {

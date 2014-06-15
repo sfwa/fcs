@@ -95,8 +95,8 @@ static void _fcs_core_pll_setup(void) {
     volatile CSL_BootcfgRegs *const cfg = (CSL_BootcfgRegs*)CSL_BOOT_CFG_REGS;
 
     /* 1. Wait for Stabilization time (min 100 us) */
-    /* This will either be 100us or 1ms depending on PLL bypass status. */
-    _fcs_delay_cycles(100000);
+    /* This will either be 10ms or 100ms depending on PLL bypass status. */
+    _fcs_delay_cycles(10000000);
 
     /*
     2. Check the status of BYPASS bit in SECCTL register,
@@ -160,7 +160,7 @@ static void _fcs_core_pll_setup(void) {
         2g. Stay in a loop such that the bit is set for 5 µs (minimum) and
         then clear the bit.
         */
-        _fcs_delay_cycles(5000); /* 5us or 50us depending on freq */
+        _fcs_delay_cycles(50000); /* 50us or 500us depending on freq */
 
         /* 2h. Power up the PLL */
         pll->PLLCTL &= ~(0x00000002);
@@ -263,7 +263,7 @@ static void _fcs_core_pll_setup(void) {
     pll->PLLCTL |= 0x00000008;
 
     /* 10. Wait for PLL Reset assertion Time (min: 7 us) */
-    _fcs_delay_cycles(7000); /* 7us or 70us depending on freq */
+    _fcs_delay_cycles(70000); /* 70us or 700us depending on freq */
 
     /* 11. In PLLCTL, write PLLRST = 0 (PLL reset is de-asserted) */
     pll->PLLCTL &= ~(0x00000008);
@@ -272,7 +272,7 @@ static void _fcs_core_pll_setup(void) {
     12. PLL Lock Delay needs to be 500 RefClk periods * (PLLD + 1)
     i.e., Wait for at least 500 * CLKIN cycles * (PLLD + 1) (PLL lock time)
     */
-    _fcs_delay_cycles(500 * 10 * (FCS_CORE_PLL_DIV + 1)); /* 5us delay */
+    _fcs_delay_cycles(500 * 100 * (FCS_CORE_PLL_DIV + 1)); /* 50us delay */
 
     /*
     13. In SECCTL, write BYPASS = 0 (enable PLL mux to switch to PLL mode)
@@ -337,7 +337,7 @@ static void _fcs_ddr3_pll_setup(void) {
     cfg->DDR3_PLL_CTL1 |= ((temp >> 8) & 0x0000000F);
 
     /* 6. Wait for the PLL Reset time (min: 5 us)  */
-    _fcs_delay_cycles(7000); /* 7us delay */
+    _fcs_delay_cycles(10000); /* 10us delay */
 
     /* 7. In DDR3PLLCTL1, write PLLRST = 0 to bring PLL out of reset */
     cfg->DDR3_PLL_CTL1 &= ~(0x00002000);
@@ -345,7 +345,7 @@ static void _fcs_ddr3_pll_setup(void) {
     /*
     8. Wait at least 500 * REFCLK cycles * PLLD (this is the PLL lock time)
     */
-    _fcs_delay_cycles(70000); /* 70us delay */
+    _fcs_delay_cycles(100000); /* 100us delay */
 
     /*
     9. Put the PLL in PLL Mode
@@ -354,6 +354,8 @@ static void _fcs_ddr3_pll_setup(void) {
     |BWADJ[7:0] |BYPASS |Reserved      |PLLM     |PLLD  |
     */
     cfg->DDR3_PLL_CTL0 &= ~(0x00800000); /* Clear bit 23 */
+
+    _fcs_delay_cycles(100000); /* 100us delay */
 }
 
 static void _fcs_ddr3_emif_setup(void) {
@@ -413,7 +415,7 @@ static void _fcs_ddr3_emif_setup(void) {
     Wait for PLL to lock = min 500 ref clock cycles.
     With refclk = 100MHz, = 5000 ns = 5us.
     */
-    _fcs_delay_cycles(7000); /* Actually a 7us delay */
+    _fcs_delay_cycles(10000); /* Actually a 10us delay */
 
     /**************** 3.2 DDR3 PLL Configuration ****************************/
     /* Done before */
@@ -501,8 +503,8 @@ static void _fcs_ddr3_emif_setup(void) {
                         (0x05 << 28) + /* T_PDLL_UL always 5 */
                         (0x0F << 0); /* T_RAS_MAX always 0xF */
 
-    /* Wait 600us for HW init to complete */
-    _fcs_delay_cycles(600000);
+    /* Wait 6ms for HW init to complete */
+    _fcs_delay_cycles(6000000);
 
     ddr3->SDRAM_REF_CTRL = 0x00001450;       /* Refresh rate = (7.8*666MHz) */
 
@@ -519,7 +521,7 @@ static void _fcs_ddr3_emif_setup(void) {
     Wait for min 1048576 DDR clock cycles for leveling to complete =
     1048576 * 1.5ns = 1572864ns = 1.57ms.
     */
-    _fcs_delay_cycles(5000000); /* 5ms delay */
+    _fcs_delay_cycles(10000000); /* 10ms delay */
 }
 
 /*

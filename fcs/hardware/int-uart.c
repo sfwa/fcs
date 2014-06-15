@@ -179,7 +179,7 @@ void fcs_int_uart_reset(uint8_t uart_idx) {
 
     We try both
     */
-    fcs_assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 3000000);
+    fcs_assert(2400 <= uart_baud[uart_idx] && uart_baud[uart_idx] <= 4000000);
 
     float divisor16 = 166666666.67f / (float)(uart_baud[uart_idx] * 16);
     float divisor13 = 166666666.67f / (float)(uart_baud[uart_idx] * 13);
@@ -346,8 +346,8 @@ void fcs_int_uart_set_baud_rate(uint8_t uart_idx, uint32_t baud) {
 uint32_t fcs_int_uart_check_error(uint8_t uart_idx) {
     fcs_assert(uart_idx == 0 || uart_idx == 1);
 
-    volatile CSL_UartRegs *const uart[2] =
-        { (CSL_UartRegs*)CSL_UART_REGS, (CSL_UartRegs*)CSL_UART_B_REGS };
+    volatile CSL_UartRegs * uart[2] =
+        { (volatile CSL_UartRegs*)CSL_UART_REGS, (volatile CSL_UartRegs*)CSL_UART_B_REGS };
 
     /*
     LSR: Line Status Register (section 3.8 in SPRUGP1)
@@ -818,7 +818,6 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
     fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
 
     uint16_t nbytes = 0;
     if (rx_last_buf_size[uart_idx] != 0) {
@@ -833,15 +832,6 @@ uint16_t fcs_int_uart_get_rx_edma_count(uint8_t uart_idx) {
                (edma3->PARAMSET[rx_edma_event[uart_idx]].A_B_CNT >> 16u);
     }
 
-    /*
-    If there are bytes available, turn the output LED on -- GPIO 23 or 27
-    */
-    if (nbytes > 0) {
-        gpio->BANK_REGISTERS[0].OUT_DATA |= 0x00800000 << (uart_idx ? 4u : 0);
-    } else {
-        gpio->BANK_REGISTERS[0].OUT_DATA &= 0xFF7FFFFF << (uart_idx ? 4u : 0);
-    }
-
     return nbytes;
 }
 
@@ -849,7 +839,6 @@ uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
     fcs_assert(uart_idx == 0 || uart_idx == 1);
 
     volatile CSL_TpccRegs *const edma3 = (CSL_TpccRegs*)CSL_EDMA2CC_REGS;
-    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
 
     uint16_t nbytes = 0;
     if (tx_last_buf_size[uart_idx] != 0) {
@@ -860,15 +849,6 @@ uint16_t fcs_int_uart_get_tx_edma_count(uint8_t uart_idx) {
         */
         nbytes = tx_last_buf_size[uart_idx] -
                (edma3->PARAMSET[tx_edma_event[uart_idx]].A_B_CNT >> 16);
-    }
-
-    /*
-    If there are bytes available, turn the output LED on -- GPIO 22 or 26
-    */
-    if (nbytes > 0) {
-        gpio->BANK_REGISTERS[0].OUT_DATA |= 0x00400000 << (uart_idx ? 4u : 0);
-    } else {
-        gpio->BANK_REGISTERS[0].OUT_DATA &= 0xFFBFFFFF << (uart_idx ? 4u : 0);
     }
 
     return nbytes;

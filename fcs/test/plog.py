@@ -311,10 +311,10 @@ class ParameterLog(list):
         data = cobsr.decode(data.strip('\x00'))
 
         data_crc = struct.pack("<L" , binascii.crc32(data[:-4]) & 0xFFFFFFFF)
-        #if data[-4:] != data_crc:
-        #    raise ValueError("CRC mismatch: provided %s, calculated %s" %
-        #                     (binascii.b2a_hex(data[-4:]),
-        #                      binascii.b2a_hex(data_crc)))
+        if data[-4:] != data_crc:
+            raise ValueError("CRC mismatch: provided %s, calculated %s" %
+                             (binascii.b2a_hex(data[-4:]),
+                              binascii.b2a_hex(data_crc)))
 
         log_type, _, tick = struct.unpack("<BHH", data[0:5])
         data = data[5:]
@@ -433,7 +433,7 @@ def iterlogs(stream):
             try:
                 logf = ParameterLog.deserialize(data)
             except Exception:
-                pass # print "Invalid packet: %s" % binascii.b2a_hex(data)
+                print "Invalid packet: %s" % binascii.b2a_hex(data)
             else:
                 yield logf
             data = ''
@@ -637,7 +637,7 @@ def print_control_log(data):
         "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
         "path=%4d"
     ) % (
-        (time.time() - t, ) +
+        (0.0, ) +
         lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
                    ref_point.get("alt", 0)), (sim_state["lat"],
                    sim_state["lon"], sim_state["alt"])) +
@@ -657,15 +657,15 @@ def print_control_log(data):
 
 
 if __name__ == "__main__":
-    print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode"
+    #print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode"
 
-    #print "gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
-    #      "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
-    #      "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
-    #      "control_rail_1,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
-    #      "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
-    #      "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
-    #      "control_lail_2,control_rail_2"
+    print "gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
+          "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
+          "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
+          "control_rail_1,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
+          "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
+          "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
+          "control_lail_2,control_rail_2"
 
     n = 0
     for logf in iterlogs(sys.stdin):
@@ -676,17 +676,17 @@ if __name__ == "__main__":
 
         try:
             #if n % 100 == 0:
-            result = print_estimate_log(logf)
-            print repr(logf)
+            #result = print_estimate_log(logf)
+            #print repr(logf)
             #if result[0]:
-            #    print_control_log(logf)
+            print_measurement_log(logf)
             #    print "%.3f,%.3f,%.2f,%.3f W" % (lla_to_ned((waypoint["lat"], waypoint["lon"], waypoint["alt"]), result[1:]) + (math.degrees(waypoint["yaw"]), ))
             #    print waypoint
             #    #print_measurement_log(logf)
             n += 1
         except Exception:
-            pass
+            #pass
             #print repr(logf)
-            #raise
+            raise
             #print "Incomplete packet"
 

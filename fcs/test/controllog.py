@@ -66,7 +66,7 @@ def tick(t, data):
             control_mode[param.device_id] = pv[0]
         elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT:
             control_values = map(lambda x: float(x) / 65535.0, pv)
-        elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_POS:
+        elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_POS and param.device_id == 1:
             control_pos = map(lambda x: float(x) / 65535.0, pv)
         elif pt == plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID:
             control_path = pv[0]
@@ -87,9 +87,10 @@ def tick(t, data):
 
     control_data = (control_cycles, control_obj_val, control_errors,
                     control_resets)
-    if control_mode[1] != 1 or not state_pos \
-            or not control_refp or LAST_CONTROL_DATA == control_data:
+    if not state_pos or not control_refp : #or LAST_CONTROL_DATA == control_data:
         return ""
+    #if control_mode[1] != 1:
+    #    return ""
 
     LAST_CONTROL_DATA = control_data
 

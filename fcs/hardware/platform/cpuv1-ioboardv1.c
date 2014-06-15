@@ -125,12 +125,12 @@ void fcs_board_init_platform(void) {
     */
     enum fcs_stream_result_t result;
 
-    result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 2604168u);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_INT0, 2604166u);
     fcs_assert(result == FCS_STREAM_OK);
     result = fcs_stream_open(FCS_STREAM_UART_INT0);
     fcs_assert(result == FCS_STREAM_OK);
 
-    result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 2604168u);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 2604166u);
     fcs_assert(result == FCS_STREAM_OK);
     result = fcs_stream_open(FCS_STREAM_UART_INT1);
     fcs_assert(result == FCS_STREAM_OK);
@@ -317,7 +317,6 @@ void fcs_board_init_platform(void) {
     board_reference_alt = 0.0;
 }
 
-#include <stdio.h>
 void fcs_board_tick(void) {
     uint8_t out_buf[FCS_LOG_SERIALIZED_LENGTH];
     size_t out_buf_len, write_len, i;
@@ -332,12 +331,42 @@ void fcs_board_tick(void) {
     uint16_t frame_id;
 
     /*
-    Read attitude, WMM field, static pressure, static temp and AHRS mode from
-    old estimate log
+    Merge the AHRS estimate log and the NMPC control log and send them to the
+    I/O boards.
     */
+    control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_READ);
+    fcs_assert(control_log);
+
     estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, FCS_MODE_READ);
     fcs_assert(estimate_log);
 
+    /*
+    Copy control log then merge estimate log so that if there's not enough
+    space for whatever reason, the control output still gets through.
+    */
+    fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
+    (void)fcs_log_merge(&out_log, control_log);
+    (void)fcs_log_merge(&out_log, estimate_log);
+
+    /*
+    Serialize the merged log and write it to both internal UARTs (I/O boards
+    1 and 2).
+
+    Right-align the data and pad the left with zeros so it becomes available
+    at a consistent time regardless of length.
+    */
+    out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
+    fcs_assert(out_buf_len < 240u);
+    memmove(&out_buf[240u - out_buf_len], out_buf, out_buf_len);
+    memset(out_buf, 0, 240u - out_buf_len);
+
+    write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, 240u);
+    //fcs_assert(write_len == 256u);
+
+    /*
+    Read attitude, WMM field, static pressure, static temp and AHRS mode from
+    old estimate log
+    */
     got_result = fcs_parameter_find_by_type_and_device(
         estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_Q, 0, &param);
     if (got_result) {
@@ -443,10 +472,8 @@ void fcs_board_tick(void) {
         If the time since last I/O board tick/reset is too high, the stream
         should be reset.
         */
-        if (fcs_stream_check_error((enum fcs_stream_device_t)
-        		(FCS_STREAM_UART_INT0 + i)) == FCS_STREAM_ERROR) {
-            fcs_global_counters.ioboard_packet_rx_err[i]++;
-        }
+        (void)fcs_stream_check_error(
+            (enum fcs_stream_device_t)(FCS_STREAM_UART_INT0 + i));
 
         /*
         If the board has timed out, start the reset for stream 0. Otherwise,
@@ -483,13 +510,6 @@ void fcs_board_tick(void) {
                                  board_reference_alt);
     _set_gps_position(measurement_log, hal_log, &board_calibration);
     _set_gps_velocity(measurement_log, hal_log, &board_calibration);
-
-    /*
-    Merge the AHRS estimate log and the NMPC control log and send them to the
-    I/O boards.
-    */
-    control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_READ);
-    fcs_assert(control_log);
 
     /* Check for control log updates */
     frame_id = fcs_log_get_frame_id(control_log);
@@ -547,23 +567,6 @@ void fcs_board_tick(void) {
     /* fcs_assert(out_buf_len == write_len); */
 
     /*
-    Copy control log then merge estimate log so that if there's not enough
-    space for whatever reason, the control output still gets through.
-    */
-    fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
-    (void)fcs_log_merge(&out_log, control_log);
-    (void)fcs_log_merge(&out_log, estimate_log);
-
-    /*
-    Serialize the merged log and write it to both internal UARTs (I/O boards
-    1 and 2).
-    */
-    out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
-
-    write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, out_buf_len);
-    fcs_assert(out_buf_len == write_len);
-
-    /*
     Now merge in the measurement log and HAL log, then send everything to the
     CPU via the USB stream.
     */
@@ -612,12 +615,31 @@ struct fcs_log_t *out_log) {
     bool result = false, got_message = false;
 
     nbytes = fcs_stream_read(dev, buf, 511);
+
+#ifdef __TI_COMPILER_VERSION__
+    volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+
+    /*
+    If there are bytes available, turn the output LED on -- GPIO 23 or 27
+    */
+    if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
+        if (nbytes) {
+            gpio->BANK_REGISTERS[0].OUT_DATA |=
+                0x00400000 << (board_id ? 4u : 0);
+        } else {
+            gpio->BANK_REGISTERS[0].OUT_DATA &=
+                0xFFBFFFFF << (board_id ? 4u : 0);
+        }
+    }
+#endif
+
     while (i < nbytes) {
         ch = buf[i];
         i++;
 
-        if (ch == 0x00 || stream_msg_idx[dev]) {
-            if (ch == 0x00 && stream_msg_idx[dev]) {
+        if (ch == 0x00 || stream_msg_idx[dev]) { /* started packet, or already
+                                                    in one */
+            if (ch == 0x00 && stream_msg_idx[dev]) { /* ending a packet */
                 if (stream_msg_buf[dev][stream_msg_idx[dev] - 1u] == 0x00) {
                     /*
                     This was a false start -- the previous character was
@@ -636,6 +658,7 @@ struct fcs_log_t *out_log) {
 
             if (stream_msg_idx[dev] >= FCS_LOG_SERIALIZED_LENGTH) {
                 stream_msg_idx[dev] = 0;
+                got_message = false;
             }
         }
 
@@ -654,6 +677,23 @@ struct fcs_log_t *out_log) {
     if (result) {
         fcs_log_set_parameter_device_id(&plog, (uint8_t)board_id);
         fcs_log_merge(out_log, &plog);
+
+#ifdef __TI_COMPILER_VERSION__
+        if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
+            gpio->BANK_REGISTERS[0].OUT_DATA &=
+                0xFF7FFFFF << (board_id ? 4u : 0);
+        }
+#endif
+    } else {
+#ifdef __TI_COMPILER_VERSION__
+        /*
+        If there's no packet available, turn the output LED on -- GPIO 23 or 27
+        */
+        if (dev == FCS_STREAM_UART_INT0 || dev == FCS_STREAM_UART_INT1) {
+            gpio->BANK_REGISTERS[0].OUT_DATA |=
+                0x00800000 << (board_id ? 4u : 0);
+        }
+#endif
     }
 
     return result;

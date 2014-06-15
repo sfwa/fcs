@@ -365,6 +365,13 @@ struct fcs_parameter_t *restrict parameter) {
     within the packet.
     */
     size_t length = fcs_parameter_get_length(parameter);
+
+    /* Make sure the source log is valid */
+    if (plog->data[0] <= (uint8_t)FCS_LOG_TYPE_INVALID ||
+            plog->data[0] >= FCS_LOG_TYPE_LAST) {
+        return false;
+    }
+
     if (plog->length + length > FCS_LOG_MAX_LENGTH) {
         return false;
     }
@@ -381,12 +388,16 @@ Set the device ID of all parameters in the log to `device_id`
 void fcs_log_set_parameter_device_id(struct fcs_log_t *restrict plog,
 uint8_t device_id) {
     fcs_assert(plog);
-    fcs_assert(plog->data[0] > (uint8_t)FCS_LOG_TYPE_INVALID);
-    fcs_assert(plog->data[0] < (uint8_t)FCS_LOG_TYPE_LAST);
     fcs_assert(FCS_LOG_MIN_LENGTH <= plog->length &&
                plog->length <= FCS_LOG_MAX_LENGTH);
 
     size_t i, length = 0;
+
+    /* Make sure the source log is valid */
+    if (plog->data[0] <= (uint8_t)FCS_LOG_TYPE_INVALID ||
+            plog->data[0] >= FCS_LOG_TYPE_LAST) {
+        return;
+    }
 
     for (i = 5u; i < plog->length; i += length) {
         length = _extract_length(plog->data[i]);
@@ -414,6 +425,12 @@ uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
     fcs_assert(out_parameter);
 
     size_t i, length;
+
+    /* Make sure the source log is valid */
+    if (plog->data[0] <= (uint8_t)FCS_LOG_TYPE_INVALID ||
+            plog->data[0] >= FCS_LOG_TYPE_LAST) {
+        return false;
+    }
 
     for (i = 5u; i < plog->length;) {
         length = _extract_length(plog->data[i]);
@@ -450,6 +467,12 @@ uint8_t device_id, struct fcs_parameter_t *restrict out_parameter) {
     fcs_assert(out_parameter);
 
     size_t i, length;
+
+    /* Make sure the source log is valid */
+    if (plog->data[0] <= (uint8_t)FCS_LOG_TYPE_INVALID ||
+            plog->data[0] >= FCS_LOG_TYPE_LAST) {
+        return false;
+    }
 
     for (i = 5u; i < plog->length;) {
         length = _extract_length(plog->data[i]);
@@ -489,6 +512,12 @@ struct fcs_parameter_t *restrict out_parameters, size_t max_parameters) {
     fcs_assert(out_parameters);
 
     size_t i, length, count = 0;
+
+    /* Make sure the source log is valid */
+    if (plog->data[0] <= (uint8_t)FCS_LOG_TYPE_INVALID ||
+            plog->data[0] >= FCS_LOG_TYPE_LAST) {
+        return false;
+    }
 
     for (i = 5u; i < plog->length && count < max_parameters;) {
         length = _extract_length(plog->data[i]);

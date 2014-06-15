@@ -194,7 +194,7 @@ void fcs_control_tick(void) {
     struct fcs_log_t *control_log, *measurement_log;
     struct fcs_path_t *path;
     struct fcs_parameter_t param, param2;
-    float controls[NMPC_CONTROL_DIM], alt_diff;
+    float controls[NMPC_CONTROL_DIM], alt_diff, yaw, pitch, roll;
     uint32_t start_t = cycle_count();
     int32_t ms_since_last_gps, ms_since_last_data;
     uint16_t manual_setpoint[NMPC_CONTROL_DIM];
@@ -423,9 +423,22 @@ void fcs_control_tick(void) {
     */
     if (control_state.mode == FCS_CONTROL_MODE_MANUAL || !is_path_valid()) {
         /*
-        If in manual mode or the path is uninitialized, enter a holding
+        If in manual mode or the path is uninitialized, initialize the
+        reference trajectory with the current state and enter a holding
         pattern.
         */
+        yaw_pitch_roll_from_quaternion_f(&yaw, &pitch, &roll,
+                                         state_estimate.attitude);
+
+        nav_state.reference_trajectory[0].lat = state_estimate.lat;
+        nav_state.reference_trajectory[0].lon = state_estimate.lon;
+        nav_state.reference_trajectory[0].alt = state_estimate.alt;
+        nav_state.reference_trajectory[0].yaw = yaw;
+        nav_state.reference_trajectory[0].pitch = pitch;
+        nav_state.reference_trajectory[0].roll = roll;
+        nav_state.reference_trajectory[0].airspeed =
+            FCS_CONTROL_DEFAULT_AIRSPEED;
+
         fcs_trajectory_start_hold(&nav_state, &state_estimate);
         fcs_trajectory_recalculate(&nav_state, &state_estimate);
     } else if (control_timeout || needs_path_reset ||
