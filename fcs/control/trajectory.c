@@ -69,13 +69,13 @@ void _get_next_reference_point(float *restrict state);
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     1e-4f, 1e-4f, 1e-2f, /* position */
     1e0f, 1e0f, 1e0f, /* velocity */
-    5e-1f, 1e0f, 1e0f, /* attitude */
+    2e0f, 2e0f, 2e0f, /* attitude */
     1e0f, 1e0f, 1e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
     1e-1f, 1e-1f, 3e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
-    5e-1f, 1e0f, 1e0f,  /* attitude */
+    2e0f, 2e0f, 2e0f,  /* attitude */
     1e0f, 1e0f, 1e0f /* angular velocity */
 };
 
