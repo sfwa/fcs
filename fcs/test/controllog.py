@@ -87,7 +87,7 @@ def tick(t, data):
 
     control_data = (control_cycles, control_obj_val, control_errors,
                     control_resets)
-    if not state_pos or not control_refp : #or LAST_CONTROL_DATA == control_data:
+    if not state_pos or not control_refp or LAST_CONTROL_DATA == control_data:
         return ""
     #if control_mode[1] != 1:
     #    return ""
@@ -144,7 +144,7 @@ if __name__ == "__main__":
             outfile.write(tick(i, logf))
             outfile.flush()
         except Exception:
-            pass
+            raise
         i += 1
 
     infile.close()

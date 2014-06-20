@@ -241,13 +241,7 @@ void fcs_ahrs_tick(void) {
             _vec_hasnan_d(error, 24u)) {
         _reset_state();
     } else {
-        /* Clear the downward component of wind.
-        if (ahrs_mode != FCS_MODE_ACTIVE && ahrs_mode != FCS_MODE_ARMED) {
-            state_values.wind_velocity[0] = 0.0;
-            state_values.wind_velocity[1] = 0.0;
-        }
-        */
-
+        /* Clear the downward component of wind. */
         state_values.wind_velocity[2] = 0.0;
         ukf_set_state(&state_values);
     }
@@ -421,25 +415,25 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     /* Horizontal and vertical error std dev in cm */
     tmp[0] = (int32_t)(6378000.0 * max(error[0], error[1]) * 1e2);
     tmp[1] = (int32_t)(error[2] * 1e2);
-    _set_estimate_value_i32(
-        estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_SD, 2u, tmp, 2u);
+    //_set_estimate_value_i32(
+    //    estimate_log, FCS_PARAMETER_ESTIMATED_POSITION_SD, 2u, tmp, 2u);
 
     /* Velocity error std dev in cm/s */
     tmp[0] = (int32_t)(vector3_norm_d(&error[3]) * 1e2);
-    _set_estimate_value_i32(
-        estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_SD, 2u, tmp, 1u);
+    //_set_estimate_value_i32(
+    //    estimate_log, FCS_PARAMETER_ESTIMATED_VELOCITY_SD, 2u, tmp, 1u);
 
     /* Attitude error std dev with +/- 2pi rad scaled to [-32767, 32767] */
     tmp[0] = (int32_t)(error[9] * ((double)INT16_MAX / M_PI) * 0.5);
     tmp[1] = (int32_t)(error[10] * ((double)INT16_MAX / M_PI) * 0.5);
     tmp[2] = (int32_t)(error[11] * ((double)INT16_MAX / M_PI) * 0.5);
-    _set_estimate_value_i32(
-        estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_SD, 2u, tmp, 3u);
+    //_set_estimate_value_i32(
+    //    estimate_log, FCS_PARAMETER_ESTIMATED_ATTITUDE_SD, 2u, tmp, 3u);
 
     /* Wind velocity error std dev in cm/s */
     tmp[0] = (int32_t)(vector3_norm_d(&error[18]) * 1e2);
-    _set_estimate_value_i32(
-        estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_SD, 2u, tmp, 1u);
+    //_set_estimate_value_i32(
+    //    estimate_log, FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_SD, 2u, tmp, 1u);
 
     /* Static pressure in Pa */
     /* TODO -- determine based on reference pressure/alt */

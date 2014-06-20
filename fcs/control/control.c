@@ -311,7 +311,7 @@ void fcs_control_tick(void) {
         fcs_assert(0 && "Mission boundary crossed");
     }
 
-    if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
+    if (false && control_state.mode == FCS_CONTROL_MODE_AUTO) { // FIXME
         /* Handle loss of data link and loss of GPS when in autonomous mode */
         if (ms_since_last_gps > 1000 && ms_since_last_data > 10000) {
             /* Lock up */

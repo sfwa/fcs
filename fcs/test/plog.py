@@ -141,8 +141,8 @@ class DataParameter(Parameter):
         (ValueType.FCS_VALUE_SIGNED, 16): 'h',
         (ValueType.FCS_VALUE_SIGNED, 32): 'l',
         (ValueType.FCS_VALUE_SIGNED, 64): 'q',
-        (ValueType.FCS_VALUE_FLOAT, 8): None,
-        (ValueType.FCS_VALUE_FLOAT, 16): None,
+        (ValueType.FCS_VALUE_FLOAT, 8): 'B', # shouldn't be needed
+        (ValueType.FCS_VALUE_FLOAT, 16): 'H', # shouldn't be needed
         (ValueType.FCS_VALUE_FLOAT, 32): 'f',
         (ValueType.FCS_VALUE_FLOAT, 64): 'd',
         # Shouldn't be needed!
@@ -218,8 +218,13 @@ class DataParameter(Parameter):
         value_fmt = cls.VALUE_FORMAT_CHAR[value_type, value_precision]
         value_len = value_count * int(value_precision / 8)
 
-        values = struct.unpack("<%d%s" % (value_count, value_fmt),
-                               data[0:value_len])
+        try:
+            values = struct.unpack("<%d%s" % (value_count, value_fmt),
+                                   data[0:value_len])
+        except:
+            pass
+            #print "Couldn't unpack parameter of type %d from count %d, precision %d: %s" % (
+            #            parameter_type, value_count, value_precision, binascii.b2a_hex(data[0:value_len]))
         data = data[value_len:]
 
         try:
@@ -268,17 +273,20 @@ class KeyValueParameter(Parameter):
     @classmethod
     def deserialize(cls, data):
         header, device_id, parameter_type = struct.unpack("<BBB", data[0:3])
-        value_len = header & 0x7f
+        value_len = int(header & 0x7f)
+        data = data[3:]
+        key = data[0:4]
+        data = data[4:]
 
         try:
             param = cls(device_id=device_id,
                         parameter_type=ParameterType(parameter_type),
-                        key=data[3:7], value=data[7:value_len + 7])
+                        key=key, value=data[0:value_len - 4])
         except Exception:
             #traceback.print_exc()
             param = None
 
-        return param, data[value_len + 7:]
+        return param, data[value_len - 4:]
 
 
 class LogType(Enum):
@@ -311,10 +319,10 @@ class ParameterLog(list):
         data = cobsr.decode(data.strip('\x00'))
 
         data_crc = struct.pack("<L" , binascii.crc32(data[:-4]) & 0xFFFFFFFF)
-        if data[-4:] != data_crc:
-            raise ValueError("CRC mismatch: provided %s, calculated %s" %
-                             (binascii.b2a_hex(data[-4:]),
-                              binascii.b2a_hex(data_crc)))
+        #if data[-4:] != data_crc:
+        #    raise ValueError("CRC mismatch: provided %s, calculated %s" %
+        #                     (binascii.b2a_hex(data[-4:]),
+        #                      binascii.b2a_hex(data_crc)))
 
         log_type, _, tick = struct.unpack("<BHH", data[0:5])
         data = data[5:]
@@ -365,6 +373,10 @@ class ParameterLog(list):
 
 
 def extract_waypoint(data):
+    if len(data) < 40:
+        data = data + "\x00" * (40 - len(data))
+    elif len(data) > 40:
+        data = data[0:40]
     return dict(zip(
         ("lat", "lon", "alt", "airspeed", "yaw", "pitch", "roll", "flags"),
         struct.unpack("<ddfffffL", data)))
@@ -433,7 +445,8 @@ def iterlogs(stream):
             try:
                 logf = ParameterLog.deserialize(data)
             except Exception:
-                print "Invalid packet: %s" % binascii.b2a_hex(data)
+                if len(data) != 13:
+                    print "Invalid packet: %s" % binascii.b2a_hex(data)
             else:
                 yield logf
             data = ''
@@ -477,6 +490,8 @@ def print_estimate_log(data):
     wind_v = [0, 0, 0]
     mode = 'X'
     control_mode = 0
+    status = [-1, 0, 0, 0]
+    path = 0
 
     for param in data:
         pt = param.parameter_type
@@ -506,6 +521,10 @@ def print_estimate_log(data):
             mode = chr(pv[0])
         elif pt == ParameterType.FCS_PARAMETER_CONTROL_MODE:
             control_mode = pv[0]
+        elif pt == ParameterType.FCS_PARAMETER_CONTROL_STATUS:
+            status = pv
+        elif pt == ParameterType.FCS_PARAMETER_NAV_PATH_ID:
+            path = pv[0]
 
     print (
             "%.8f,%.8f,%.2f," +
@@ -514,7 +533,7 @@ def print_estimate_log(data):
             "%.1f,%.1f,%.1f," +
             "%.1f,%.1f,%.1f," +
             "%.2f,%.2f,%.2f," +
-            "%s,%d"
+            "%s,%d,%d,%.0f,%.0f"
         ) % tuple(
             pos +
             v +
@@ -523,14 +542,34 @@ def print_estimate_log(data):
             angular_v +
             wind_v +
             [mode] +
-            [control_mode]
+            [control_mode] +
+            [path] +
+            [status[1], status[3]]
         )
 
     return control_mode, math.radians(pos[0]), math.radians(pos[1]), pos[2]
 
 
-def print_measurement_log(data):
+def print_measurement_log(i, data):
+    #tmp = data.find_by(device_id=0, parameter_type=ParameterType.FCS_PARAMETER_AHRS_STATUS)
+    #if tmp and tmp.values[0] < 10:
+    #    return
+
+    #tmp = data.find_by(device_id=0, parameter_type=ParameterType.FCS_PARAMETER_PRESSURE_TEMP)
+    #if not tmp:
+    #    return
+
+    #print "%d (%d): " % (i, tmp.values[0])
+
     for device_id in range(2):
+        try:
+            tmp = data.find_by(
+                device_id=device_id,
+                parameter_type=ParameterType.FCS_PARAMETER_GPS_INFO).values
+            gps_info= "%d,%d,%d" % (tmp[0], tmp[1], tmp[2])
+        except Exception:
+            gps_info = ",,"
+
         try:
             tmp = data.find_by(
                 device_id=device_id,
@@ -603,7 +642,7 @@ def print_measurement_log(data):
         except Exception:
             control_pos = ",,"
 
-        sys.stdout.write(",".join([gps_pos, gps_v, accel, gyro, mag, pitot, baro, iv, control_pos]) + ("," if device_id == 0 else "\n"))
+        sys.stdout.write(",".join([gps_info, gps_pos, gps_v, accel, gyro, mag, pitot, baro, iv, control_pos]) + ("," if device_id == 0 else "\n"))
 
 
 def print_control_log(data):
@@ -657,12 +696,12 @@ def print_control_log(data):
 
 
 if __name__ == "__main__":
-    #print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode"
+    #print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode,control_mode,path,objval,resets"
 
-    print "gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
+    print "gps_mode_1,gps_pdop_1,gps_numsv_1,gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
           "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
           "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
-          "control_rail_1,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
+          "control_rail_1,gps_mode_2,gps_pdop_2,gps_numsv_2,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
           "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
           "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
           "control_lail_2,control_rail_2"
@@ -679,14 +718,14 @@ if __name__ == "__main__":
             #result = print_estimate_log(logf)
             #print repr(logf)
             #if result[0]:
-            print_measurement_log(logf)
+            print_measurement_log(n, logf)
             #    print "%.3f,%.3f,%.2f,%.3f W" % (lla_to_ned((waypoint["lat"], waypoint["lon"], waypoint["alt"]), result[1:]) + (math.degrees(waypoint["yaw"]), ))
             #    print waypoint
             #    #print_measurement_log(logf)
             n += 1
         except Exception:
-            #pass
-            #print repr(logf)
             raise
+            #print repr(logf)
+            #raise
             #print "Incomplete packet"
 

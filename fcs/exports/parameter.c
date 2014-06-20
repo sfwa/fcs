@@ -266,7 +266,7 @@ uint8_t key[4], uint8_t *restrict value, size_t value_length) {
     memcpy(&parameter->data.u8[4], value, value_length);
 
     parameter->header =
-        (uint8_t)(FCS_PARAMETER_HEADER_MODE_MASK | value_length);
+        (uint8_t)(FCS_PARAMETER_HEADER_MODE_MASK | (value_length + 4u));
     parameter->type = FCS_PARAMETER_KEY_VALUE;
 }
 
