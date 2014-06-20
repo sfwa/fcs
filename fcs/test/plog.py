@@ -445,8 +445,9 @@ def iterlogs(stream):
             try:
                 logf = ParameterLog.deserialize(data)
             except Exception:
-                if len(data) != 13:
-                    print "Invalid packet: %s" % binascii.b2a_hex(data)
+                pass
+                #if len(data) != 13:
+                #    print "Invalid packet: %s" % binascii.b2a_hex(data)
             else:
                 yield logf
             data = ''
@@ -715,10 +716,10 @@ if __name__ == "__main__":
 
         try:
             #if n % 100 == 0:
-            #result = print_estimate_log(logf)
+            result = print_estimate_log(logf)
             #print repr(logf)
             #if result[0]:
-            print_measurement_log(n, logf)
+            #print_measurement_log(n, logf)
             #    print "%.3f,%.3f,%.2f,%.3f W" % (lla_to_ned((waypoint["lat"], waypoint["lon"], waypoint["alt"]), result[1:]) + (math.degrees(waypoint["yaw"]), ))
             #    print waypoint
             #    #print_measurement_log(logf)
