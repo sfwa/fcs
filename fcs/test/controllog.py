@@ -98,11 +98,23 @@ def tick(t, data):
                                (state_velocity[1] - state_wind[1])**2 +
                                (state_velocity[2] - state_wind[2])**2)
 
+    ned_off = plog.lla_to_ned(
+        state_pos,
+        (control_refp["lat"], control_refp["lon"], control_refp["alt"]))
+    ref_v = (
+        control_refp["airspeed"] * math.cos(control_refp["yaw"]) + state_wind[0],
+        control_refp["airspeed"] * math.sin(control_refp["yaw"]) + state_wind[1]
+    )
+    ate = abs((ned_off[0] * ref_v[0] + ned_off[1] * ref_v[1]) / \
+              math.sqrt(ref_v[0] ** 2 + ref_v[1] ** 2))
+    xte = math.sqrt((ned_off[0] ** 2 + ned_off[1] ** 2) - ate ** 2)
+
     return (
         "t=%8d, " +
         "alt=%3.3f, alt_ref=%3.3f, " +
-        "n=%6.2f, e=%6.2f, d=%6.2f, " +
+        "n=%6.2f, e=%6.2f, d=%6.2f, xte=%3.2f, ate=%3.2f, " +
         "tas=%5.2f, tas_ref=%5.2f, " +
+        "heading=%3.0f, heading_ref=%3.0f, " +
         "yaw=%3.0f, yaw_ref=%3.0f, " +
         "pitch=%4.0f, pitch_ref=%4.0f, " +
         "roll=%4.0f, roll_ref=%4.0f, " +
@@ -113,15 +125,14 @@ def tick(t, data):
         "path=%4d, last_gps=%4d, mode1=%d, flags=%08x, err=%04x\n"
     ) % (
         (t, ) +
-        (state_pos[2], control_refp.get("alt", 0)) +
-        plog.lla_to_ned(
-            (control_refp.get("lat", 0), control_refp.get("lon", 0),
-                control_refp.get("alt", 0)),
-            state_pos) +
-        (state_airspeed, control_refp.get("airspeed", 0)) +
-        (state_attitude[0], math.degrees(control_refp.get("yaw", 0))) +
-        (state_attitude[1], math.degrees(control_refp.get("pitch", 0))) +
-        (state_attitude[2], math.degrees(control_refp.get("roll", 0))) +
+        (state_pos[2], control_refp["alt"]) +
+        ned_off + (xte, ate) +
+        (state_airspeed, control_refp["airspeed"]) +
+        (math.degrees(math.atan2(state_velocity[1], state_velocity[0])),
+            math.degrees(math.atan2(ref_v[1], ref_v[0]))) +
+        (state_attitude[0], math.degrees(control_refp["yaw"])) +
+        (state_attitude[1], math.degrees(control_refp["pitch"])) +
+        (state_attitude[2], math.degrees(control_refp["roll"])) +
         (state_angular_velocity[2], state_angular_velocity[1],
             state_angular_velocity[0]) +
         (control_values[0], control_values[1], control_values[2]) +

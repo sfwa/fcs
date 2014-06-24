@@ -30,6 +30,7 @@ import vectors
 import datetime
 import binascii
 import collections
+import ConfigParser
 from ctypes import *
 
 
@@ -89,7 +90,7 @@ def socket_readlines(socket):
 
 
 def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
-         angular_velocity=None, wind_velocity=None):
+         angular_velocity=None, wind_velocity=None, measurement_input=None):
     """
     Runs the FCS control and comms tasks with the state data provided as
     though it came from the AHRS, and returns the control output.
@@ -155,6 +156,7 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     )
 
     fcs.write(3, estimate_log.serialize())
+    fcs.write(1, measurement_input)
     #print binascii.b2a_hex(estimate_log.serialize())
 
     fcs._fcs.fcs_board_tick()
@@ -313,9 +315,9 @@ def enable_xplane_sim(s):
     update += "set sim/flightmodel/position/local_vy %.6f\n" % -velocity[2]
     update += "set sim/flightmodel/position/local_vz %.6f\n" % -velocity[0]
 
-    update += "set sim/flightmodel/position/P %.6f\n" % math.radians(14.4)
-    update += "set sim/flightmodel/position/Q %.6f\n" % math.radians(-5.0)
-    update += "set sim/flightmodel/position/R %.6f\n" % math.radians(-6.7)
+    update += "set sim/flightmodel/position/P %.6f\n" % math.radians(0)
+    update += "set sim/flightmodel/position/Q %.6f\n" % math.radians(0)
+    update += "set sim/flightmodel/position/R %.6f\n" % math.radians(0)
     s.sendall(update)
 
 
@@ -678,8 +680,8 @@ if __name__ == "__main__":
 
     # Register the path with the FCS
     fcs.control_state.mode = 1
-    fcs.nav_state.reference_path_id[0] = 0
-    fcs._fcs.fcs_control_reset()
+    #fcs.nav_state.reference_path_id[0] = 0
+    #fcs._fcs.fcs_control_reset()
 
     sock = connect_to_xplane()
     reset_xplane_state(sock)
@@ -690,7 +692,7 @@ if __name__ == "__main__":
 
     time.sleep(0.1)
 
-    print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,yaw_rate,pitch_rate,roll_rate,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r"
+    print "t,target_lat,target_lon,target_alt,target_airspeed,target_yaw,actual_lat,actual_lon,actual_alt,actual_airspeed,actual_yaw,yaw_rate,pitch_rate,roll_rate,wind_n,wind_e,wind_d,ctl_t,ctl_l,ctl_r,nav_state_version"
 
     controls = [0.0, 0.5, 0.5]
     t = 0
@@ -698,6 +700,30 @@ if __name__ == "__main__":
     try:
         while True:
             iter_start = time.time()
+
+            control_config = ConfigParser.RawConfigParser()
+            control_config.read('dynamics.conf')
+            control_params = [
+                control_config.getint('default', 'roll_due_to_control'),
+                control_config.getint('default', 'roll_due_to_beta'),
+                control_config.getint('default', 'roll_due_to_roll_rate'),
+                control_config.getint('default', 'pitch_due_to_control'),
+                control_config.getint('default', 'yaw_due_to_control'),
+                control_config.getint('default', 'yaw_due_to_beta'),
+                control_config.getint('default', 'yaw_due_to_yaw_rate'),
+
+                control_config.getint('default', 'roll_inertia_inv'),
+                control_config.getint('default', 'pitch_inertia_inv'),
+                control_config.getint('default', 'yaw_inertia_inv'),
+                control_config.getint('default', 'roll_yaw_inertia_inv'),
+                control_config.getint('default', 'lift_due_to_alpha'),
+                control_config.getint('default', 'lift_constant'),
+                control_config.getint('default', 'drag_due_to_alpha')
+            ]
+            control_param_log = plog.ParameterLog()
+            control_param_log.append(plog.KeyValueParameter(
+                device_id=0, key='parm',
+                value="".join(map(lambda x: chr(x), control_params))))
 
             recv_state_from_xplane(sock)
 
@@ -716,7 +742,8 @@ if __name__ == "__main__":
                 alt=sim_state_delay[-1]["alt"], velocity=sim_state_delay[0]["velocity"],
                 attitude=sim_state_delay[-2]["attitude"],
                 angular_velocity=sim_state_delay[-1]["angular_velocity"],
-                wind_velocity=sim_state_delay[0]["wind_velocity"])
+                wind_velocity=sim_state_delay[0]["wind_velocity"],
+                measurement_input=control_param_log.serialize())
 
             print (
                 "t=%6.2f, " +
@@ -728,7 +755,7 @@ if __name__ == "__main__":
                 "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
                 "t=%.3f, l=%.3f, r=%.3f, " +
                 "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
-                "path=%4d, flags=%8x"
+                "path=%4d, flags=%8x, nav_state=%3d"
             ) % (
                 (t, ) +
                 plog.lla_to_ned((ref_point.get("lat", 0), ref_point.get("lon", 0),
@@ -746,7 +773,7 @@ if __name__ == "__main__":
                         math.degrees(sim_state["angular_velocity"][0])) +
                 (controls[0], controls[1], controls[2]) +
                 (obj_val, cycles, nmpc_errors, nmpc_resets) +
-                (path, ref_point.get("flags", 0xFFFFFFFF))
+                (path, ref_point.get("flags", 0xFFFFFFFF), fcs.nav_state.version)
             )
 
             send_control_to_xplane(sock, controls)

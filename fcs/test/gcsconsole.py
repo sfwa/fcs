@@ -24,6 +24,7 @@
 import sys
 import plog
 import time
+import math
 import serial
 import binascii
 import ConfigParser
@@ -76,8 +77,6 @@ def tick(t, data):
             control_mode[param.device_id] = pv[0]
         elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_SETPOINT:
             control_values = map(lambda x: float(x) / 65535.0, pv)
-        elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_POS and param.device_id == 1:
-            control_pos = map(lambda x: float(x) / 65535.0, pv)
         elif pt == plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID:
             control_path = pv[0]
             control_error_type = pv[1]
@@ -115,9 +114,8 @@ def tick(t, data):
         "pitch=%4.0f, pitch_ref=%4.0f, " +
         "roll=%4.0f, roll_ref=%4.0f, " +
         "t=%.3f, l=%.3f, r=%.3f, " +
-        "tp=%.3f, lp=%.3f, rp=%.3f, " +
         "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
-        "path=%4d, last_gps=%4d, mode1=%d, nav_state=%d\n"
+        "path=%4d, last_gps=%4d, mode1=%d, nav_state=%d"
     ) % (
         (t, ) +
         (state_pos[2], control_refp.get("alt", 0)) +
@@ -129,12 +127,9 @@ def tick(t, data):
         (state_attitude[0], math.degrees(control_refp.get("yaw", 0))) +
         (state_attitude[1], math.degrees(control_refp.get("pitch", 0))) +
         (state_attitude[2], math.degrees(control_refp.get("roll", 0))) +
-        (state_angular_velocity[2], state_angular_velocity[1],
-            state_angular_velocity[0]) +
         (control_values[0], control_values[1], control_values[2]) +
-        (control_pos[0], control_pos[1], control_pos[2]) +
         (control_obj_val, control_cycles, control_errors, control_resets) +
-        (control_path, last_gps, control_mode[1], controL_nav_version)
+        (control_path, last_gps, control_mode[1], control_nav_version)
     )
 
 
@@ -148,9 +143,11 @@ if __name__ == "__main__":
     conn = serial.Serial(sys.argv[1], 57600, timeout=None)
     for logl in plog.iterlogs(conn):
         try:
-            tick(time.time() - start_t, logl)
+            result = tick(time.time() - start_t, logl)
+            if result:
+                print result
         except Exception:
-            pass
+            raise
 
         control_config = ConfigParser.RawConfigParser()
         control_config.read('dynamics.conf')

@@ -264,7 +264,7 @@ class KeyValueParameter(Parameter):
     def serialize(self):
         # Pack the header byte -- high bit to indicate it's a key/value param,
         # and then the remaining 7 bits are the length in bytes
-        header = (0x80 | len(self.value))
+        header = (0x80 | (len(self.value) + 4))
         # Serialize the header and data in one go
         return struct.pack("<BBB4s%ds" % len(self.value), header,
                            self.device_id, self.parameter_type.value,
@@ -715,8 +715,8 @@ if __name__ == "__main__":
         #    waypoint = extract_waypoint(result.value)
 
         try:
-            #if n % 100 == 0:
-            result = print_estimate_log(logf)
+            if n % 1000 == 0:
+                result = print_estimate_log(logf)
             #print repr(logf)
             #if result[0]:
             #print_measurement_log(n, logf)

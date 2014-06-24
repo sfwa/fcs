@@ -210,7 +210,12 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
     current path type, navigating between FCS_CONTROL_RESUME_WAYPOINT_ID
     and the end_waypoint_id and next_path_id of the current path.
     */
-    if (nav->reference_path_id[0] != FCS_CONTROL_INTERPOLATE_PATH_ID &&
+    if (nav->reference_path_id[0] == FCS_CONTROL_HOLD_PATH_ID) {
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].next_path_id =
+            FCS_CONTROL_HOLD_PATH_ID;
+        nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
+            FCS_CONTROL_HOLD_WAYPOINT_ID;
+    } else if (nav->reference_path_id[0] != FCS_CONTROL_INTERPOLATE_PATH_ID &&
                nav->reference_path_id[0] != FCS_CONTROL_STABILISE_PATH_ID) {
         original_path_id = nav->reference_path_id[0];
         memcpy(&nav->paths[FCS_CONTROL_RESUME_PATH_ID],
@@ -506,7 +511,7 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     fcs_assert(out_waypoint_id != FCS_CONTROL_INVALID_WAYPOINT_ID);
 
     struct fcs_waypoint_t *waypoint, *out_waypoint;
-    float stabilise_delta, stabilise_heading, alt;
+    float stabilise_delta[2], alt;
 
     out_waypoint = &nav->waypoints[out_waypoint_id];
 
@@ -527,19 +532,21 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     Set up the holding pattern waypoint (current position and yaw,
     standard airspeed, and arbitrary pitch/roll).
     */
-    stabilise_delta = waypoint->airspeed * 5.0f;
-    stabilise_heading = waypoint->yaw;
+    stabilise_delta[0] = (float)(cos(waypoint->yaw) * waypoint->airspeed) +
+                         state_estimate->wind_velocity[0];
+    stabilise_delta[1] = (float)(sin(waypoint->yaw) * waypoint->airspeed) +
+                         state_estimate->wind_velocity[1];
     alt = waypoint->alt < state_estimate->alt ?
           waypoint->alt : state_estimate->alt;
 
     out_waypoint->lat = waypoint->lat +
-        (1.0/WGS84_A) * cos(stabilise_heading) * stabilise_delta;
+                        (1.0/WGS84_A) * stabilise_delta[0] * 3.0f;
     out_waypoint->lon = waypoint->lon +
-        (1.0/WGS84_A) * sin(stabilise_heading) * stabilise_delta /
-        cos(waypoint->lat);
+                        (1.0/WGS84_A) * stabilise_delta[1] * 3.0f /
+                        cos(waypoint->lat);
     out_waypoint->alt = alt;
     out_waypoint->airspeed = FCS_CONTROL_DEFAULT_AIRSPEED;
-    out_waypoint->yaw = stabilise_heading;
+    out_waypoint->yaw = waypoint->yaw;
     out_waypoint->pitch = 0.0f;
     out_waypoint->roll = 0.0f;
 
