@@ -69,14 +69,14 @@ void _get_next_reference_point(float *restrict state);
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     1e-4f, 1e-4f, 1e-2f, /* position */
     1e0f, 1e0f, 1e0f, /* velocity */
-    2e0f, 2e0f, 2e0f, /* attitude */
+    1e0f, 1e0f, 1e0f, /* attitude */
     1e0f, 1e0f, 1e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
     1e-1f, 1e-1f, 3e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
-    2e0f, 2e0f, 2e0f,  /* attitude */
-    1e0f, 1e0f, 1e0f /* angular velocity */
+    5e-1f, 1e0f, 1e0f,  /* attitude */
+    2e0f, 1e0f, 1e0f /* angular velocity */
 };
 
 
@@ -164,6 +164,8 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         fcs_assert(new_point);
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
+        nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
+            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
     }
 }
 
@@ -215,6 +217,8 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
             FCS_CONTROL_HOLD_PATH_ID;
         nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
             FCS_CONTROL_HOLD_WAYPOINT_ID;
+        nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
+            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
     } else if (nav->reference_path_id[0] != FCS_CONTROL_INTERPOLATE_PATH_ID &&
                nav->reference_path_id[0] != FCS_CONTROL_STABILISE_PATH_ID) {
         original_path_id = nav->reference_path_id[0];
@@ -279,6 +283,9 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         FCS_CONTROL_HOLD_PATH_ID;
     nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
         FCS_CONTROL_HOLD_WAYPOINT_ID;
+
+    nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
+        FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
 }
 
 /*
@@ -328,6 +335,8 @@ const float *restrict wind) {
             *last_point_path_id != FCS_CONTROL_INTERPOLATE_PATH_ID) {
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            last_point, sizeof(struct fcs_waypoint_t));
+        nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
+            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
     }
 
     _make_reference(reference, new_point, last_point,
@@ -436,6 +445,7 @@ Determine the next point and path in the trajectory following `last_point`,
 along the path given by `last_point_path_id`. This consumes up to 10 paths in
 order to return a point OCP_STEP_LENGTH seconds ahead of `last_point`.
 */
+#include <stdio.h>
 static void _next_point(struct fcs_waypoint_t *restrict new_point,
 uint16_t *restrict new_point_path_id,
 const struct fcs_waypoint_t *restrict last_point,

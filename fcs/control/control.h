@@ -52,7 +52,7 @@ trajectory to get back on track.
 #define FCS_CONTROL_DEFAULT_AIRSPEED 20.0
 
 /* Turn radius in metres */
-#define FCS_CONTROL_TURN_RADIUS 60.0
+#define FCS_CONTROL_TURN_RADIUS 75.0
 
 /* Maximum path length in metres */
 #define FCS_CONTROL_MAX_PATH_LENGTH 10000.0
@@ -107,7 +107,6 @@ generation system.
 
 #define FCS_WAYPOINT_FLAG_SEGMENT_MASK 0x0000000Cu
 #define FCS_WAYPOINT_FLAG_SEGMENT_OFFSET 2u
-
 
 struct fcs_path_t {
     uint16_t start_waypoint_id;

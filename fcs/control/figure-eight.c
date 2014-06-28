@@ -69,7 +69,7 @@ const struct fcs_waypoint_t *end, float t) {
     */
     float yaw_rate, offset_n, offset_e, sd, cd, sy, cy, target_airspeed,
           target_yaw, target_roll, tangent_n,
-          tangent_e, wind_dot, wind_yaw;
+          tangent_e, wind_dot, wind_yaw, tangent_ground_speed;
     uint8_t last_direction, new_direction;
 
     /* Fly at the start speed. */
@@ -88,7 +88,7 @@ const struct fcs_waypoint_t *end, float t) {
     tangent_n = (float)cos(last_point->yaw);
     tangent_e = (float)sin(last_point->yaw);
     wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
-    wind_yaw = t * wind_dot * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
+    wind_yaw = wind_dot * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
 
     /* If delta yaw > start yaw - last yaw, it's time to change direction. */
     target_yaw = start->yaw - last_point->yaw;
@@ -99,33 +99,34 @@ const struct fcs_waypoint_t *end, float t) {
     }
 
     /*
-    Roll angle is based on airspeed and turn radius (constant):
-    roll_deg = 90 - atan(9.8 * r / v^2)
-    */
-    target_roll =
-        (float)(M_PI * 0.5 - atan2(G_ACCEL * FCS_CONTROL_TURN_RADIUS,
-                                   (target_airspeed * target_airspeed)));
-
-    /* Scale roll angle to resolve discontinuity during direction change */
-    if (absval(target_yaw) < 0.333333f) {
-        target_roll *= absval(target_yaw) * 3.0f;
-    }
-
-    /*
     Determine yaw rate based on airspeed; whether it's left or right depends
     on the direction of the last point
     */
     yaw_rate = target_airspeed * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
 
     if (last_direction == FCS_WAYPOINT_FLAG_FIGURE8_RIGHT &&
-            target_yaw > 0.0f && target_yaw < yaw_rate * t + wind_yaw) {
+            target_yaw > 0.0f && target_yaw < (yaw_rate + wind_yaw) * t) {
         new_direction = FCS_WAYPOINT_FLAG_FIGURE8_LEFT;
     } else if (last_direction == FCS_WAYPOINT_FLAG_FIGURE8_LEFT &&
-               target_yaw < 0.0f && target_yaw > -yaw_rate * t - wind_yaw) {
+               target_yaw < 0.0f && target_yaw > (-yaw_rate - wind_yaw) * t) {
         new_direction = FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
     } else if (last_direction != FCS_WAYPOINT_FLAG_FIGURE8_RIGHT &&
                last_direction != FCS_WAYPOINT_FLAG_FIGURE8_LEFT) {
         new_direction = FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
+    }
+
+    /*
+    Roll angle is based on airspeed and turn radius (constant):
+    roll_deg = 90 - atan(9.8 * r / v^2)
+    */
+    tangent_ground_speed = (yaw_rate + wind_yaw * 0.33f) * (float)FCS_CONTROL_TURN_RADIUS;
+    target_roll = (float)(M_PI * 0.5 - atan2(
+        G_ACCEL * FCS_CONTROL_TURN_RADIUS,
+        (tangent_ground_speed * tangent_ground_speed)));
+
+    /* Scale roll angle to resolve discontinuity during direction change */
+    if (absval(target_yaw) < 0.333333f) {
+        target_roll *= absval(target_yaw) * 3.0f;
     }
 
     if (new_direction == FCS_WAYPOINT_FLAG_FIGURE8_LEFT) {
@@ -140,7 +141,8 @@ const struct fcs_waypoint_t *end, float t) {
     if (new_direction != last_direction) {
         new_point->yaw = start->yaw;
     } else {
-        new_point->yaw = mod_2pi_f(last_point->yaw + yaw_rate * t + wind_yaw);
+        new_point->yaw = mod_2pi_f(last_point->yaw +
+                                   t * (yaw_rate + wind_yaw));
     }
 
     sy = (float)sin(start->yaw);

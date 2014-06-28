@@ -115,7 +115,7 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 6e1, 6e1 };
+    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 3e1, 3e1 };
     float lower_control_bound[NMPC_CONTROL_DIM] = { 0.25f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
@@ -306,8 +306,8 @@ void fcs_control_tick(void) {
                 data[1] <= 100u && data[2] <= 100u && data[3] <= 100u &&
                 data[4] <= 100u && data[5] <= 100u && data[6] <= 100u &&
                 data[7] <= 160u && data[8] <= 160u && data[9] <= 160u &&
-                data[10] <= 160u && data[11] <= 100u && data[12] <= 100u &&
-                data[13] <= 100u) {
+                data[10] <= 160u && data[11] <= 200u && data[12] <= 200u &&
+                data[13] <= 200u) {
             if (memcmp(data, last_data, 14) != 0) {
                 nav_state.version++; // push back an update so we know it's applied
                 update_x8_dynamics_params(
