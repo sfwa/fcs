@@ -302,9 +302,9 @@ void fcs_control_tick(void) {
 
         param_data_len = fcs_parameter_get_key_value(key, data, 40u, &param);
         if (param_data_len == 14u && key[0] == 'p' && key[1] == 'a' &&
-                key[2] == 'r' && key[3] == 'm' && data[0] <= 100u &&
-                data[1] <= 100u && data[2] <= 100u && data[3] <= 100u &&
-                data[4] <= 100u && data[5] <= 100u && data[6] <= 100u &&
+                key[2] == 'r' && key[3] == 'm' && data[0] <= 150u &&
+                data[1] <= 100u && data[2] <= 100u && data[3] <= 150u &&
+                data[4] <= 150u && data[5] <= 100u && data[6] <= 100u &&
                 data[7] <= 160u && data[8] <= 160u && data[9] <= 160u &&
                 data[10] <= 160u && data[11] <= 200u && data[12] <= 200u &&
                 data[13] <= 200u) {

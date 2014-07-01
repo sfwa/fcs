@@ -109,21 +109,7 @@ def tick(t, data):
               math.sqrt(ref_v[0] ** 2 + ref_v[1] ** 2))
     xte = math.sqrt((ned_off[0] ** 2 + ned_off[1] ** 2) - ate ** 2)
 
-    return (
-        "t=%8d, " +
-        "alt=%3.3f, alt_ref=%3.3f, " +
-        "n=%6.2f, e=%6.2f, d=%6.2f, xte=%3.2f, ate=%3.2f, " +
-        "tas=%5.2f, tas_ref=%5.2f, " +
-        "heading=%3.0f, heading_ref=%3.0f, " +
-        "yaw=%3.0f, yaw_ref=%3.0f, " +
-        "pitch=%4.0f, pitch_ref=%4.0f, " +
-        "roll=%4.0f, roll_ref=%4.0f, " +
-        "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
-        "t=%.3f, l=%.3f, r=%.3f, " +
-        "tp=%.3f, lp=%.3f, rp=%.3f, " +
-        "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
-        "path=%4d, last_gps=%4d, mode1=%d, flags=%08x, err=%04x\n"
-    ) % (
+    data = (
         (t, ) +
         (state_pos[2], control_refp["alt"]) +
         ned_off + (xte, ate) +
@@ -135,6 +121,8 @@ def tick(t, data):
         (state_attitude[2], math.degrees(control_refp["roll"])) +
         (state_angular_velocity[2], state_angular_velocity[1],
             state_angular_velocity[0]) +
+        (math.sqrt(state_wind[0] ** 2 + state_wind[1] ** 2), state_wind[0],
+            state_wind[1]) +
         (control_values[0], control_values[1], control_values[2]) +
         (control_pos[0], control_pos[1], control_pos[2]) +
         (control_obj_val, control_cycles, control_errors, control_resets) +
@@ -142,12 +130,51 @@ def tick(t, data):
             control_error_type)
     )
 
+    format = (
+        "t=%8d, " +
+        "alt=%3.3f, alt_ref=%3.3f, " +
+        "n=%6.2f, e=%6.2f, d=%6.2f, xte=%4.2f, ate=%4.2f, " +
+        "tas=%5.2f, tas_ref=%5.2f, " +
+        "heading=%3.0f, heading_ref=%3.0f, " +
+        "yaw=%3.0f, yaw_ref=%3.0f, " +
+        "pitch=%4.0f, pitch_ref=%4.0f, " +
+        "roll=%4.0f, roll_ref=%4.0f, " +
+        "vyaw=%4.0f, vpitch=%4.0f, vroll=%4.0f, " +
+        "wind=%5.2f, wind_n=%5.2f, wind_e=%5.2f, " +
+        "t=%.3f, l=%.3f, r=%.3f, " +
+        "tp=%.3f, lp=%.3f, rp=%.3f, " +
+        "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
+        "path=%4d, last_gps=%4d, mode1=%d, flags=%08x, err=%04x\n"
+    )
+
+    dump = (
+        "%d," +
+        "%.3f,%.3f," +
+        "%.2f,%.2f,%.2f,%.2f,%.2f," +
+        "%.2f,%.2f," +
+        "%.1f,%.1f," +
+        "%.1f,%.1f," +
+        "%.1f,%.1f," +
+        "%.1f,%.1f," +
+        "%.1f,%.1f,%.1f," +
+        "%.2f,%.2f,%.2f," +
+        "%.3f,%.3f,%.3f," +
+        "%.3f,%.3f,%.3f," +
+        "%.1f,%d,%d,%d," +
+        "%d,%d,%d,%d,%d\n"
+    )
+
+    #return format % data
+    return dump % data
+
 
 if __name__ == "__main__":
     fcs.init(sys.argv[1])
 
     infile = open(sys.argv[2], 'rb') if len(sys.argv) > 2 else sys.stdin
     outfile = open(sys.argv[3], 'wb') if len(sys.argv) > 3 else sys.stdout
+
+    print "t,alt,alt_ref,n,e,d,xte,ate,tas,tas_ref,heading,heading_ref,yaw,yaw_ref,pitch,pitch_ref,roll,roll_ref,vyaw,vpitch,vroll,wind,wind_n,wind_e,t,l,r,tp,lp,rp,objval,cycles,errors,resets,path,last_gps,mode1,flags,err"
 
     i = 0
     for logf in plog.iterlogs(infile):

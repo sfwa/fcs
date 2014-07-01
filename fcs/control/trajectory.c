@@ -445,7 +445,6 @@ Determine the next point and path in the trajectory following `last_point`,
 along the path given by `last_point_path_id`. This consumes up to 10 paths in
 order to return a point OCP_STEP_LENGTH seconds ahead of `last_point`.
 */
-#include <stdio.h>
 static void _next_point(struct fcs_waypoint_t *restrict new_point,
 uint16_t *restrict new_point_path_id,
 const struct fcs_waypoint_t *restrict last_point,

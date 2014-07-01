@@ -152,7 +152,8 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t) {
     /*
-    Dubins path -- picks the shortest of LSL, LSR, RSL, RSR.
+    Dubins path -- picks the shortest of LSL, LSR, RSL, RSR (LRL/RLR are not
+    supported as they are not required for feasibility, only for optimality).
 
     In each of these curves, altitude is interpolated linearly; pitch is
     based on the climb rate, while airspeed, yaw and roll are set by the
@@ -366,13 +367,13 @@ float t) {
 
     /*
     Smooth roll changes by interpolating from 0 to maximum over the course of
-    1/3 of a radian in yaw.
+    1/2 of a radian in yaw.
     */
-    if (absval(target_yaw) < 0.333333f &&
+    if (absval(target_yaw) < 0.5f &&
             (needs_roll_change ||
              (last_segment == 0 && path_t < start_turn_d * 0.5f) ||
              (last_segment == 2u && path_t < min_d - end_turn_d * 0.5f))) {
-        target_roll *= max(0.01f, absval(target_yaw) * 3.0f);
+        target_roll *= max(0.01f, absval(target_yaw) * 2.0f);
     }
 
     interpolation_rate =

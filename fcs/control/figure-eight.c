@@ -125,8 +125,8 @@ const struct fcs_waypoint_t *end, float t) {
         (tangent_ground_speed * tangent_ground_speed)));
 
     /* Scale roll angle to resolve discontinuity during direction change */
-    if (absval(target_yaw) < 0.333333f) {
-        target_roll *= absval(target_yaw) * 3.0f;
+    if (absval(target_yaw) < 0.5f) {
+        target_roll *= absval(target_yaw) * 2.0f;
     }
 
     if (new_direction == FCS_WAYPOINT_FLAG_FIGURE8_LEFT) {
