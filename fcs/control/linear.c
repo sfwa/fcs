@@ -39,7 +39,7 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t) {
     float delta_n, delta_e, x, end_ned[3], distance, target_roll,
-          target_airspeed, wind_n, wind_e, wind_dot;
+          target_airspeed, wind_dot;
 
     /* Handle zero-length paths */
     if (start == end) {
@@ -99,11 +99,9 @@ float t) {
 
         wind_dot = (end_ned[0] * distance * wind[0] +
                     end_ned[1] * distance * wind[1]);
-        wind_n = end_ned[0] * distance * wind_dot;
-        wind_e = end_ned[1] * distance * wind_dot;
 
-        delta_n = (end_ned[0] * distance) * last_point->airspeed + wind_n;
-        delta_e = (end_ned[1] * distance) * last_point->airspeed + wind_e;
+        delta_n = (end_ned[0] * distance) * (last_point->airspeed + wind_dot);
+        delta_e = (end_ned[1] * distance) * (last_point->airspeed + wind_dot);
 
         /*
         If we're past the last point, work out how much t we should use. Base

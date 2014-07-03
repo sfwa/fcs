@@ -115,7 +115,7 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 3e1, 3e1 };
+    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 5e1, 5e1 };
     float lower_control_bound[NMPC_CONTROL_DIM] = { 0.25f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
@@ -296,19 +296,19 @@ void fcs_control_tick(void) {
     if (fcs_parameter_find_by_type_and_device(
             measurement_log, FCS_PARAMETER_KEY_VALUE, 1u, &param)) {
         uint8_t data[40];
-        static uint8_t last_data[14];
+        static uint8_t last_data[15];
         uint8_t key[4];
         size_t param_data_len;
 
         param_data_len = fcs_parameter_get_key_value(key, data, 40u, &param);
-        if (param_data_len == 14u && key[0] == 'p' && key[1] == 'a' &&
+        if (param_data_len == 15u && key[0] == 'p' && key[1] == 'a' &&
                 key[2] == 'r' && key[3] == 'm' && data[0] <= 150u &&
                 data[1] <= 100u && data[2] <= 100u && data[3] <= 150u &&
                 data[4] <= 150u && data[5] <= 100u && data[6] <= 100u &&
                 data[7] <= 160u && data[8] <= 160u && data[9] <= 160u &&
-                data[10] <= 160u && data[11] <= 200u && data[12] <= 200u &&
-                data[13] <= 200u) {
-            if (memcmp(data, last_data, 14) != 0) {
+                data[10] <= 160u && data[11] <= 250u && data[12] <= 250u &&
+                data[13] <= 250u && data[14] <= 100u) {
+            if (memcmp(data, last_data, 15) != 0) {
                 nav_state.version++; // push back an update so we know it's applied
                 update_x8_dynamics_params(
                     (float)data[0] * 0.005f, // roll due to control
@@ -325,10 +325,12 @@ void fcs_control_tick(void) {
                     (float)data[10] * 0.1f, // roll yaw inertia inv
                     (float)data[11] * 0.01f, // lift due to alpha
                     (float)data[12] * 0.01f, // lift constant
-                    (float)data[13] * 0.01f  // drag due to alpha
+                    (float)data[13] * 0.01f,  // drag due to alpha
+
+                    (float)data[14] * 0.0005f // thrust Cve
                 );
 
-                memcpy(last_data, data, 14u);
+                memcpy(last_data, data, 15u);
             }
         }
     }
@@ -512,6 +514,13 @@ void fcs_control_tick(void) {
         control_infeasibility_timer = control_tick;
     } else {
     	fcs_global_counters.nmpc_errors++;
+
+        /*
+        During infeasibility, scale the control deflection to 1/4 its usual
+        value in order to avoid sudden movement.
+        */
+        controls[1] = (controls[1] - 0.5f) * 0.25f + 0.5f;
+        controls[2] = (controls[2] - 0.5f) * 0.25f + 0.5f;
     }
 
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_WRITE);

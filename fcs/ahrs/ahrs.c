@@ -631,7 +631,7 @@ bool fcs_ahrs_set_mode(enum fcs_mode_t mode) {
             break;
         case FCS_MODE_ARMED:
             vector_set_d(&ahrs_process_noise[9], 7e-8, 3u);
-            vector_set_d(&ahrs_process_noise[18], 1e-6, 3u);
+            vector_set_d(&ahrs_process_noise[18], 1e-7, 3u);
             vector_set_d(&ahrs_process_noise[21], 1e-12, 3u);
             break;
         case FCS_MODE_ACTIVE:

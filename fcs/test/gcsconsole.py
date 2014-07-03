@@ -166,7 +166,9 @@ if __name__ == "__main__":
             control_config.getint('default', 'roll_yaw_inertia_inv'),
             control_config.getint('default', 'lift_due_to_alpha'),
             control_config.getint('default', 'lift_constant'),
-            control_config.getint('default', 'drag_due_to_alpha')
+            control_config.getint('default', 'drag_due_to_alpha'),
+
+            control_config.getint('default', 'thrust_cve'),
         ]
         control_param_log = plog.ParameterLog()
         control_param_log.append(plog.KeyValueParameter(

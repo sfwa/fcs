@@ -89,8 +89,8 @@ def tick(t, data):
                     control_resets)
     if not state_pos or not control_refp or LAST_CONTROL_DATA == control_data:
         return ""
-    if control_mode[1] != 1:
-        return ""
+    #if control_mode[1] != 1:
+    #    return ""
 
     LAST_CONTROL_DATA = control_data
 

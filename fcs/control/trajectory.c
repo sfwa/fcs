@@ -73,10 +73,10 @@ static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     1e0f, 1e0f, 1e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
-    1e-1f, 1e-1f, 3e0f,  /* position */
+    3e-2f, 3e-2f, 3e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
-    5e-1f, 1e0f, 1e0f,  /* attitude */
-    2e0f, 1e0f, 1e0f /* angular velocity */
+    2e0f, 1e0f, 1e0f,  /* attitude */
+    1e0f, 1e0f, 1e0f /* angular velocity */
 };
 
 
@@ -165,7 +165,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            new_point, sizeof(struct fcs_waypoint_t));
         nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
-            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
+            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT_ENTRY;
     }
 }
 
@@ -218,7 +218,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         nav->paths[FCS_CONTROL_INTERPOLATE_PATH_ID].end_waypoint_id =
             FCS_CONTROL_HOLD_WAYPOINT_ID;
         nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
-            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
+            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT_ENTRY;
     } else if (nav->reference_path_id[0] != FCS_CONTROL_INTERPOLATE_PATH_ID &&
                nav->reference_path_id[0] != FCS_CONTROL_STABILISE_PATH_ID) {
         original_path_id = nav->reference_path_id[0];
@@ -285,7 +285,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         FCS_CONTROL_HOLD_WAYPOINT_ID;
 
     nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
-        FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
+        FCS_WAYPOINT_FLAG_FIGURE8_RIGHT_ENTRY;
 }
 
 /*
@@ -336,7 +336,7 @@ const float *restrict wind) {
         memcpy(&nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
            last_point, sizeof(struct fcs_waypoint_t));
         nav->waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID].flags =
-            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT;
+            FCS_WAYPOINT_FLAG_FIGURE8_RIGHT_ENTRY;
     }
 
     _make_reference(reference, new_point, last_point,
@@ -386,14 +386,22 @@ const float *restrict wind) {
     determine reference attitude based on waypoint yaw, pitch and roll.
     */
     float next_reference_velocity[3], next_reference_attitude[4],
-          last_reference_attitude[4], tmp[4], tmp2[4];
+          last_reference_attitude[4], tmp[4], tmp2[4], actual_yaw,
+          tangent_n, tangent_e, wind_dot;
+
+    tangent_n = (float)cos(current_point->yaw);
+    tangent_e = (float)sin(current_point->yaw);
+    wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
 
     next_reference_velocity[0] =
-        current_point->airspeed * (float)cos(current_point->yaw) + wind[0];
+        (wind_dot + current_point->airspeed) * tangent_n;
     next_reference_velocity[1] =
-        current_point->airspeed * (float)sin(current_point->yaw) + wind[1];
+        (wind_dot + current_point->airspeed) * tangent_e;
     next_reference_velocity[2] = (1.0f / OCP_STEP_LENGTH) *
                                  (last_point->alt - current_point->alt);
+
+    actual_yaw = (float)atan2(current_point->airspeed * tangent_e - wind[1],
+                              current_point->airspeed * tangent_n - wind[0]);
 
     /* Calculate angular velocity based on the reference attitudes */
     quaternion_f_from_yaw_pitch_roll(next_reference_attitude,
@@ -416,6 +424,11 @@ const float *restrict wind) {
     last_reference_attitude[3] *= -1.0;
 
     quaternion_multiply_f(tmp2, tmp, last_reference_attitude);
+
+    /* Work out the attitude again with wind-compensated yaw */
+    quaternion_f_from_yaw_pitch_roll(next_reference_attitude,
+                                     actual_yaw, current_point->pitch,
+                                     current_point->roll);
 
     /*
     Update the horizon with the next reference trajectory step. The first
@@ -541,10 +554,8 @@ uint16_t out_waypoint_id, uint16_t out_path_id) {
     Set up the holding pattern waypoint (current position and yaw,
     standard airspeed, and arbitrary pitch/roll).
     */
-    stabilise_delta[0] = (float)(cos(waypoint->yaw) * waypoint->airspeed) +
-                         state_estimate->wind_velocity[0];
-    stabilise_delta[1] = (float)(sin(waypoint->yaw) * waypoint->airspeed) +
-                         state_estimate->wind_velocity[1];
+    stabilise_delta[0] = (float)(cos(waypoint->yaw) * waypoint->airspeed);
+    stabilise_delta[1] = (float)(sin(waypoint->yaw) * waypoint->airspeed);
     alt = waypoint->alt < state_estimate->alt ?
           waypoint->alt : state_estimate->alt;
 

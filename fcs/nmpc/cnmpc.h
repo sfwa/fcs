@@ -81,7 +81,7 @@ float roll_due_to_beta, float roll_due_to_roll_rate,
 float pitch_due_to_control, float yaw_due_to_control, float yaw_due_to_beta,
 float yaw_due_to_yaw_rate, float roll_inertia_inv, float pitch_inertia_inv,
 float yaw_inertia_inv, float roll_yaw_inertia_inv, float lift_due_to_alpha,
-float lift_constant, float drag_due_to_alpha);
+float lift_constant, float drag_due_to_alpha, float thrust_cve);
 
 #ifdef __cplusplus
 }

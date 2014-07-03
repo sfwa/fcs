@@ -411,9 +411,9 @@ def send_state_to_xplane(s):
 
 
 def send_control_to_xplane(s, controls):
-    update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % (controls[0] - 0.15)
-    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 1.5)
-    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 1.5)
+    update = "set sim/flightmodel/engine/ENGN_thro_use [%.6f,0,0,0,0,0,0,0]\n" % ((controls[0] - 0.2) * 0.5)
+    update += "set sim/flightmodel/controls/wing1l_ail1def %.6f\n" % (math.degrees(controls[1] - 0.5) * 2.0)
+    update += "set sim/flightmodel/controls/wing1r_ail1def %.6f\n" % (math.degrees(controls[2] - 0.5) * 2.0)
     s.sendall(update)
 
 
@@ -718,7 +718,9 @@ if __name__ == "__main__":
                 control_config.getint('default', 'roll_yaw_inertia_inv'),
                 control_config.getint('default', 'lift_due_to_alpha'),
                 control_config.getint('default', 'lift_constant'),
-                control_config.getint('default', 'drag_due_to_alpha')
+                control_config.getint('default', 'drag_due_to_alpha'),
+
+                control_config.getint('default', 'thrust_cve'),
             ]
             control_param_log = plog.ParameterLog()
             control_param_log.append(plog.KeyValueParameter(
