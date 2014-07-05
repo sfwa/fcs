@@ -97,6 +97,8 @@ def tick(t, data):
     state_airspeed = math.sqrt((state_velocity[0] - state_wind[0])**2 +
                                (state_velocity[1] - state_wind[1])**2 +
                                (state_velocity[2] - state_wind[2])**2)
+    state_groundspeed = math.sqrt(state_velocity[0] ** 2 +
+                                  state_velocity[1] ** 2)
 
     ned_off = plog.lla_to_ned(
         state_pos,
@@ -113,7 +115,7 @@ def tick(t, data):
         (t, ) +
         (state_pos[2], control_refp["alt"]) +
         ned_off + (xte, ate) +
-        (state_airspeed, control_refp["airspeed"]) +
+        (state_airspeed, control_refp["airspeed"], state_groundspeed) +
         (math.degrees(math.atan2(state_velocity[1], state_velocity[0])),
             math.degrees(math.atan2(ref_v[1], ref_v[0]))) +
         (state_attitude[0], math.degrees(control_refp["yaw"])) +
@@ -134,7 +136,7 @@ def tick(t, data):
         "t=%8d, " +
         "alt=%3.3f, alt_ref=%3.3f, " +
         "n=%6.2f, e=%6.2f, d=%6.2f, xte=%4.2f, ate=%4.2f, " +
-        "tas=%5.2f, tas_ref=%5.2f, " +
+        "tas=%5.2f, tas_ref=%5.2f, gs=%5.2f, " +
         "heading=%3.0f, heading_ref=%3.0f, " +
         "yaw=%3.0f, yaw_ref=%3.0f, " +
         "pitch=%4.0f, pitch_ref=%4.0f, " +
@@ -151,7 +153,7 @@ def tick(t, data):
         "%d," +
         "%.3f,%.3f," +
         "%.2f,%.2f,%.2f,%.2f,%.2f," +
-        "%.2f,%.2f," +
+        "%.2f,%.2f,%.2f," +
         "%.1f,%.1f," +
         "%.1f,%.1f," +
         "%.1f,%.1f," +

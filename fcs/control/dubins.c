@@ -359,7 +359,7 @@ float t) {
     wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
     target_airspeed = start->airspeed;
 
-    tangent_ground_speed = target_airspeed ;//+ wind_dot * 0.33f;
+    tangent_ground_speed = target_airspeed ; //+ wind_dot * 0.33f;
 
     target_roll = (float)(M_PI * 0.5 - atan2(
         G_ACCEL * FCS_CONTROL_TURN_RADIUS,

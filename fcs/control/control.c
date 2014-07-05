@@ -115,7 +115,7 @@ void fcs_control_init(void) {
     float terminal_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
-    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 5e1, 5e1 };
+    float control_weights[NMPC_CONTROL_DIM] = { 2e2, 3e1, 3e1 };
     float lower_control_bound[NMPC_CONTROL_DIM] = { 0.25f, 0.25f, 0.25f };
     float upper_control_bound[NMPC_CONTROL_DIM] = { 1.0f, 0.75f, 0.75f };
 
@@ -516,11 +516,11 @@ void fcs_control_tick(void) {
     	fcs_global_counters.nmpc_errors++;
 
         /*
-        During infeasibility, scale the control deflection to 1/4 its usual
+        During infeasibility, scale the control deflection to 1/2 its usual
         value in order to avoid sudden movement.
         */
-        controls[1] = (controls[1] - 0.5f) * 0.25f + 0.5f;
-        controls[2] = (controls[2] - 0.5f) * 0.25f + 0.5f;
+        controls[1] = (controls[1] - 0.5f) * 0.5f + 0.5f;
+        controls[2] = (controls[2] - 0.5f) * 0.5f + 0.5f;
     }
 
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_WRITE);

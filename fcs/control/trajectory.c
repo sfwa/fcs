@@ -73,10 +73,10 @@ static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     1e0f, 1e0f, 1e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
-    3e-2f, 3e-2f, 3e0f,  /* position */
+    2e-2f, 2e-2f, 6e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
-    2e0f, 1e0f, 1e0f,  /* attitude */
-    1e0f, 1e0f, 1e0f /* angular velocity */
+    5e0f, 1e0f, 1e0f,  /* attitude */
+    2e0f, 1e0f, 1e0f /* angular velocity */
 };
 
 
