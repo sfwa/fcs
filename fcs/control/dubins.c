@@ -369,11 +369,11 @@ float t) {
     Smooth roll changes by interpolating from 0 to maximum over the course of
     1/2 of a radian in yaw.
     */
-    if (absval(target_yaw) < 0.5f &&
+    if (absval(target_yaw) < 0.333333f &&
             (needs_roll_change ||
              (last_segment == 0 && path_t < start_turn_d * 0.5f) ||
              (last_segment == 2u && path_t < min_d - end_turn_d * 0.5f))) {
-        target_roll *= max(0.01f, absval(target_yaw) * 2.0f);
+        target_roll *= max(0.01f, absval(target_yaw) * 3.0f);
     }
 
     interpolation_rate =
