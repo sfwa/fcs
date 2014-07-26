@@ -46,14 +46,10 @@ Pin    Direction    Net                    Description
 1      INPUT        /DSP_EXT_UART1_INT     EMIF16 UART 1 byte ready
 2      OUTPUT       IOBOARD_1_RESET_OUT    I/O board 0 reset (ahrs.c)
 3      OUTPUT       IOBOARD_2_RESET_OUT    I/O board 1 reset (ahrs.c)
-4      OUTPUT       /FS_ABORT_IN           Misc GPIO pin 1 -> failsafe arm/
-                                           abort input
-5      NC           FS_NC                  Misc GPIO pin 2 -> failsafe N/C
-6      INPUT        FS_CONTROL_OUT         Misc GPIO pin 3 -> failsafe FCS CTL
-                                           high = automatic control
-                                           low = manual control
-7      INPUT        FCS_ABORT_OUT          Misc GPIO pin 4 -> failsafe abort
-                                           output
+4      OUTPUT       CAMERA_TRIGGER         Misc GPIO pin 1 -> camera trigger
+5
+6
+7
 8
 9
 10

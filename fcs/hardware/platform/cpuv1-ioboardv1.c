@@ -135,7 +135,7 @@ void fcs_board_init_platform(void) {
     result = fcs_stream_open(FCS_STREAM_UART_INT1);
     fcs_assert(result == FCS_STREAM_OK);
 
-    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 921600u);
+    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
     fcs_assert(result == FCS_STREAM_OK);
     result = fcs_stream_open(FCS_STREAM_UART_EXT0);
     fcs_assert(result == FCS_STREAM_OK);
@@ -560,17 +560,33 @@ void fcs_board_tick(void) {
         fcs_assert(stream_result == FCS_STREAM_OK);
     }
 
-    /* Write the estimate log to the CPU UART */
-    //out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), estimate_log);
+    /* Write the estimate log to the CPU UART at 31.25Hz */
+    if ((fcs_log_get_frame_id(estimate_log) & 0x001Fu) == 0) {
+        out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
+                                        estimate_log);
+        write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, out_buf,
+                                     out_buf_len);
+        /* fcs_assert(out_buf_len == write_len); */
 
-    //write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, out_buf, out_buf_len);
-    /* fcs_assert(out_buf_len == write_len); */
+        /* Set the external trigger high for 8ms every 1024ms */
+#ifdef __TI_COMPILER_VERSION__
+        volatile CSL_GpioRegs *const gpio = (CSL_GpioRegs*)CSL_GPIO_REGS;
+        if ((fcs_log_get_frame_id(estimate_log) & 0x03FFu) == 0) {
+            /* Trigger line high (GPIO) */
+            gpio->BANK_REGISTERS[0].SET_DATA = 0x10u;
+        } else {
+            /* Trigger line low (GPIO) */
+            gpio->BANK_REGISTERS[0].CLR_DATA = 0x10u;
+        }
+#endif
+    }
 
     /*
     Now merge in the measurement log and HAL log, then send everything to the
     CPU via the USB stream.
     */
-    fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
+    fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED,
+                 fcs_log_get_frame_id(estimate_log));
     (void)fcs_log_merge(&out_log, measurement_log);
     (void)fcs_log_merge(&out_log, estimate_log);
     (void)fcs_log_merge(&out_log, control_log);

@@ -319,10 +319,10 @@ class ParameterLog(list):
         data = cobsr.decode(data.strip('\x00'))
 
         data_crc = struct.pack("<L" , binascii.crc32(data[:-4]) & 0xFFFFFFFF)
-        #if data[-4:] != data_crc:
-        #    raise ValueError("CRC mismatch: provided %s, calculated %s" %
-        #                     (binascii.b2a_hex(data[-4:]),
-        #                      binascii.b2a_hex(data_crc)))
+        if data[-4:] != data_crc:
+            raise ValueError("CRC mismatch: provided %s, calculated %s" %
+                             (binascii.b2a_hex(data[-4:]),
+                              binascii.b2a_hex(data_crc)))
 
         log_type, _, tick = struct.unpack("<BHH", data[0:5])
         data = data[5:]
@@ -380,6 +380,35 @@ def extract_waypoint(data):
     return dict(zip(
         ("lat", "lon", "alt", "airspeed", "yaw", "pitch", "roll", "flags"),
         struct.unpack("<ddfffffL", data)))
+
+
+def pack_waypoint(waypoint):
+    return struct.pack("<ddfffffL", waypoint["lat"], waypoint["lon"],
+                       waypoint["alt"], waypoint["yaw"], waypoint["pitch"],
+                       waypoint["roll"], waypoint["flags"])
+
+
+def unpack_path(data):
+    return dict(zip(
+        ("start_waypoint_id", "end_waypoint_id", "type", "flags",
+         "next_path_id"),
+        struct.unpack("<HHLHH", data)))
+
+
+def pack_path(path):
+    return struct.pack("<HHLHH", path["start_waypoint_id"],
+                       path["end_waypoint_id"], path["type"], path["flags"],
+                       path["next_path_id"])
+
+
+def unpack_boundary(data):
+    result = struct.unpack("<H16HB", data)
+    return result[1:result[0] + 1]
+
+
+def pack_boundary(boundary):
+    # boundary is an array of waypoint IDs
+    return struct.pack("<H16HB", len(boundary), *(boundary + [0]))
 
 
 def q_to_euler(q):
@@ -445,9 +474,8 @@ def iterlogs(stream):
             try:
                 logf = ParameterLog.deserialize(data)
             except Exception:
-                pass
-                #if len(data) != 13:
-                #    print "Invalid packet: %s" % binascii.b2a_hex(data)
+                if len(data) != 13:
+                    sys.stderr.write("Invalid packet: %s\n" % binascii.b2a_hex(data))
             else:
                 yield logf
             data = ''
@@ -508,22 +536,22 @@ def print_estimate_log(data):
                 pv[2] * 1e-2
             ]
         elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_VELOCITY_NED:
-            v = map(lambda x: float(x) * 1e-2, pv)
+            v = map(lambda x: float(x) * 1e-2, pv[0:3])
         elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_ATTITUDE_Q:
-            att_q = map(lambda x: float(x) / 32767.0, pv)
+            att_q = map(lambda x: float(x) / 32767.0, pv[0:4])
             att_ypr = list(q_to_euler(att_q))
         elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_ANGULAR_VELOCITY_XYZ:
             angular_v = map(
                 lambda x: math.degrees(float(x) / (32767.0 / math.pi * 0.25)),
-                pv)
+                pv[0:3])
         elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED:
-            wind_v = map(lambda x: float(x) * 1e-2, pv)
+            wind_v = map(lambda x: float(x) * 1e-2, pv[0:3])
         elif pt == ParameterType.FCS_PARAMETER_AHRS_MODE:
             mode = chr(pv[0])
         elif pt == ParameterType.FCS_PARAMETER_CONTROL_MODE:
             control_mode = pv[0]
         elif pt == ParameterType.FCS_PARAMETER_CONTROL_STATUS:
-            status = pv
+            status = pv[0:4]
         elif pt == ParameterType.FCS_PARAMETER_NAV_PATH_ID:
             path = pv[0]
 
@@ -534,7 +562,7 @@ def print_estimate_log(data):
             "%.1f,%.1f,%.1f," +
             "%.1f,%.1f,%.1f," +
             "%.2f,%.2f,%.2f," +
-            "%s,%d,%d,%.0f,%.0f"
+            "%s,%d,%d,%.0f,%.0f,%.0f"
         ) % tuple(
             pos +
             v +
@@ -542,10 +570,11 @@ def print_estimate_log(data):
             att_ypr +
             angular_v +
             wind_v +
-            [mode] +
-            [control_mode] +
-            [path] +
-            [status[1], status[3]]
+            ['x', 0, 0] +
+            #[mode] +
+            #[control_mode] +
+            #[path] +
+            [status[0], status[2], status[3]]
         )
 
     return control_mode, math.radians(pos[0]), math.radians(pos[1]), pos[2]
@@ -697,15 +726,15 @@ def print_control_log(data):
 
 
 if __name__ == "__main__":
-    #print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode,control_mode,path,objval,resets"
+    print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode,control_mode,path,objval,errors,resets"
 
-    print "gps_mode_1,gps_pdop_1,gps_numsv_1,gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
-          "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
-          "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
-          "control_rail_1,gps_mode_2,gps_pdop_2,gps_numsv_2,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
-          "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
-          "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
-          "control_lail_2,control_rail_2"
+    #print "gps_mode_1,gps_pdop_1,gps_numsv_1,gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
+    #      "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
+    #      "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
+    #      "control_rail_1,gps_mode_2,gps_pdop_2,gps_numsv_2,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
+    #      "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
+    #      "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
+    #      "control_lail_2,control_rail_2"
 
     n = 0
     for logf in iterlogs(sys.stdin):
@@ -715,14 +744,8 @@ if __name__ == "__main__":
         #    waypoint = extract_waypoint(result.value)
 
         try:
-            if n % 1000 == 0:
-                result = print_estimate_log(logf)
-            #print repr(logf)
-            #if result[0]:
+            print_estimate_log(logf)
             #print_measurement_log(n, logf)
-            #    print "%.3f,%.3f,%.2f,%.3f W" % (lla_to_ned((waypoint["lat"], waypoint["lon"], waypoint["alt"]), result[1:]) + (math.degrees(waypoint["yaw"]), ))
-            #    print waypoint
-            #    #print_measurement_log(logf)
             n += 1
         except Exception:
             raise
