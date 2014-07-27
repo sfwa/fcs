@@ -75,14 +75,6 @@ uint32_t nmpc_config_get_horizon_length(void);
 float nmpc_config_get_step_length(void);
 enum nmpc_precision_t nmpc_config_get_precision(void);
 
-// FIXME -- tuning only
-void update_x8_dynamics_params(float roll_due_to_control,
-float roll_due_to_beta, float roll_due_to_roll_rate,
-float pitch_due_to_control, float yaw_due_to_control, float yaw_due_to_beta,
-float yaw_due_to_yaw_rate, float roll_inertia_inv, float pitch_inertia_inv,
-float yaw_inertia_inv, float roll_yaw_inertia_inv, float lift_due_to_alpha,
-float lift_constant, float drag_due_to_alpha, float thrust_cve);
-
 #ifdef __cplusplus
 }
 #endif

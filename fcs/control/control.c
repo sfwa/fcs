@@ -192,8 +192,7 @@ void fcs_control_tick(void) {
     enum nmpc_result_t result;
     struct fcs_state_estimate_t state_estimate;
     struct fcs_log_t *control_log, *measurement_log;
-    // FIXME
-    // struct fcs_path_t *path;
+    struct fcs_path_t *path;
     struct fcs_parameter_t param, param2;
     float controls[NMPC_CONTROL_DIM], alt_diff, yaw, pitch, roll;
     uint32_t start_t = cycle_count();
@@ -289,52 +288,6 @@ void fcs_control_tick(void) {
         }
     }
 
-    /*
-    FIXME -- tuning only. Read a control parameter packet, do some sanity
-    checking and pass it to the NMPC dynamics model.
-    */
-    if (fcs_parameter_find_by_type_and_device(
-            measurement_log, FCS_PARAMETER_KEY_VALUE, 1u, &param)) {
-        uint8_t data[40];
-        static uint8_t last_data[15];
-        uint8_t key[4];
-        size_t param_data_len;
-
-        param_data_len = fcs_parameter_get_key_value(key, data, 40u, &param);
-        if (param_data_len == 15u && key[0] == 'p' && key[1] == 'a' &&
-                key[2] == 'r' && key[3] == 'm' && data[0] <= 150u &&
-                data[1] <= 100u && data[2] <= 100u && data[3] <= 150u &&
-                data[4] <= 150u && data[5] <= 100u && data[6] <= 100u &&
-                data[7] <= 160u && data[8] <= 160u && data[9] <= 160u &&
-                data[10] <= 160u && data[11] <= 250u && data[12] <= 250u &&
-                data[13] <= 250u && data[14] <= 100u) {
-            if (memcmp(data, last_data, 15) != 0) {
-                nav_state.version++; // push back an update so we know it's applied
-                update_x8_dynamics_params(
-                    (float)data[0] * 0.005f, // roll due to control
-                    (float)data[1] * 0.005f, // roll due to beta
-                    (float)data[2] * 0.005f, // roll due to rate
-                    (float)data[3] * 0.005f, // pitch due to control
-                    (float)data[4] * 0.005f, // yaw due to control
-                    (float)data[5] * 0.005f, // yaw due to beta
-                    (float)data[6] * 0.005f,  // yaw due to yaw rate
-
-                    (float)data[7] * 0.1f, // roll inertia inv
-                    (float)data[8] * 0.1f, // pitch inertia inv
-                    (float)data[9] * 0.1f, // yaw inertia inv
-                    (float)data[10] * 0.1f, // roll yaw inertia inv
-                    (float)data[11] * 0.01f, // lift due to alpha
-                    (float)data[12] * 0.01f, // lift constant
-                    (float)data[13] * 0.01f,  // drag due to alpha
-
-                    (float)data[14] * 0.0005f // thrust Cve
-                );
-
-                memcpy(last_data, data, 15u);
-            }
-        }
-    }
-
     measurement_log = fcs_exports_log_close(measurement_log);
     fcs_assert(!measurement_log);
 
@@ -358,72 +311,71 @@ void fcs_control_tick(void) {
         fcs_assert(0 && "Mission boundary crossed");
     }
 
-//    // FIXME
-//    if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
-//        /* Handle loss of data link and loss of GPS when in autonomous mode */
-//        if (ms_since_last_gps > 1000 && ms_since_last_data > 10000) {
-//            /* Lock up */
-//            fcs_assert(0 && "Lost GPS and lost data link");
-//        }
-//
-//        if (ms_since_last_gps > 30000) {
-//            /* Lock up */
-//            fcs_assert(0 && "Lost GPS > 30 sec");
-//        } else if (ms_since_last_gps > 1000) {
-//            /* Enter a holding pattern if we're not already in one */
-//            if (nav_state.reference_path_id[0] != FCS_CONTROL_HOLD_PATH_ID &&
-//                    nav_state.reference_path_id[0] !=
-//                    FCS_CONTROL_STABILISE_PATH_ID) {
-//                fcs_trajectory_start_hold(&nav_state, &state_estimate);
-//                fcs_trajectory_recalculate(&nav_state, &state_estimate);
-//            }
-//        }
-//
-//        if (control_state.intent == FCS_CONTROL_INTENT_RETURNING_HOME &&
-//                control_hold_timer > 120000) {
-//            /* We've been holding at the HOME waypoint for 2 min -- abort */
-//            fcs_assert(0 && "Lost data link");
-//        } else if (control_state.intent == FCS_CONTROL_INTENT_RALLYING &&
-//                   control_hold_timer > 120000) {
-//            /*
-//            We've been holding at the RALLY waypoint for 2 min -- return
-//            home.
-//            */
-//            memcpy(&nav_state.waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID],
-//                   &nav_state.reference_trajectory[0],
-//                   sizeof(struct fcs_waypoint_t));
-//            memcpy(&nav_state.waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
-//                   &nav_state.waypoints[FCS_CONTROL_HOME_WAYPOINT_ID],
-//                   sizeof(struct fcs_waypoint_t));
-//
-//            path = &nav_state.paths[FCS_CONTROL_RETURN_HOME_PATH_ID];
-//            path->start_waypoint_id = FCS_CONTROL_STABILISE_WAYPOINT_ID;
-//            path->end_waypoint_id = FCS_CONTROL_HOME_WAYPOINT_ID;
-//            path->next_path_id = FCS_CONTROL_HOLD_PATH_ID;
-//            path->type = FCS_PATH_DUBINS_CURVE;
-//
-//            nav_state.reference_path_id[0] = FCS_CONTROL_RETURN_HOME_PATH_ID;
-//            fcs_trajectory_recalculate(&nav_state, &state_estimate);
-//        } else if (control_state.intent == FCS_CONTROL_INTENT_NAVIGATING &&
-//                   ms_since_last_data > 10000) {
-//            /* Lost the data link -- go to the RALLY waypoint */
-//            memcpy(&nav_state.waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID],
-//                   &nav_state.reference_trajectory[0],
-//                   sizeof(struct fcs_waypoint_t));
-//            memcpy(&nav_state.waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
-//                   &nav_state.waypoints[FCS_CONTROL_RALLY_WAYPOINT_ID],
-//                   sizeof(struct fcs_waypoint_t));
-//
-//            path = &nav_state.paths[FCS_CONTROL_RALLY_PATH_ID];
-//            path->start_waypoint_id = FCS_CONTROL_STABILISE_WAYPOINT_ID;
-//            path->end_waypoint_id = FCS_CONTROL_RALLY_WAYPOINT_ID;
-//            path->next_path_id = FCS_CONTROL_HOLD_PATH_ID;
-//            path->type = FCS_PATH_DUBINS_CURVE;
-//
-//            nav_state.reference_path_id[0] = FCS_CONTROL_RALLY_PATH_ID;
-//            fcs_trajectory_recalculate(&nav_state, &state_estimate);
-//        }
-//    }
+    if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
+        /* Handle loss of data link and loss of GPS when in autonomous mode */
+        if (ms_since_last_gps > 1000 && ms_since_last_data > 10000) {
+            /* Lock up */
+            fcs_assert(0 && "Lost GPS and lost data link");
+        }
+
+        if (ms_since_last_gps > 30000) {
+            /* Lock up */
+            fcs_assert(0 && "Lost GPS > 30 sec");
+        } else if (ms_since_last_gps > 1000) {
+            /* Enter a holding pattern if we're not already in one */
+            if (nav_state.reference_path_id[0] != FCS_CONTROL_HOLD_PATH_ID &&
+                    nav_state.reference_path_id[0] !=
+                    FCS_CONTROL_STABILISE_PATH_ID) {
+                fcs_trajectory_start_hold(&nav_state, &state_estimate);
+                fcs_trajectory_recalculate(&nav_state, &state_estimate);
+            }
+        }
+
+        if (control_state.intent == FCS_CONTROL_INTENT_RETURNING_HOME &&
+                control_hold_timer > 120000) {
+            /* We've been holding at the HOME waypoint for 2 min -- abort */
+            fcs_assert(0 && "Lost data link");
+        } else if (control_state.intent == FCS_CONTROL_INTENT_RALLYING &&
+                   control_hold_timer > 120000) {
+            /*
+            We've been holding at the RALLY waypoint for 2 min -- return
+            home.
+            */
+            memcpy(&nav_state.waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID],
+                   &nav_state.reference_trajectory[0],
+                   sizeof(struct fcs_waypoint_t));
+            memcpy(&nav_state.waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+                   &nav_state.waypoints[FCS_CONTROL_HOME_WAYPOINT_ID],
+                   sizeof(struct fcs_waypoint_t));
+
+            path = &nav_state.paths[FCS_CONTROL_RETURN_HOME_PATH_ID];
+            path->start_waypoint_id = FCS_CONTROL_STABILISE_WAYPOINT_ID;
+            path->end_waypoint_id = FCS_CONTROL_HOME_WAYPOINT_ID;
+            path->next_path_id = FCS_CONTROL_HOLD_PATH_ID;
+            path->type = FCS_PATH_DUBINS_CURVE;
+
+            nav_state.reference_path_id[0] = FCS_CONTROL_RETURN_HOME_PATH_ID;
+            fcs_trajectory_recalculate(&nav_state, &state_estimate);
+        } else if (control_state.intent == FCS_CONTROL_INTENT_NAVIGATING &&
+                   ms_since_last_data > 10000) {
+            /* Lost the data link -- go to the RALLY waypoint */
+            memcpy(&nav_state.waypoints[FCS_CONTROL_STABILISE_WAYPOINT_ID],
+                   &nav_state.reference_trajectory[0],
+                   sizeof(struct fcs_waypoint_t));
+            memcpy(&nav_state.waypoints[FCS_CONTROL_HOLD_WAYPOINT_ID],
+                   &nav_state.waypoints[FCS_CONTROL_RALLY_WAYPOINT_ID],
+                   sizeof(struct fcs_waypoint_t));
+
+            path = &nav_state.paths[FCS_CONTROL_RALLY_PATH_ID];
+            path->start_waypoint_id = FCS_CONTROL_STABILISE_WAYPOINT_ID;
+            path->end_waypoint_id = FCS_CONTROL_RALLY_WAYPOINT_ID;
+            path->next_path_id = FCS_CONTROL_HOLD_PATH_ID;
+            path->type = FCS_PATH_DUBINS_CURVE;
+
+            nav_state.reference_path_id[0] = FCS_CONTROL_RALLY_PATH_ID;
+            fcs_trajectory_recalculate(&nav_state, &state_estimate);
+        }
+    }
 
     /*
     Check for multiple infeasible results in a row, and reset the trajectory
