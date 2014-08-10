@@ -40,6 +40,11 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t);
 
+float fcs_trajectory_interpolate_release(struct fcs_waypoint_t *new_point,
+const struct fcs_waypoint_t *last_point, const float *restrict wind,
+const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
+float t);
+
 float fcs_trajectory_interpolate_figure_eight(
 struct fcs_waypoint_t *new_point, const struct fcs_waypoint_t *last_point,
 const float *restrict wind, const struct fcs_waypoint_t *start,

@@ -45,8 +45,8 @@ X-Plane simulation, with the DSP connected via a USB-serial adapter
 ahrs_tick = 0
 
 
-START_LAT = -37.81358378
-START_LON = 144.9
+START_LAT = -37.954719 #-37.81358378
+START_LON = 145.237617 #144.9
 START_ALT = 200
 
 
@@ -272,7 +272,7 @@ def connect_to_xplane():
 def reset_xplane_state(s, yaw=0.0, pitch=0.0, roll=0.0, velocity=None):
     disable_xplane_sim(s)
 
-    s.sendall("world-set %f %f %f\n" % (-37.8136, START_LON, START_ALT))
+    s.sendall("world-set %f %f %f\n" % (START_LAT - 0.05, START_LON, START_ALT))
     time.sleep(1.0)
 
     # Clear the engine fire -- this happens whenever the X8 is on the ground

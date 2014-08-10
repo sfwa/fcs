@@ -475,6 +475,15 @@ void fcs_control_tick(void) {
         controls[2] = (controls[2] - 0.5f) * 0.5f + 0.5f;
     }
 
+    /*
+    Check the throttle cut flag -- if it's set, cut the throttle immediately
+    */
+    if (nav_state.reference_trajectory[0].flags &
+            FCS_WAYPOINT_FLAG_THROTTLE_CUT_MASK) {
+        controls[0] = 0.0f;
+        control_last_throttle = 0.0f;
+    }
+
     control_log = fcs_exports_log_open(FCS_LOG_TYPE_CONTROL, FCS_MODE_WRITE);
     fcs_assert(control_log);
 
@@ -495,7 +504,14 @@ void fcs_control_tick(void) {
         param.data.u16[1] = manual_setpoint[1];
         param.data.u16[2] = manual_setpoint[2];
     }
+    fcs_log_add_parameter(control_log, &param);
 
+    /* Add GPIO to the control log if a payload release is requested */
+    fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 8u, 1u);
+    fcs_parameter_set_type(&param, FCS_PARAMETER_GP_OUT);
+    fcs_parameter_set_device_id(&param, 0);
+    param.data.u8[0] = (nav_state.reference_trajectory[0].flags &
+            FCS_WAYPOINT_FLAG_RELEASE_MASK) ? 0xFu : 0x0u;
     fcs_log_add_parameter(control_log, &param);
 
     /*

@@ -110,6 +110,8 @@ class ValueType(Enum):
 FCS_PARAMETER_KEY_PATH = "PATH"
 FCS_PARAMETER_KEY_WAYPOINT = "WAYP"
 FCS_PARAMETER_KEY_REFERENCE_POINT = "REFP"
+FCS_PARAMETER_KEY_NAV_BOUNDARY = "BDRY"
+FCS_PARAMETER_KEY_REROUTE = "RRTE"
 
 
 class Parameter(object):
@@ -384,21 +386,22 @@ def extract_waypoint(data):
 
 def pack_waypoint(waypoint):
     return struct.pack("<ddfffffL", waypoint["lat"], waypoint["lon"],
-                       waypoint["alt"], waypoint["yaw"], waypoint["pitch"],
-                       waypoint["roll"], waypoint["flags"])
+                       waypoint["alt"], waypoint["airspeed"], waypoint["yaw"],
+                       waypoint["pitch"], waypoint["roll"], waypoint["flags"])
 
 
 def unpack_path(data):
-    return dict(zip(
+    result = dict(zip(
         ("start_waypoint_id", "end_waypoint_id", "type", "flags",
          "next_path_id"),
         struct.unpack("<HHLHH", data)))
+    result["type"] = ord(result["type"])
 
 
 def pack_path(path):
     return struct.pack("<HHLHH", path["start_waypoint_id"],
-                       path["end_waypoint_id"], path["type"], path["flags"],
-                       path["next_path_id"])
+                       path["end_waypoint_id"], ord(path["type"]),
+                       path["flags"], path["next_path_id"])
 
 
 def unpack_boundary(data):

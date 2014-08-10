@@ -69,13 +69,13 @@ void _get_next_reference_point(float *restrict state);
 static float stabilise_state_weights[NMPC_DELTA_DIM] = {
     1e-4f, 1e-4f, 1e-2f, /* position */
     1e0f, 1e0f, 1e0f, /* velocity */
-    1e0f, 1e0f, 1e0f, /* attitude */
+    1e0f, 1e0f, 2e-1f, /* attitude */
     1e0f, 1e0f, 1e0f /* angular velocity */
 };
 static float normal_state_weights[NMPC_DELTA_DIM] = {
     2e-2f, 2e-2f, 2e0f,  /* position */
     1e0f, 1e0f, 1e0f,  /* velocity */
-    5e0f, 1e0f, 1e0f,  /* attitude */
+    5e0f, 1e0f, 2e-1f,  /* attitude */
     2e0f, 1e0f, 1e0f /* angular velocity */
 };
 
@@ -360,6 +360,9 @@ enum fcs_path_type_t type, float t) {
     } else if (type == FCS_PATH_FIGURE_EIGHT) {
         return fcs_trajectory_interpolate_figure_eight(new_point, last_point,
                                                        wind, start, end, t);
+    } else if (type == FCS_PATH_RELEASE) {
+        return fcs_trajectory_interpolate_release(new_point, last_point, wind,
+                                                  start, end, t);
     } else {
         fcs_assert(false && "Invalid path type.");
     }

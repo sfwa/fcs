@@ -80,6 +80,7 @@ ADD_EXECUTABLE(unittest
     ../control/dubins.c
     ../control/figure-eight.c
     ../control/linear.c
+    ../control/release.c
     ../control/trajectory.c
     test_control.cpp
     ../hardware/platform/cpuv1-ioboardv1.c
@@ -133,6 +134,7 @@ ADD_LIBRARY(fcs SHARED
     ../control/trajectory.c
     ../control/dubins.c
     ../control/figure-eight.c
+    ../control/release.c
     ../control/linear.c
     ../exports/log.c
     ../exports/calibration.c

@@ -73,6 +73,7 @@ enum fcs_path_type_t {
     FCS_PATH_LINE = 'L',
     FCS_PATH_DUBINS_CURVE = 'D',
     FCS_PATH_FIGURE_EIGHT = '8',
+    FCS_PATH_RELEASE = 'R',
     FCS_PATH_INVALID = 0
 };
 
@@ -110,6 +111,13 @@ generation system.
 
 #define FCS_WAYPOINT_FLAG_SEGMENT_MASK 0x000000F0u
 #define FCS_WAYPOINT_FLAG_SEGMENT_OFFSET 4u
+
+#define FCS_WAYPOINT_FLAG_THROTTLE_CUT_MASK 0x00000100u
+#define FCS_WAYPOINT_FLAG_THROTTLE_CUT_OFFSET 8u
+
+#define FCS_WAYPOINT_FLAG_RELEASE_MASK 0x00000200u
+#define FCS_WAYPOINT_FLAG_RELEASE_OFFSET 9u
+
 
 struct fcs_path_t {
     uint16_t start_waypoint_id;
