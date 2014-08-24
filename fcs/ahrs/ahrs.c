@@ -59,6 +59,8 @@ static uint64_t ahrs_mode_start_time;
 static enum fcs_mode_t ahrs_mode;
 static uint64_t ahrs_last_gps_time;
 static uint64_t ahrs_last_baro_time;
+static uint64_t ahrs_last_comms_time;
+static uint16_t ahrs_last_gcs_packet_tick;
 
 /*
 Check a vector for NaN values; return true if any are found, and false
@@ -86,6 +88,8 @@ static void _populate_estimate_log(
 const struct ukf_state_t *restrict state,
 const double *restrict error, const double *restrict field,
 enum fcs_mode_t mode, double static_pressure, double static_temp);
+static void _populate_ahrs_status(struct fcs_log_t *estimate_log,
+enum fcs_mode_t ahrs_mode);
 
 
 void fcs_ahrs_init(void) {
@@ -114,11 +118,13 @@ void fcs_ahrs_tick(void) {
     While copying measurement data to the UKF, get sensor error and geometry
     information so the sensor model parameters can be updated.
     */
-    double v[3], control_pos[4] = {0.0, 0.0, 0.0, 0.0}, speed, wmm_field_inv;
-    bool got_result, got_gps = false, got_reference_alt = true; /* FIXME */
+    static double control_pos[4];  /* Static so that missing values in a given
+                                      frame don't disrupt the filter */
+    double v[3], speed, wmm_field_inv;
+    bool got_result, got_gps = false, got_reference_alt = false;
     struct ukf_ioboard_params_t params;
     struct fcs_parameter_t parameter;
-    struct fcs_log_t *hal_log, *measurement_log;
+    struct fcs_log_t *hal_log, *measurement_log, *estimate_log;
     struct ukf_state_t state_values;
     double error[24];
 
@@ -214,23 +220,36 @@ void fcs_ahrs_tick(void) {
     ukf_set_params(&params);
     ukf_set_process_noise(ahrs_process_noise);
 
+    measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT,
+                                           FCS_MODE_READ);
+    fcs_assert(measurement_log);
+
     /* Don't update the filter during initialization */
     if (ahrs_mode != FCS_MODE_INITIALIZING) {
-        measurement_log = fcs_exports_log_open(FCS_LOG_TYPE_MEASUREMENT,
-        		                               FCS_MODE_READ);
-        fcs_assert(measurement_log);
-
         got_result = fcs_parameter_find_by_type_and_device(
         	measurement_log, FCS_PARAMETER_CONTROL_POS, 1u, &parameter);
         if (got_result) {
             fcs_parameter_get_values_d(&parameter, control_pos, 4u);
             vector3_scale_d(control_pos, 1.0 / 65535.0);
-            ukf_iterate((float)AHRS_DELTA, control_pos);
         }
 
-        measurement_log = fcs_exports_log_close(measurement_log);
-        fcs_assert(!measurement_log);
+        ukf_iterate((float)AHRS_DELTA, control_pos);
     }
+
+    /* Check if we've received a new packet from the GCS recently */
+    got_result = fcs_parameter_find_by_type_and_device(
+        measurement_log, FCS_PARAMETER_IO_STATUS, 1u, &parameter);
+    if (got_result) {
+        if (ahrs_last_gcs_packet_tick != parameter.data.u16[1]) {
+            ahrs_last_comms_time = ahrs_solution_time;
+            got_reference_alt = true;
+        }
+
+        ahrs_last_gcs_packet_tick = parameter.data.u16[1];
+    }
+
+    measurement_log = fcs_exports_log_close(measurement_log);
+    fcs_assert(!measurement_log);
 
     /* Copy the state out of the UKF */
     ukf_get_state(&state_values);
@@ -256,6 +275,12 @@ void fcs_ahrs_tick(void) {
 
         _populate_estimate_log(&state_values, error, ahrs_wmm_field,
                                ahrs_mode, STANDARD_PRESSURE, STANDARD_TEMP);
+    } else {
+        estimate_log = fcs_exports_log_open(FCS_LOG_TYPE_ESTIMATE, FCS_MODE_APPEND);
+        fcs_assert(estimate_log);
+        _populate_ahrs_status(estimate_log, ahrs_mode);
+        estimate_log = fcs_exports_log_close(estimate_log);
+        fcs_assert(!estimate_log);
     }
 
     /* Check the current mode and transition if necessary */
@@ -463,6 +488,16 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_AHRS_MODE, 1u, tmp, 2u);
 
+    _populate_ahrs_status(estimate_log, mode);
+
+    estimate_log = fcs_exports_log_close(estimate_log);
+    fcs_assert(!estimate_log);
+}
+
+static void _populate_ahrs_status(struct fcs_log_t *estimate_log,
+enum fcs_mode_t ahrs_mode) {
+    int32_t tmp[4];
+
     /*
     AHRS status 0 is the maximum time since last critical sensor update (for
     GPS and barometric pressure) -- if it exceeds a certain value flight
@@ -487,12 +522,18 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
     if it exceeds a certain value the control system should follow the loss
     of data link procedure.
     */
-    tmp[1] = 0;
+    uint64_t t_since_last_comms;
+    t_since_last_comms = ahrs_solution_time - ahrs_last_comms_time;
+
+    /* Ignore sensor timeouts in any mode but active */
+    if (ahrs_mode != FCS_MODE_ACTIVE && ahrs_mode != FCS_MODE_SIMULATING) {
+        t_since_last_comms = 0;
+    }
+
+    tmp[1] = (int16_t)(t_since_last_comms > INT16_MAX ?
+                       INT16_MAX : t_since_last_comms);
     _set_estimate_value_i32(
         estimate_log, FCS_PARAMETER_AHRS_STATUS, 2u, tmp, 2u);
-
-    estimate_log = fcs_exports_log_close(estimate_log);
-    fcs_assert(!estimate_log);
 }
 
 static bool _get_hal_sensor_value(const struct fcs_log_t *plog,

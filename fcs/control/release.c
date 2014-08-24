@@ -39,7 +39,7 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t) {
     float delta_n, delta_e, x, end_ned[3], distance, target_roll,
-          target_airspeed, wind_dot;
+          target_airspeed, wind_dot, distance_inv, start_t = t;
 
     /* Handle zero-length paths */
     if (start == end) {
@@ -95,13 +95,15 @@ float t) {
         delta_n = 0.0;
         delta_e = 0.0;
     } else {
-        distance = 1.0f / distance;
+        distance_inv = 1.0f / distance;
 
-        wind_dot = (end_ned[0] * distance * wind[0] +
-                    end_ned[1] * distance * wind[1]);
+        wind_dot = (end_ned[0] * distance_inv * wind[0] +
+                    end_ned[1] * distance_inv * wind[1]);
 
-        delta_n = (end_ned[0] * distance) * (last_point->airspeed + wind_dot);
-        delta_e = (end_ned[1] * distance) * (last_point->airspeed + wind_dot);
+        delta_n = (end_ned[0] * distance_inv) *
+                  (last_point->airspeed + wind_dot);
+        delta_e = (end_ned[1] * distance_inv) *
+                  (last_point->airspeed + wind_dot);
 
         /*
         If we're past the last point, work out how much t we should use. Base
@@ -135,7 +137,22 @@ float t) {
         mod_2pi_f((float)atan2(end_ned[1], end_ned[0]));
     new_point->pitch = start->pitch + x * (end->pitch - start->pitch) +
                        3.0f * ((float)M_PI / 180.0f);
-    target_roll = 0.0f;
+
+    /* Interpolate roll in whichever direction is the shortest. */
+    target_roll = end->roll - start->roll;
+    if (target_roll > M_PI) {
+        target_roll -= M_PI * 2.0f;
+    } else if (target_roll < -M_PI) {
+        target_roll += M_PI * 2.0f;
+    }
+    new_point->roll = start->roll + x * target_roll;
+    if (new_point->roll > M_PI) {
+        new_point->roll -= M_PI * 2.0f;
+    } else if (new_point->roll < -M_PI) {
+        new_point->roll += M_PI * 2.0f;
+    }
+
+    new_point->flags = FCS_WAYPOINT_FLAG_RELEASE_MASK;
 
     return t;
 }

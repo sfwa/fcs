@@ -152,12 +152,5 @@ float t) {
         new_point->roll += M_PI * 2.0f;
     }
 
-    /* Use end waypoint flags if close enough */
-    if (distance < 5.0f && end->flags) {
-        new_point->flags = end->flags;
-    } else {
-        new_point->flags = 0;
-    }
-
     return t;
 }

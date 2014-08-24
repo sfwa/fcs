@@ -356,11 +356,11 @@ void fcs_board_tick(void) {
     at a consistent time regardless of length.
     */
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
-    fcs_assert(out_buf_len < 240u);
-    memmove(&out_buf[240u - out_buf_len], out_buf, out_buf_len);
-    memset(out_buf, 0, 240u - out_buf_len);
+    fcs_assert(out_buf_len < 250u);
+    memmove(&out_buf[250u - out_buf_len], out_buf, out_buf_len);
+    memset(out_buf, 0, 250u - out_buf_len);
 
-    write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, 240u);
+    write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, 250u);
     //fcs_assert(write_len == 256u);
 
     /*

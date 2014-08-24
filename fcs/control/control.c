@@ -199,7 +199,7 @@ void fcs_control_tick(void) {
     int32_t ms_since_last_gps, ms_since_last_data;
     uint16_t manual_setpoint[NMPC_CONTROL_DIM];
     uint8_t param_key[4];
-    bool control_timeout = false, needs_path_reset = false;
+    bool control_timeout = false, needs_path_reset = false, do_release;
 
     fcs_assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
 
@@ -277,6 +277,7 @@ void fcs_control_tick(void) {
             nav_state.reference_path_id[0] = param.data.u16[0];
             nav_state.version++;
             needs_path_reset = true;
+            control_state.intent = FCS_CONTROL_INTENT_NAVIGATING;
         } else if (fcs_parameter_find_by_key_and_device(
                     measurement_log, FCS_PARAMETER_KEY_NAV_BOUNDARY, 1u,
                     &param)) {
@@ -356,6 +357,8 @@ void fcs_control_tick(void) {
 
             nav_state.reference_path_id[0] = FCS_CONTROL_RETURN_HOME_PATH_ID;
             fcs_trajectory_recalculate(&nav_state, &state_estimate);
+
+            control_state.intent = FCS_CONTROL_INTENT_RETURNING_HOME;
         } else if (control_state.intent == FCS_CONTROL_INTENT_NAVIGATING &&
                    ms_since_last_data > 10000) {
             /* Lost the data link -- go to the RALLY waypoint */
@@ -374,6 +377,8 @@ void fcs_control_tick(void) {
 
             nav_state.reference_path_id[0] = FCS_CONTROL_RALLY_PATH_ID;
             fcs_trajectory_recalculate(&nav_state, &state_estimate);
+
+            control_state.intent = FCS_CONTROL_INTENT_RALLYING;
         }
     }
 
@@ -507,11 +512,20 @@ void fcs_control_tick(void) {
     fcs_log_add_parameter(control_log, &param);
 
     /* Add GPIO to the control log if a payload release is requested */
+    if ((nav_state.reference_trajectory[0].flags &
+            FCS_WAYPOINT_FLAG_RELEASE_MASK) ||
+        (nav_state.reference_path_id[0] < FCS_CONTROL_MAX_PATHS &&
+            nav_state.paths[nav_state.reference_path_id[0]].type ==
+            FCS_PATH_RELEASE)) {
+        do_release = true;
+    } else {
+        do_release = false;
+    }
+
     fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 8u, 1u);
     fcs_parameter_set_type(&param, FCS_PARAMETER_GP_OUT);
     fcs_parameter_set_device_id(&param, 0);
-    param.data.u8[0] = (nav_state.reference_trajectory[0].flags &
-            FCS_WAYPOINT_FLAG_RELEASE_MASK) ? 0xFu : 0x0u;
+    param.data.u8[0] = do_release ? 0xFu : 0x0u;
     fcs_log_add_parameter(control_log, &param);
 
     /*
