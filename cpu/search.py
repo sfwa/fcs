@@ -1,4 +1,7 @@
+import os
 import sys
+import plog
+import math
 import numpy
 import subprocess
 import skimage.feature
@@ -6,6 +9,58 @@ import skimage.color
 import skimage.exposure
 import skimage.io
 import skimage.draw
+
+
+WGS84_A = 6378137.0
+FOV_X = 1.712
+FOV_Y = FOV_X
+
+def cam_from_img(img):
+    # Convert x, y pixel coordinates to a point on a plane at one metre
+    # from the camera
+    pt_x = (img[0] - 640.0) / 640.0 * FOV_X
+    pt_y = (img[1] - 480.0) / 480.0 * FOV_Y
+
+    return (pt_x, pt_y)
+
+
+def geo_from_cam(cam, v_lat, v_lon, v_alt, v_q):
+    # Convert x, y image coordinates (in metres at 1.0m viewing distance) to
+    # body-frame coordinates
+    cx = -cam[1]
+    cy = cam[0]
+    cz = 1.0
+
+    # Transform body frame to world frame (TODO: may need to take conjugate)
+    qx, qy, qz, qw = v_q
+    qx = -qx
+    qy = -qy
+    qz = -qz
+
+    tx = 2.0 * (qy * cz - qz * cy)
+    ty = 2.0 * (qz * cx - qx * cz)
+    tz = 2.0 * (qx * cy - qy * cx)
+
+    rx = cx + qw * tx + qy * tz - qz * ty
+    ry = cy + qw * ty + qz * tx - qx * tz
+    rz = cz + qw * tz - qy * tx + qx * ty
+
+    # Project the ray down to where it intersects with the ground plane.
+    # If the z-component is negative or zero, the point is in the sky.
+    if rz < 0.001:
+        return None
+
+    fac = v_alt / rz
+    n = rx * fac
+    e = ry * fac
+
+    # Convert north/east offsets to lat/lon
+    return (
+        v_lat + n / WGS84_A,
+        n,
+        v_lon + e / (WGS84_A * math.cos(v_lat)),
+        e
+        )
 
 
 def array_from_pgm(data, byteorder='>'):
@@ -17,83 +72,84 @@ def array_from_pgm(data, byteorder='>'):
             ).reshape((height, width, 3))
 
 
-def detect(pgm_path, threshold=0.2, min_size=1, max_size=5):
+def detect(pgm_path):
+    lat = None
+    lon = None
+    alt = None
+    q = None
+
+    # Extract the attitude estimate for the current image
+    fdir, fname = os.path.split(pgm_path)
+    telem_path = os.path.join(
+        fdir, "telem" + fname[len("img"):].rpartition(".")[0] + ".txt")
+    with open(telem_path, "r") as telem_in:
+        last_telem = list(p for p in plog.iterlogs_raw(telem_in))[-1]
+        attitude_est = plog.ParameterLog.deserialize(last_telem)
+
+        lat, lon, alt = attitude_est.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_POSITION_LLA).values
+        lat = math.degrees(lat * math.pi / 2**31)
+        lon = math.degrees(lon * math.pi / 2**31)
+        alt *= 1e-2
+
+        q = attitude_est.find_by(
+            device_id=0,
+            parameter_type=plog.ParameterType.FCS_PARAMETER_ESTIMATED_ATTITUDE_Q).values
+        q = map(lambda x: float(x) / 32767.0, q)
+
+    # Find blob coordinates
     with open(pgm_path, "r") as img_in:
         # Debayer the image
         debayer = subprocess.Popen(
             ["./debayer", "GBRG"], stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
-        img_out, stderr = debayer.communicate(img_in.read())
+        img_out, blob_out = debayer.communicate(img_in.read())
 
         # Convert the output to a numpy array
         img_arr = skimage.img_as_float(array_from_pgm(img_out))
 
-        # Crop the useless bits of the frame, convert to LAB, and extract the
-        # L channel as a float in [0.0, 1.0]
-        img_lab = skimage.img_as_float(
-            skimage.color.rgb2lab(img_arr)[..., 0] * 0.01)
-        img_hsv = skimage.img_as_float(
-            skimage.color.rgb2hsv(img_arr)[..., 0])
-        img_hsv2 = skimage.img_as_float(
-            skimage.color.rgb2hsv(img_arr)[..., 0])
-
-        # Stretch the contrast so that the 0.2th percentile brightness becomes
-        # 0.0, and the 99.8th percentile brightness becomes 1.0.
-        pmin, pmax = numpy.percentile(img_lab, (90.0, 99.8))
-        img_exp = skimage.exposure.rescale_intensity(img_lab,
-                                                     in_range=(pmin, pmax))
-
-        # Detect blue blobs
-        img_hsv = numpy.mod(1.0 + img_hsv - 0.65, 1.0)
-        img_hsv = numpy.abs(img_hsv - 1.0)
-        img_hsv[img_hsv > 0.5] = 0.5
-        img_hsv = 1.0 - img_hsv * 2.0
-        img_hsv *= img_exp
-
-        out_path = pgm_path.rpartition(".")[0] + "-h-blue.png"
-        skimage.io.imsave(out_path, img_hsv)
-
-        blue_blobs = skimage.feature.blob_dog(img_hsv, min_sigma=min_size,
-                                              max_sigma=max_size,
-                                              sigma_ratio=1.8,
-                                              threshold=threshold)
-
-        # Detect yellow blobs
-        img_hsv2 = numpy.mod(1.0 + img_hsv2 - 0.15, 1.0)
-        img_hsv2 = numpy.abs(img_hsv2 - 1.0)
-        img_hsv2[img_hsv2 > 0.5] = 0.5
-        img_hsv2 = 1.0 - img_hsv2 * 2.0
-        img_hsv2 *= img_exp
-
-        out_path = pgm_path.rpartition(".")[0] + "-h-yellow.png"
-        skimage.io.imsave(out_path, img_hsv2)
-
-        yellow_blobs = skimage.feature.blob_dog(img_hsv2, min_sigma=min_size,
-                                                max_sigma=max_size,
-                                                sigma_ratio=1.8,
-                                                threshold=threshold)
-        # Make the image a bit darker so the highlight stands out more
-        img_arr *= 0.7
-
         h, w, d = img_arr.shape
 
-        target_blobs = []
-        for b1 in yellow_blobs:
-            for b2 in blue_blobs:
-                if abs(b1[0] - b2[0]) < 8 and abs(b1[1] - b2[1]) < 8 and abs(b1[2] - b2[2]) < 4:
-                    target_blobs.append((int((b1[0] + b2[0]) * 0.5), int((b1[1] + b2[1]) * 0.5), b1[2]))
+        blobs = [eval(l) for l in blob_out.split("\n") if l]
+        blue_blobs = sorted(list((b[3], b[1], b[2]) for b in blobs if b[0] == 'b'), reverse=True)
+        yellow_blobs = sorted(list((b[3], b[1], b[2]) for b in blobs if b[0] == 'y'), reverse=True)
+        L_blobs = sorted(list((b[3], b[1], b[2]) for b in blobs if b[0] == 'L'), reverse=True)
+
+        target_blobs = {}
+
+        for b1 in blue_blobs:
+            best_hue = 0.0
+            for b2 in yellow_blobs:
+                if abs(b1[1] - b2[1]) < 5 and abs(b1[2] - b2[2]) < 5 and b1[0] * b2[0] > best_hue:
+                    best_hue = b1[0] * b2[0]
+
+            if best_hue < b1[0]:
+                continue
+
+            best_L = 0.0
+            best_coords = None
+            for b3 in L_blobs:
+                if abs(b1[1] - b3[1]) < 5 and abs(b1[2] - b3[2]) < 5 and best_hue * b3[0] > best_L:
+                    best_L = best_hue * b3[0]
+                    best_coords = (b3[1], b3[2])
+
+            if best_coords and target_blobs.get(best_coords, 0) < best_L:
+                target_blobs[best_coords] = best_L
 
         # Draw a red line around the features by subtracting a circle
         # pattern from the G and B channels, and adding it to R.
-        for blob in target_blobs:
-            if blob[1] < 10 or blob[1] > w - 10 or blob[0] < 10 or blob[0] > h - 10:
+        for coords, val in target_blobs.iteritems():
+            print geo_from_cam(cam_from_img(coords), lat, lon, alt, q)
+
+            if coords[0] < 10 or coords[0] > w - 10 or coords[1] < 10 or coords[1] > h - 10:
                 continue
 
             rr, cc, val = skimage.draw.circle_perimeter_aa(
-                blob[0], blob[1], blob[2] + 4)
+                coords[1], coords[0], 6)
             img_arr[rr, cc, 0] = val
 
-        print "%s: %d Y blobs, %d B blobs, %d targets" % (pgm_path, len(yellow_blobs), len(blue_blobs), len(target_blobs))
+        print "%s: %d Y blobs, %d B blobs, %d L blobs, %d targets" % (pgm_path, len(yellow_blobs), len(blue_blobs), len(L_blobs), len(target_blobs))
 
         # If blobs were found, write an image out showing where
         if len(target_blobs):
