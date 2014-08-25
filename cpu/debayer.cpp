@@ -29,19 +29,19 @@ float rgb2L(float r, float g, float b) {
     float x, y, z;
 
     if (r > 0.04045f) {
-        r = powf((r + 0.055f) / 1.055f, 2.4f);
+        r = powf((r + 0.055f) * (1.0f / 1.055f), 2.4f);
     } else {
         r = r / 12.92f;
     }
 
     if (g > 0.04045f) {
-        g = powf((g + 0.055f) / 1.055f, 2.4f);
+        g = powf((g + 0.055f) * (1.0f / 1.055f), 2.4f);
     } else {
         g = g / 12.92f;
     }
 
     if (b > 0.04045f) {
-        b = powf((b + 0.055f) / 1.055f, 2.4f);
+        b = powf((b + 0.055f) * (1.0f / 1.055f), 2.4f);
     } else {
         b = b / 12.92f;
     }
@@ -73,9 +73,9 @@ float rgb2h(float r, float g, float b) {
     } else {                // Chromatic data...
         s = deltav / maxv;
 
-        dr = (((maxv - r) / 6.0f) + (deltav / 2.0f)) / deltav;
-        dg = (((maxv - g) / 6.0f) + (deltav / 2.0f)) / deltav;
-        db = (((maxv - b) / 6.0f) + (deltav / 2.0f)) / deltav;
+        dr = (((maxv - r) * (1.0f / 6.0f)) + (deltav * 0.5f)) / deltav;
+        dg = (((maxv - g) * (1.0f / 6.0f)) + (deltav * 0.5f)) / deltav;
+        db = (((maxv - b) * (1.0f / 6.0f)) + (deltav * 0.5f)) / deltav;
 
         if (r == maxv) {
             h = db - dg;
@@ -499,7 +499,7 @@ void bayer_simple(const unsigned int *src, unsigned int *dst, unsigned int w, un
     dst[w+5] = dst[w+2] = dst[5] = dst[2] = a.B(src, w);
 }
 
-float kernel[144] = {
+int16_t kernel[144] = {
     -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3,
     -3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -3,
     -3, -1, -1, -1, -1,  1,  1, -1, -1, -1, -1, -3,
@@ -514,7 +514,7 @@ float kernel[144] = {
     -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3
 };
 
-float l_kernel[144] = {
+int16_t l_kernel[144] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1,  1,  1, -1, -1, -1, -1, -1,
@@ -529,13 +529,13 @@ float l_kernel[144] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 };
 
-float apply_kernel(float *kernel, float *src, size_t kernel_dim, size_t src_width) {
-    float result = 0.0f;
+int32_t apply_kernel(int16_t *kernel, uint16_t *src, size_t kernel_dim, size_t src_width) {
+    int32_t result = 0;
     size_t i, j;
 
     for (i = 0; i < kernel_dim; i++) {
         for (j = 0; j < kernel_dim; j++) {
-            result += kernel[i * kernel_dim + j] * src[i * src_width + j];
+            result += (int32_t)kernel[i * kernel_dim + j] * (int32_t)src[i * src_width + j];
         }
     }
 
@@ -569,17 +569,17 @@ int main(int argc, char *argv[]) {
 
             imgRGB.save(std::cout);
 
-            float *hue = new float[imgRGB.width() * imgRGB.height()];
-            float *blue = new float[imgRGB.width() * imgRGB.height()];
-            float *yellowgreen = new float[imgRGB.width() * imgRGB.height()];
-            float *L = new float[imgRGB.width() * imgRGB.height()];
-            float r, g, b, s = 1.0f / 65535.0f, max_L = 0.0f, L_offset,
-                  L_scale, max_blue, blue_offset, blue_scale,
-                  max_yellowgreen, yellowgreen_offset, yellowgreen_scale,
-                  result;
+            uint16_t *hue = new uint16_t[imgRGB.width() * imgRGB.height()];
+            uint16_t *blue = new uint16_t[imgRGB.width() * imgRGB.height()];
+            uint16_t *yellowgreen = new uint16_t[imgRGB.width() * imgRGB.height()];
+            uint16_t *L = new uint16_t[imgRGB.width() * imgRGB.height()];
+            uint16_t L_offset, max_L, blue_offset, max_blue, yellowgreen_offset, max_yellowgreen;
+            float r, g, b, s = 1.0f / 65535.0f, hval,
+                  L_scale, blue_scale, yellowgreen_scale;
             uint32_t *L_hist = new uint32_t[65536], accum, pm999, pm900;
             uint32_t *blue_hist = new uint32_t[65536];
             uint32_t *yellowgreen_hist = new uint32_t[65536];
+            int32_t result;
             size_t i, j, d = imgRGB.channels_per_pixel(), w = imgRGB.width(),
                    h = imgRGB.height(), l = w * h;
 
@@ -591,13 +591,14 @@ int main(int argc, char *argv[]) {
                 r = (float)imgRGB[i * d] * s;
                 g = (float)imgRGB[i * d + 1] * s;
                 b = (float)imgRGB[i * d + 2] * s;
+                hval = min(max(0.0f, rgb2h(r, g, b)), 1.0f);
 
-                hue[i] = min(max(0.0f, rgb2h(r, g, b)), 1.0f);
-                L[i] = min(max(0.0f, rgb2L(r, g, b) * 0.01f), 1.0f);
-                blue[i] = hue_dist(hue[i], 0.66f);
-                yellowgreen[i] = hue_dist(hue[i], 0.0875f);
+                hue[i] = hval * 65535.0f;
+                L[i] = min(max(0.0f, rgb2L(r, g, b) * 0.01f), 1.0f) * 65535.0f;
+                blue[i] = hue_dist(hval, 0.66f) * 65535.0f;
+                yellowgreen[i] = hue_dist(hval, 0.0875f) * 65535.0f;
 
-                L_hist[(size_t)floor(L[i] * 65535.0f)]++;
+                L_hist[L[i]]++;
             }
 
             // Find the 90th percentile L value
@@ -611,35 +612,34 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            L_offset = (float)pm900 * s;
-            max_L = (float)pm999 * s;
+            L_offset = pm900;
+            max_L = pm999;
             if (L_offset < max_L) {
-                L_scale = 1.0f / (max_L - L_offset);
+                L_scale = 65535.0f / (max_L - L_offset);
             } else {
                 L_scale = 1.0f;
-                L_offset = 0.0f;
+                L_offset = 0;
             }
 
             for (i = 0; i < l; i++) {
-                L[i] = max(L[i] - L_offset, 0.0f);
-                L[i] = min(L[i] * L_scale, 1.0f);
-                L[i] *= L[i];
+                L[i] = L[i] > L_offset ? L[i] - L_offset : 0;
+                L[i] = min((float)L[i] * L_scale * (float)L[i] * L_scale, 65535.0f * 65535.0f) * (1.0f / 65535.0f);
 
-                if (L[i] < 0.5f) {
-                    L[i] = 0.0f;
+                if (L[i] < 32768) {
+                    L[i] = 0;
                 }
 
-                blue[i] *= L[i];
-                yellowgreen[i] *= L[i];
+                blue[i] = (uint16_t)(((uint32_t)L[i] * (uint32_t)blue[i]) >> 16u);
+                yellowgreen[i] = (uint16_t)(((uint32_t)L[i] * (uint32_t)yellowgreen[i]) >> 16u);
 
-                blue_hist[(size_t)floor(blue[i] * 65535.0f)]++;
-                yellowgreen_hist[(size_t)floor(yellowgreen[i] * 65535.0f)]++;
+                blue_hist[blue[i]]++;
+                yellowgreen_hist[yellowgreen[i]]++;
             }
 
             for (i = 0; i < h - 12; i++) {
                 for (j = 0; j < w - 12; j++) {
                     result = apply_kernel(l_kernel, &L[i * w + j], 12u, w);
-                    if (result > 25.0f) {
+                    if (result > 25 * 65535) {
                         std::cerr << "('L', " << (j + 6) << ", " << (i + 6) << ", " << result << ")" << std::endl;
                     }
                 }
@@ -656,27 +656,27 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            blue_offset = (float)pm900 * s;
-            max_blue = (float)pm999 * s;
+            blue_offset = pm900;
+            max_blue = pm999;
             if (blue_offset < max_blue) {
-                blue_scale = 1.0f / (max_blue - blue_offset);
+                blue_scale = 65535.0f / (max_blue - blue_offset);
             } else {
                 blue_scale = 1.0f;
-                blue_offset = 0.0f;
+                blue_offset = 0;
             }
 
             // Multiply blue/yellowgreen maps by luminance value, and then zero any
             // with a hue histogram frequency of zero
             for (i = 0; i < l; i++) {
-                blue[i] = max(blue[i] - blue_offset, 0.0f);
-                blue[i] = min(blue[i] * blue_scale, 1.0f);
+                blue[i] = blue[i] > blue_offset ? blue[i] - blue_offset : 0;
+                blue[i] = min(blue[i] * blue_scale, 65535.0f);
             }
 
             // Apply the kernel and locate the best blobs
             for (i = 0; i < h - 12; i++) {
                 for (j = 0; j < w - 12; j++) {
                     result = apply_kernel(kernel, &blue[i * w + j], 12u, w);
-                    if (result > 5.0f) {
+                    if (result > 5 * 65535) {
                         std::cerr << "('b', " << (j + 6) << ", " << (i + 6) << ", " << result << ")" << std::endl;
                     }
                 }
@@ -693,24 +693,24 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            yellowgreen_offset = (float)pm900 * s;
-            max_yellowgreen = (float)pm999 * s;
+            yellowgreen_offset = pm900;
+            max_yellowgreen = pm999;
             if (yellowgreen_offset < max_yellowgreen) {
-                yellowgreen_scale = 1.0f / (max_yellowgreen - yellowgreen_offset);
+                yellowgreen_scale = 65535.0f / (max_yellowgreen - yellowgreen_offset);
             } else {
                 yellowgreen_scale = 1.0f;
-                yellowgreen_offset = 0.0f;
+                yellowgreen_offset = 0;
             }
 
             for (i = 0; i < l; i++) {
-                yellowgreen[i] = max(yellowgreen[i] - yellowgreen_offset, 0.0f);
-                yellowgreen[i] = min(yellowgreen[i] * yellowgreen_scale, 1.0f);
+                yellowgreen[i] = yellowgreen[i] > yellowgreen_offset ? yellowgreen[i] - yellowgreen_offset : 0;
+                yellowgreen[i] = min(yellowgreen[i] * yellowgreen_scale, 65535.0f);
             }
 
             for (i = 0; i < h - 12; i++) {
                 for (j = 0; j < w - 12; j++) {
                     result = apply_kernel(kernel, &yellowgreen[i * w + j], 12u, w);
-                    if (result > 5.0f) {
+                    if (result > 5 * 65535) {
                         std::cerr << "('y', " << (j + 6) << ", " << (i + 6) << ", " << result << ")" << std::endl;
                     }
                 }
@@ -724,10 +724,10 @@ int main(int argc, char *argv[]) {
 //            imgL.alloc(imgRGB.width(), imgRGB.height(), GREY16);
 //
 //            for (i = 0; i < l; i++) {
-//                imgH[i] = hue[i] * 65535.0f;
-//                img_blue[i] = blue[i] * 65535.0f;
-//                img_yellowgreen[i] = yellowgreen[i] * 65535.0f;
-//                imgL[i] = L[i] * 65535.0f;
+//                imgH[i] = hue[i];
+//                img_blue[i] = blue[i];
+//                img_yellowgreen[i] = yellowgreen[i];
+//                imgL[i] = L[i];
 //            }
 //
 //            std::ofstream Hf, bluef, yellowgreenf, Lf;
