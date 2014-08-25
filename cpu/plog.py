@@ -26,7 +26,6 @@ import sys
 import math
 import json
 import struct
-import vectors
 import binascii
 import traceback
 from enum import Enum
@@ -446,6 +445,8 @@ def q_to_euler(q):
 
 
 def euler_to_q(yaw, pitch, roll):
+    import vectors
+
     return (vectors.Q.rotate("X", -roll) *
             vectors.Q.rotate("Y", -pitch) *
             vectors.Q.rotate("Z", -yaw))

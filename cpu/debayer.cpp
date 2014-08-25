@@ -19,6 +19,9 @@
 #include <iostream>
 #include <cstring>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
 
 using namespace std;
 
@@ -496,7 +499,48 @@ void bayer_simple(const unsigned int *src, unsigned int *dst, unsigned int w, un
     dst[w+5] = dst[w+2] = dst[5] = dst[2] = a.B(src, w);
 }
 
+float kernel[144] = {
+    -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3,
+    -3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -3,
+    -3, -1, -1, -1, -1,  1,  1, -1, -1, -1, -1, -3,
+    -3, -1, -1, -1,  1,  1,  1,  1, -1, -1, -1, -3,
+    -3, -1, -1,  1,  1,  1,  1,  1,  1, -1, -1, -3,
+    -3, -1,  1,  1,  1,  1,  1,  1,  1,  1, -1, -3,
+    -3, -1,  1,  1,  1,  1,  1,  1,  1,  1, -1, -3,
+    -3, -1, -1,  1,  1,  1,  1,  1,  1, -1, -1, -3,
+    -3, -1, -1, -1,  1,  1,  1,  1, -1, -1, -1, -3,
+    -3, -1, -1, -1, -1,  1,  1, -1, -1, -1, -1, -3,
+    -3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -3,
+    -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3
+};
 
+float l_kernel[144] = {
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1,  1,  1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1,  1,  1,  1,  1, -1, -1, -1, -1,
+    -1, -1, -1,  1,  1,  3,  3,  1,  1, -1, -1, -1,
+    -1, -1,  1,  1,  3,  3,  3,  3,  1,  1, -1, -1,
+    -1, -1,  1,  1,  3,  3,  3,  3,  1,  1, -1, -1,
+    -1, -1, -1,  1,  1,  3,  3,  1,  1, -1, -1, -1,
+    -1, -1, -1, -1,  1,  1,  1,  1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1,  1,  1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+};
+
+float apply_kernel(float *kernel, float *src, size_t kernel_dim, size_t src_width) {
+    float result = 0.0f;
+    size_t i, j;
+
+    for (i = 0; i < kernel_dim; i++) {
+        for (j = 0; j < kernel_dim; j++) {
+            result += kernel[i * kernel_dim + j] * src[i * src_width + j];
+        }
+    }
+
+    return result;
+}
 
 int main(int argc, char *argv[]) {
     if (argc == 2) {
@@ -529,29 +573,34 @@ int main(int argc, char *argv[]) {
             float *blue = new float[imgRGB.width() * imgRGB.height()];
             float *yellowgreen = new float[imgRGB.width() * imgRGB.height()];
             float *L = new float[imgRGB.width() * imgRGB.height()];
-            float r, g, b, s = 1.0f / 65535.0f, max_L = 0.0f, L_offset, L_scale;
+            float r, g, b, s = 1.0f / 65535.0f, max_L = 0.0f, L_offset,
+                  L_scale, max_blue, blue_offset, blue_scale,
+                  max_yellowgreen, yellowgreen_offset, yellowgreen_scale,
+                  result;
             uint32_t *L_hist = new uint32_t[65536], accum, pm999, pm900;
-            size_t i, d = imgRGB.channels_per_pixel(),
-                   l = imgRGB.width() * imgRGB.height();
+            uint32_t *blue_hist = new uint32_t[65536];
+            uint32_t *yellowgreen_hist = new uint32_t[65536];
+            size_t i, j, d = imgRGB.channels_per_pixel(), w = imgRGB.width(),
+                   h = imgRGB.height(), l = w * h;
 
             memset(L_hist, 0, 65536 * 4);
+            memset(blue_hist, 0, 65536 * 4);
+            memset(yellowgreen_hist, 0, 65536 * 4);
 
             for (i = 0; i < l; i++) {
                 r = (float)imgRGB[i * d] * s;
                 g = (float)imgRGB[i * d + 1] * s;
                 b = (float)imgRGB[i * d + 2] * s;
+
                 hue[i] = min(max(0.0f, rgb2h(r, g, b)), 1.0f);
                 L[i] = min(max(0.0f, rgb2L(r, g, b) * 0.01f), 1.0f);
-                blue[i] = hue_dist(hue[i], 0.65f);
-                yellowgreen[i] = hue_dist(hue[i], 0.15f);
+                blue[i] = hue_dist(hue[i], 0.66f);
+                yellowgreen[i] = hue_dist(hue[i], 0.0875f);
 
                 L_hist[(size_t)floor(L[i] * 65535.0f)]++;
-                if (L[i] > max_L) {
-                    max_L = L[i];
-                }
             }
 
-            // Find the 90th percentile colour value
+            // Find the 90th percentile L value
             for (i = 65535, accum = 0, pm999 = 0, pm900 = 0; i > 0 && (!pm999 || !pm900); i--) {
                 accum += L_hist[i];
                 if (pm999 == 0 && accum > l / 1000) {
@@ -574,8 +623,97 @@ int main(int argc, char *argv[]) {
             for (i = 0; i < l; i++) {
                 L[i] = max(L[i] - L_offset, 0.0f);
                 L[i] = min(L[i] * L_scale, 1.0f);
+                L[i] *= L[i];
+
+                if (L[i] < 0.5f) {
+                    L[i] = 0.0f;
+                }
+
                 blue[i] *= L[i];
                 yellowgreen[i] *= L[i];
+
+                blue_hist[(size_t)floor(blue[i] * 65535.0f)]++;
+                yellowgreen_hist[(size_t)floor(yellowgreen[i] * 65535.0f)]++;
+            }
+
+            for (i = 0; i < h - 12; i++) {
+                for (j = 0; j < w - 12; j++) {
+                    result = apply_kernel(l_kernel, &L[i * w + j], 12u, w);
+                    if (result > 25.0f) {
+                        std::cerr << "('L', " << (j + 6) << ", " << (i + 6) << ", " << result << ")" << std::endl;
+                    }
+                }
+            }
+
+            // Find the 90th percentile blue value
+            for (i = 65535, accum = 0, pm999 = 0, pm900 = 0; i > 0 && (!pm999 || !pm900); i--) {
+                accum += blue_hist[i];
+                if (pm999 == 0 && accum > l / 10000) {
+                    pm999 = i;
+                }
+                if (pm900 == 0 && accum > l / 10) {
+                    pm900 = i;
+                }
+            }
+
+            blue_offset = (float)pm900 * s;
+            max_blue = (float)pm999 * s;
+            if (blue_offset < max_blue) {
+                blue_scale = 1.0f / (max_blue - blue_offset);
+            } else {
+                blue_scale = 1.0f;
+                blue_offset = 0.0f;
+            }
+
+            // Multiply blue/yellowgreen maps by luminance value, and then zero any
+            // with a hue histogram frequency of zero
+            for (i = 0; i < l; i++) {
+                blue[i] = max(blue[i] - blue_offset, 0.0f);
+                blue[i] = min(blue[i] * blue_scale, 1.0f);
+            }
+
+            // Apply the kernel and locate the best blobs
+            for (i = 0; i < h - 12; i++) {
+                for (j = 0; j < w - 12; j++) {
+                    result = apply_kernel(kernel, &blue[i * w + j], 12u, w);
+                    if (result > 5.0f) {
+                        std::cerr << "('b', " << (j + 6) << ", " << (i + 6) << ", " << result << ")" << std::endl;
+                    }
+                }
+            }
+
+            // Find the 90th percentile yellow-green value
+            for (i = 65535, accum = 0, pm999 = 0, pm900 = 0; i > 0 && (!pm999 || !pm900); i--) {
+                accum += yellowgreen_hist[i];
+                if (pm999 == 0 && accum > l / 10000) {
+                    pm999 = i;
+                }
+                if (pm900 == 0 && accum > l / 100) {
+                    pm900 = i;
+                }
+            }
+
+            yellowgreen_offset = (float)pm900 * s;
+            max_yellowgreen = (float)pm999 * s;
+            if (yellowgreen_offset < max_yellowgreen) {
+                yellowgreen_scale = 1.0f / (max_yellowgreen - yellowgreen_offset);
+            } else {
+                yellowgreen_scale = 1.0f;
+                yellowgreen_offset = 0.0f;
+            }
+
+            for (i = 0; i < l; i++) {
+                yellowgreen[i] = max(yellowgreen[i] - yellowgreen_offset, 0.0f);
+                yellowgreen[i] = min(yellowgreen[i] * yellowgreen_scale, 1.0f);
+            }
+
+            for (i = 0; i < h - 12; i++) {
+                for (j = 0; j < w - 12; j++) {
+                    result = apply_kernel(kernel, &yellowgreen[i * w + j], 12u, w);
+                    if (result > 5.0f) {
+                        std::cerr << "('y', " << (j + 6) << ", " << (i + 6) << ", " << result << ")" << std::endl;
+                    }
+                }
             }
 
 //            // Debug

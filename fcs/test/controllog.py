@@ -70,7 +70,7 @@ def tick(t, data):
             control_pos = map(lambda x: float(x) / 65535.0, pv)
         elif pt == plog.ParameterType.FCS_PARAMETER_NAV_PATH_ID:
             control_path = pv[0]
-            control_error_type = pv[1]
+            control_error_type = pv[1] if len(pv) > 1 else 0
         elif pt == plog.ParameterType.FCS_PARAMETER_KEY_VALUE:
             control_refp = plog.extract_waypoint(pv)
         elif pt == plog.ParameterType.FCS_PARAMETER_CONTROL_STATUS:
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     infile = open(sys.argv[2], 'rb') if len(sys.argv) > 2 else sys.stdin
     outfile = open(sys.argv[3], 'wb') if len(sys.argv) > 3 else sys.stdout
 
-    print "t,alt,alt_ref,n,e,d,xte,ate,tas,tas_ref,heading,heading_ref,yaw,yaw_ref,pitch,pitch_ref,roll,roll_ref,vyaw,vpitch,vroll,wind,wind_n,wind_e,t,l,r,tp,lp,rp,objval,cycles,errors,resets,path,last_gps,mode1,flags,err"
+    print "t,alt,alt_ref,n,e,d,xte,ate,tas,tas_ref,gs,heading,heading_ref,yaw,yaw_ref,pitch,pitch_ref,roll,roll_ref,vyaw,vpitch,vroll,wind,wind_n,wind_e,t,l,r,tp,lp,rp,objval,cycles,errors,resets,path,last_gps,mode1,flags,err"
 
     i = 0
     for logf in plog.iterlogs(infile):
