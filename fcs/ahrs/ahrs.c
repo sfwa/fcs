@@ -291,7 +291,7 @@ void fcs_ahrs_tick(void) {
         Transition out of initializing if we've received a GPS packet as well
         as a reference pressure from the GCS
         */
-        if (got_gps && got_reference_alt) {
+        if (got_gps && ahrs_last_gcs_packet_tick != 0) {
             fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
         }
     } else if (ahrs_mode == FCS_MODE_SIMULATING) {

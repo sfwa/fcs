@@ -560,10 +560,14 @@ void fcs_board_tick(void) {
         fcs_assert(stream_result == FCS_STREAM_OK);
     }
 
-    /* Write the estimate log to the CPU UART at 31.25Hz */
-    if ((fcs_log_get_frame_id(estimate_log) & 0x001Fu) == 0) {
+    /* Write the estimate log to the CPU UART at 15.625Hz */
+    if ((fcs_log_get_frame_id(estimate_log) & 0x003Fu) == 0) {
+        fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED,
+                     fcs_log_get_frame_id(estimate_log));
+        (void)fcs_log_merge(&out_log, estimate_log);
+        (void)fcs_log_merge(&out_log, control_log);
         out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
-                                        estimate_log);
+                                        out_log);
         write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, out_buf,
                                      out_buf_len);
         /* fcs_assert(out_buf_len == write_len); */
@@ -579,6 +583,26 @@ void fcs_board_tick(void) {
             gpio->BANK_REGISTERS[0].CLR_DATA = 0x10u;
         }
 #endif
+    }
+
+    fcs_log_init(&out_log, FCS_LOG_TYPE_MEASUREMENT, 0);
+    if (_fcs_read_log_packet(FCS_STREAM_UART_EXT0, 0, &out_log)) {
+        /*
+        Got a command from the CPU -- merge it in ahead of the actual
+        measurement log to ensure it takes priority over commands relayed from
+        the I/O boards.
+        */
+        fcs_log_merge(&out_log, measurement_log);
+        fcs_log_init(measurement_log, FCS_LOG_TYPE_MEASUREMENT,
+                     fcs_log_get_frame_id(measurement_log));
+        fcs_log_merge(measurement_log, &out_log);
+    }
+
+    if (fcs_stream_check_error(FCS_STREAM_UART_EXT0) == FCS_STREAM_ERROR) {
+        stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
+        fcs_assert(stream_result == FCS_STREAM_OK);
+        stream_result = fcs_stream_open(FCS_STREAM_UART_EXT0);
+        fcs_assert(stream_result == FCS_STREAM_OK);
     }
 
     /*

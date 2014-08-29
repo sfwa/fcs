@@ -272,9 +272,12 @@ void fcs_control_tick(void) {
                     measurement_log, FCS_PARAMETER_KEY_REROUTE, 1u,
                     &param2) &&
                 param.data.u16[0] < FCS_CONTROL_MAX_PATHS &&
-                 nav_state.reference_path_id[0] != param.data.u16[0]) {
+                nav_state.reference_path_id[0] != param.data.u16[0]) {
             /* Re-route to the new path */
             nav_state.reference_path_id[0] = param.data.u16[0];
+            memcpy(&nav_state.reference_trajectory[0],
+                   &nav->waypoints[nav->paths[param.data.u16[0]].start_waypoint_id],
+                   sizeof(struct fcs_path_t));
             nav_state.version++;
             needs_path_reset = true;
             control_state.intent = FCS_CONTROL_INTENT_NAVIGATING;
@@ -286,6 +289,11 @@ void fcs_control_tick(void) {
                 param_key, (uint8_t*)&nav_state.boundary,
                 sizeof(struct fcs_boundary_t), &param);
             nav_state.version++;
+        } else if (fcs_parameter_find_by_key_and_device(
+                    measurement_log, FCS_PARAMETER_KEY_ABORT, 1u,
+                    &param)) {
+            /* Abort */
+            fcs_assert(0 && "Manual abort");
         }
     }
 
@@ -511,12 +519,16 @@ void fcs_control_tick(void) {
     }
     fcs_log_add_parameter(control_log, &param);
 
-    /* Add GPIO to the control log if a payload release is requested */
-    if ((nav_state.reference_trajectory[0].flags &
+    /*
+    Add GPIO to the control log if everything's stable and a payload release
+    is requested
+    */
+    if (result == NMPC_OK &&
+        ((nav_state.reference_trajectory[0].flags &
             FCS_WAYPOINT_FLAG_RELEASE_MASK) ||
-        (nav_state.reference_path_id[0] < FCS_CONTROL_MAX_PATHS &&
+         (nav_state.reference_path_id[0] < FCS_CONTROL_MAX_PATHS &&
             nav_state.paths[nav_state.reference_path_id[0]].type ==
-            FCS_PATH_RELEASE)) {
+            FCS_PATH_RELEASE))) {
         do_release = true;
     } else {
         do_release = false;
