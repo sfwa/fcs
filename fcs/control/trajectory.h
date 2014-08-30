@@ -62,7 +62,7 @@ void fcs_trajectory_timestep(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate);
 
 void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
-const struct fcs_state_estimate_t *restrict state_estimate);
+const struct fcs_state_estimate_t *restrict state_estimate, bool from_start);
 
 void fcs_trajectory_start_hold(struct fcs_nav_state_t *nav,
 const struct fcs_state_estimate_t *restrict state_estimate);

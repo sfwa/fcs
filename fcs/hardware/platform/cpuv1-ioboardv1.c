@@ -116,6 +116,71 @@ static void _set_hal_sensor_value_f32(struct fcs_log_t *plog,
 enum fcs_parameter_type_t param_type, const double *restrict value,
 const double *restrict variance, size_t n);
 
+/*
+FIXME -- the next 3 functions are from parameter.c, and are used to copy the
+control log while skipping the reference trajectory parameter. Work out a
+cleaner way to do this.
+*/
+/* Internal API for making and reading fields of various types */
+static inline size_t _extract_num_values(uint8_t header) {
+    size_t num_values;
+
+    if (header & FCS_PARAMETER_HEADER_MODE_MASK) {
+        num_values = (
+            (header & FCS_PARAMETER_HEADER_DATA_LENGTH_MASK)
+            >> FCS_PARAMETER_HEADER_DATA_LENGTH_OFFSET
+        );
+
+        if (num_values > FCS_PARAMETER_DATA_LENGTH_MAX) {
+            num_values = 0;
+        }
+    } else {
+        num_values = (
+            (header & FCS_PARAMETER_HEADER_NUM_VALUES_MASK)
+            >> FCS_PARAMETER_HEADER_NUM_VALUES_OFFSET
+        ) + 1u;
+
+        if (num_values > FCS_PARAMETER_NUM_VALUES_MAX) {
+            num_values = 0;
+        }
+    }
+
+    return num_values;
+}
+
+static inline size_t _extract_precision_bits(uint8_t header) {
+    size_t precision_bits;
+
+    if (header & FCS_PARAMETER_HEADER_MODE_MASK) {
+        return 8u;
+    } else {
+        precision_bits = 8u <<
+            ((header & FCS_PARAMETER_HEADER_PRECISION_MASK)
+             >> FCS_PARAMETER_HEADER_PRECISION_OFFSET);
+    }
+
+    return precision_bits;
+}
+
+static inline size_t _extract_length(uint8_t header) {
+    size_t num_values, precision_bits, length;
+
+    num_values = _extract_num_values(header);
+    precision_bits = _extract_precision_bits(header);
+
+    if (!num_values || !precision_bits) {
+        length = 0;
+    } else {
+        /*
+        Header length + num values * bytes required to contain precision_bits
+        */
+        length = 3u + num_values * ((precision_bits + 7u) >> 3u);
+    }
+
+    return length;
+}
+
+
 
 void fcs_board_init_platform(void) {
     /*
@@ -319,7 +384,8 @@ void fcs_board_init_platform(void) {
 
 void fcs_board_tick(void) {
     uint8_t out_buf[FCS_LOG_SERIALIZED_LENGTH];
-    size_t out_buf_len, i;
+    size_t out_buf_len, i, param_len;
+    enum fcs_parameter_type_t param_type;
     struct fcs_log_t *measurement_log, *hal_log, *estimate_log, *control_log;
     struct fcs_log_t out_log;
     double attitude[4], wmm_field[3], wmm_field_norm, wmm_field_norm_inv;
@@ -329,6 +395,21 @@ void fcs_board_tick(void) {
     bool got_result, mode_ok;
     enum fcs_stream_result_t stream_result;
     uint16_t frame_id;
+
+    /* Check for errors -- if found, reset the UARTs */
+    if (fcs_stream_check_error(FCS_STREAM_UART_EXT1) == FCS_STREAM_ERROR) {
+        stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
+        fcs_assert(stream_result == FCS_STREAM_OK);
+        stream_result = fcs_stream_open(FCS_STREAM_UART_EXT1);
+        fcs_assert(stream_result == FCS_STREAM_OK);
+    }
+
+    if (fcs_stream_check_error(FCS_STREAM_UART_EXT0) == FCS_STREAM_ERROR) {
+        stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
+        fcs_assert(stream_result == FCS_STREAM_OK);
+        stream_result = fcs_stream_open(FCS_STREAM_UART_EXT0);
+        fcs_assert(stream_result == FCS_STREAM_OK);
+    }
 
     /*
     Merge the AHRS estimate log and the NMPC control log and send them to the
@@ -345,8 +426,28 @@ void fcs_board_tick(void) {
     space for whatever reason, the control output still gets through.
     */
     fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
-    (void)fcs_log_merge(&out_log, control_log);
-    (void)fcs_log_merge(&out_log, estimate_log);
+
+    /* Don't send the reference trajectory, in order to save space */
+    for (i = 5u; i < control_log->length - 3u; ) {
+        param_len = _extract_length(control_log->data[i]);
+        param_type = (enum fcs_parameter_type_t)control_log->data[i + 2u];
+        if (param_type == FCS_PARAMETER_INVALID || !param_len ||
+                param_len > sizeof(struct fcs_parameter_t) ||
+                i + param_len > control_log->length) {
+            break;
+        }
+
+        if (param_type != FCS_PARAMETER_KEY_VALUE) {
+            memcpy(&param, &control_log->data[i], param_len);
+            (void)fcs_log_add_parameter(&out_log, &param);
+        }
+
+        i += param_len;
+    }
+
+    if (out_log.length + estimate_log->length < 208) {
+        (void)fcs_log_merge(&out_log, estimate_log);
+    }
 
     /*
     Serialize the merged log and write it to both internal UARTs (I/O boards
@@ -356,11 +457,12 @@ void fcs_board_tick(void) {
     at a consistent time regardless of length.
     */
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
-    fcs_assert(out_buf_len < 250u);
-    memmove(&out_buf[250u - out_buf_len], out_buf, out_buf_len);
-    memset(out_buf, 0, 250u - out_buf_len);
+    if (out_buf_len < 220u) {
+        memmove(&out_buf[220u - out_buf_len], out_buf, out_buf_len);
+        memset(out_buf, 0, 220u - out_buf_len);
 
-    (void)fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, 250u);
+        (void)fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, 220u);
+    }
 
     /*
     Read attitude, WMM field, static pressure, static temp and AHRS mode from
@@ -550,11 +652,17 @@ void fcs_board_tick(void) {
         }
     }
 
-    if (fcs_stream_check_error(FCS_STREAM_UART_EXT1) == FCS_STREAM_ERROR) {
-        stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
-        fcs_assert(stream_result == FCS_STREAM_OK);
-        stream_result = fcs_stream_open(FCS_STREAM_UART_EXT1);
-        fcs_assert(stream_result == FCS_STREAM_OK);
+    fcs_log_init(&out_log, FCS_LOG_TYPE_MEASUREMENT, 0);
+    if (_fcs_read_log_packet(FCS_STREAM_UART_EXT0, 0, &out_log)) {
+        /*
+        Got a command from the CPU -- merge it in ahead of the actual
+        measurement log to ensure it takes priority over commands relayed from
+        the I/O boards.
+        */
+        fcs_log_merge(&out_log, measurement_log);
+        fcs_log_init(measurement_log, FCS_LOG_TYPE_MEASUREMENT,
+                     fcs_log_get_frame_id(measurement_log));
+        fcs_log_merge(measurement_log, &out_log);
     }
 
     /* Write the estimate log to the CPU UART at 15.625Hz */
@@ -578,26 +686,6 @@ void fcs_board_tick(void) {
             gpio->BANK_REGISTERS[0].CLR_DATA = 0x10u;
         }
 #endif
-    }
-
-    fcs_log_init(&out_log, FCS_LOG_TYPE_MEASUREMENT, 0);
-    if (_fcs_read_log_packet(FCS_STREAM_UART_EXT0, 0, &out_log)) {
-        /*
-        Got a command from the CPU -- merge it in ahead of the actual
-        measurement log to ensure it takes priority over commands relayed from
-        the I/O boards.
-        */
-        fcs_log_merge(&out_log, measurement_log);
-        fcs_log_init(measurement_log, FCS_LOG_TYPE_MEASUREMENT,
-                     fcs_log_get_frame_id(measurement_log));
-        fcs_log_merge(measurement_log, &out_log);
-    }
-
-    if (fcs_stream_check_error(FCS_STREAM_UART_EXT0) == FCS_STREAM_ERROR) {
-        stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
-        fcs_assert(stream_result == FCS_STREAM_OK);
-        stream_result = fcs_stream_open(FCS_STREAM_UART_EXT0);
-        fcs_assert(stream_result == FCS_STREAM_OK);
     }
 
     /*

@@ -275,9 +275,6 @@ void fcs_control_tick(void) {
                 nav_state.reference_path_id[0] != param.data.u16[0]) {
             /* Re-route to the new path */
             nav_state.reference_path_id[0] = param.data.u16[0];
-            memcpy(&nav_state.reference_trajectory[0],
-                   &nav_state.waypoints[nav_state.paths[param.data.u16[0]].start_waypoint_id],
-                   sizeof(struct fcs_path_t));
             nav_state.version++;
             needs_path_reset = true;
             control_state.intent = FCS_CONTROL_INTENT_NAVIGATING;
@@ -460,7 +457,8 @@ void fcs_control_tick(void) {
         If we're not already stabilising, construct a path sequence that gets
         the vehicle back to the next point in the reference trajectory.
         */
-        fcs_trajectory_start_recover(&nav_state, &state_estimate);
+        fcs_trajectory_start_recover(&nav_state, &state_estimate,
+                                     needs_path_reset);
         fcs_trajectory_recalculate(&nav_state, &state_estimate);
     }
 

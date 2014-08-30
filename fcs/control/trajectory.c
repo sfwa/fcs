@@ -186,7 +186,7 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
 }
 
 void fcs_trajectory_start_recover(struct fcs_nav_state_t *nav,
-const struct fcs_state_estimate_t *restrict state_estimate) {
+const struct fcs_state_estimate_t *restrict state_estimate, bool from_start) {
     fcs_assert(nav);
     fcs_assert(state_estimate);
 
@@ -225,12 +225,19 @@ const struct fcs_state_estimate_t *restrict state_estimate) {
         memcpy(&nav->paths[FCS_CONTROL_RESUME_PATH_ID],
                &nav->paths[original_path_id], sizeof(struct fcs_path_t));
 
-        /*
-        The resume waypoint is set to the next point in the reference
-        trajectory.
-        */
-        memcpy(&nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID],
-               &nav->reference_trajectory[0], sizeof(struct fcs_waypoint_t));
+        if (from_start) {
+            memcpy(&nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID],
+                   &nav->waypoints[nav->paths[original_path_id].start_waypoint_id],
+                   sizeof(struct fcs_waypoint_t));
+        } else {
+            /*
+            The resume waypoint is set to the next point in the reference
+            trajectory.
+            */
+            memcpy(&nav->waypoints[FCS_CONTROL_RESUME_WAYPOINT_ID],
+                   &nav->reference_trajectory[0], sizeof(struct fcs_waypoint_t));
+        }
+
 
         /*
         Set the starting point of the resume path to the resume waypoint.

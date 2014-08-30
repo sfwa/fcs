@@ -466,9 +466,9 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
         estimate_log, FCS_PARAMETER_ESTIMATED_STATIC_PRESSURE, 4u, tmp, 1u);
 
     /* Static temperature in Kelvin */
-    tmp[0] = (int32_t)static_temp;
-    _set_estimate_value_i32(
-        estimate_log, FCS_PARAMETER_ESTIMATED_STATIC_TEMP, 2u, tmp, 1u);
+    //tmp[0] = (int32_t)static_temp;
+    //_set_estimate_value_i32(
+    //    estimate_log, FCS_PARAMETER_ESTIMATED_STATIC_TEMP, 2u, tmp, 1u);
 
     /* Set WMM field */
     fcs_parameter_set_header(&param, FCS_VALUE_FLOAT, 32u, 3u);
