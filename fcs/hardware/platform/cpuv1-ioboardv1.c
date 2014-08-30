@@ -319,7 +319,7 @@ void fcs_board_init_platform(void) {
 
 void fcs_board_tick(void) {
     uint8_t out_buf[FCS_LOG_SERIALIZED_LENGTH];
-    size_t out_buf_len, write_len, i;
+    size_t out_buf_len, i;
     struct fcs_log_t *measurement_log, *hal_log, *estimate_log, *control_log;
     struct fcs_log_t out_log;
     double attitude[4], wmm_field[3], wmm_field_norm, wmm_field_norm_inv;
@@ -360,8 +360,7 @@ void fcs_board_tick(void) {
     memmove(&out_buf[250u - out_buf_len], out_buf, out_buf_len);
     memset(out_buf, 0, 250u - out_buf_len);
 
-    write_len = fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, 250u);
-    //fcs_assert(write_len == 256u);
+    (void)fcs_stream_write(FCS_STREAM_UART_INT0, out_buf, 250u);
 
     /*
     Read attitude, WMM field, static pressure, static temp and AHRS mode from
@@ -518,9 +517,7 @@ void fcs_board_tick(void) {
         out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
                                         control_log);
 
-        write_len = fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf,
-                                     out_buf_len);
-        /* fcs_assert(out_buf_len == write_len); */
+        (void)fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf, out_buf_len);
 
         last_control_packet_frame_id = frame_id;
     } else {
@@ -567,10 +564,8 @@ void fcs_board_tick(void) {
         (void)fcs_log_merge(&out_log, estimate_log);
         (void)fcs_log_merge(&out_log, control_log);
         out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf),
-                                        out_log);
-        write_len = fcs_stream_write(FCS_STREAM_UART_EXT0, out_buf,
-                                     out_buf_len);
-        /* fcs_assert(out_buf_len == write_len); */
+                                        &out_log);
+        (void)fcs_stream_write(FCS_STREAM_UART_EXT0, out_buf, out_buf_len);
 
         /* Set the external trigger high for 8ms every 1024ms */
 #ifdef __TI_COMPILER_VERSION__
@@ -618,8 +613,7 @@ void fcs_board_tick(void) {
 
     out_buf_len = fcs_log_serialize(out_buf, sizeof(out_buf), &out_log);
 
-    write_len = fcs_stream_write(FCS_STREAM_USB, out_buf, out_buf_len);
-    /* fcs_assert(out_buf_len == write_len); */
+    (void)fcs_stream_write(FCS_STREAM_USB, out_buf, out_buf_len);
 
     /* Close all the logs */
     control_log = fcs_exports_log_close(control_log);

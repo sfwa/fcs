@@ -121,7 +121,7 @@ void fcs_ahrs_tick(void) {
     static double control_pos[4];  /* Static so that missing values in a given
                                       frame don't disrupt the filter */
     double v[3], speed, wmm_field_inv;
-    bool got_result, got_gps = false, got_reference_alt = false;
+    bool got_result, got_gps = false;
     struct ukf_ioboard_params_t params;
     struct fcs_parameter_t parameter;
     struct fcs_log_t *hal_log, *measurement_log, *estimate_log;
@@ -242,7 +242,6 @@ void fcs_ahrs_tick(void) {
     if (got_result) {
         if (ahrs_last_gcs_packet_tick != parameter.data.u16[1]) {
             ahrs_last_comms_time = ahrs_solution_time;
-            got_reference_alt = true;
         }
 
         ahrs_last_gcs_packet_tick = parameter.data.u16[1];

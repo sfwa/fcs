@@ -276,7 +276,7 @@ void fcs_control_tick(void) {
             /* Re-route to the new path */
             nav_state.reference_path_id[0] = param.data.u16[0];
             memcpy(&nav_state.reference_trajectory[0],
-                   &nav->waypoints[nav->paths[param.data.u16[0]].start_waypoint_id],
+                   &nav_state.waypoints[nav_state.paths[param.data.u16[0]].start_waypoint_id],
                    sizeof(struct fcs_path_t));
             nav_state.version++;
             needs_path_reset = true;
