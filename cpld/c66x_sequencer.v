@@ -57,7 +57,7 @@ wire cvdd_ok = (cvdd_good_debounce == 2'b11);
 wire cvdd1_ok = (cvdd1_good_debounce == 2'b11);
 wire dvdd18_ok = (dvdd18_good_debounce == 2'b11);
 wire dvdd15_ok = (dvdd15_good_debounce == 2'b11);
-wire pll_ok = (pll_locked_debounce == 4'b1111);
+wire pll_ok = 1'b1; /* (pll_locked_debounce == 4'b1111); */
 wire resetstat_ok = (resetstat_INV_debounce == 2'b11);
 
 wire clkgen_busy;

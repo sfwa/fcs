@@ -404,13 +404,6 @@ void fcs_board_tick(void) {
         fcs_assert(stream_result == FCS_STREAM_OK);
     }
 
-    if (fcs_stream_check_error(FCS_STREAM_UART_EXT0) == FCS_STREAM_ERROR) {
-        stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
-        fcs_assert(stream_result == FCS_STREAM_OK);
-        stream_result = fcs_stream_open(FCS_STREAM_UART_EXT0);
-        fcs_assert(stream_result == FCS_STREAM_OK);
-    }
-
     /*
     Merge the AHRS estimate log and the NMPC control log and send them to the
     I/O boards.
@@ -686,6 +679,13 @@ void fcs_board_tick(void) {
             gpio->BANK_REGISTERS[0].CLR_DATA = 0x10u;
         }
 #endif
+    } else if ((fcs_log_get_frame_id(estimate_log) & 0x003Fu) == 0x003Fu) {
+        if (fcs_stream_check_error(FCS_STREAM_UART_EXT0) == FCS_STREAM_ERROR) {
+            stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
+            fcs_assert(stream_result == FCS_STREAM_OK);
+            stream_result = fcs_stream_open(FCS_STREAM_UART_EXT0);
+            fcs_assert(stream_result == FCS_STREAM_OK);
+        }
     }
 
     /*
