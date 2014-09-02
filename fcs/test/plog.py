@@ -639,7 +639,7 @@ def print_measurement_log(i, data):
         try:
             mag = data.find_by(
                 device_id=device_id,
-                parameter_type=ParameterType.FCS_PARAMETER_ACCELEROMETER_XYZ).values
+                parameter_type=ParameterType.FCS_PARAMETER_MAGNETOMETER_XYZ).values
             mag = "%d,%d,%d" % tuple(mag)
         except Exception:
             mag = ",,"
