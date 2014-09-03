@@ -21,9 +21,7 @@ def tick(log_frame):
         log_type=plog.LogType.FCS_LOG_TYPE_MEASUREMENT)
 
     for param in log_frame:
-        if param.parameter_type.value > plog.ParameterType.FCS_PARAMETER_IO_STATUS.value:
-            pass
-        elif param.device_id == 0:
+        if param.device_id == 0:
             io0_log.append(param)
         elif param.device_id == 1:
             io1_log.append(param)

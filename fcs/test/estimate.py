@@ -39,10 +39,12 @@ def tick(io0, io1):
     fcs.read(3, 1023)
     fcs.read(4, 1023)
 
+    sensor_health = fcs.get_sensor_health()
+
     try:
-        return plog.ParameterLog.deserialize(fcs.read(0, 1023))
+        return plog.ParameterLog.deserialize(fcs.read(0, 1023)), sensor_health
     except Exception:
-        return None
+        return None, None
 
 
 if __name__ == "__main__":
@@ -51,13 +53,14 @@ if __name__ == "__main__":
     infile = open(sys.argv[2], 'rb') if len(sys.argv) > 2 else sys.stdin
     outfile = open(sys.argv[3], 'wb') if len(sys.argv) > 3 else sys.stdout
 
-    outfile.write("t,lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode\n")
+    outfile.write("t,lat,lon,alt,v,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode,")
+    outfile.write("accel_x,accel_y,accel_z,accel_i_x,accel_i_y,accel_i_z,gyro_x,gyro_y,gyro_z,gyro_i_x,gyro_i_y,gyro_i_z,mag_x,mag_y,mag_z,mag_i_x,mag_i_y,mag_i_z,gps_pos_n,gps_pos_e,gps_pos_i_n,gps_pos_i_e,gps_vel_n,gps_vel_e,gps_vel_d,gps_vel_i_n,gps_vel_i_e,gps_vel_i_d,pitot,pitot_i,baro,baro_i,last\n")
 
     estimate_t = 0.0
     indata = infile.read().split('\x00\x00')
     for io0, io1 in grouped(indata, 2):
-        data = tick('\x00' + io0.strip('\x00') + '\x00',
-                    '\x00' + io1.strip('\x00') + '\x00')
+        data, health = tick('\x00' + io0.strip('\x00') + '\x00',
+                            '\x00' + io1.strip('\x00') + '\x00')
         if not data:
             continue
 
@@ -86,20 +89,22 @@ if __name__ == "__main__":
             elif pt == plog.ParameterType.FCS_PARAMETER_AHRS_MODE:
                 mode = chr(pv[0])
 
+        vv = math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+
         outfile.write(
             (
                 "%.3f," +
                 "%.8f,%.8f,%.2f," +
-                "%.2f,%.2f,%.2f," +
+                "%.2f,%.2f,%.2f,%.2f," +
                 "%.5f,%.5f,%.5f,%.5f," +
                 "%.1f,%.1f,%.1f," +
                 "%.1f,%.1f,%.1f," +
                 "%.2f,%.2f,%.2f," +
-                "%s\n"
+                "%s,"
             ) % tuple(
                 [estimate_t] +
                 pos +
-                v +
+                [vv] + v +
                 att_q +
                 att_ypr +
                 angular_v +
@@ -107,6 +112,42 @@ if __name__ == "__main__":
                 [mode]
             )
         )
+
+        if health.accel_gyro_present:
+            outfile.write("%f,%f,%f,%f,%f,%f," %
+                (tuple(health.accel_value) + tuple(health.accel_innovation)))
+            outfile.write("%f,%f,%f,%f,%f,%f," %
+                (tuple(health.gyro_value) + tuple(health.gyro_innovation)))
+        else:
+            outfile.write(",,,,,,")
+            outfile.write(",,,,,,")
+
+        if health.mag_present:
+            outfile.write("%f,%f,%f,%f,%f,%f," %
+                (tuple(health.mag_value) + tuple(health.mag_innovation)))
+        else:
+            outfile.write(",,,,,,")
+
+        if health.gps_present:
+            outfile.write("%f,%f,%f,%f," %
+                (tuple(health.gps_position_value) + tuple(health.gps_position_innovation)))
+            outfile.write("%f,%f,%f,%f,%f,%f," %
+                (tuple(health.gps_velocity_value) + tuple(health.gps_velocity_innovation)))
+        else:
+            outfile.write(",,,,")
+            outfile.write(",,,,,,")
+
+        if health.pitot_present:
+            outfile.write("%f,%f," % (health.pitot_value, health.pitot_innovation))
+        else:
+            outfile.write(",,")
+
+        if health.barometer_present:
+            outfile.write("%f,%f," % (health.barometer_value, health.barometer_innovation))
+        else:
+            outfile.write(",,")
+
+        outfile.write("\n")
 
     infile.close()
     outfile.close()

@@ -729,16 +729,90 @@ def print_control_log(data):
     print "%.0f,%.1f,%.0f,%.0f,%d,%.6f,%.6f,%.6f" % tuple(status + [path] + setpoint)
 
 
+def print_debug_log(i, data):
+    #tmp = data.find_by(device_id=0, parameter_type=ParameterType.FCS_PARAMETER_AHRS_STATUS)
+    #if tmp and tmp.values[0] < 10:
+    #    return
+
+    #tmp = data.find_by(device_id=0, parameter_type=ParameterType.FCS_PARAMETER_PRESSURE_TEMP)
+    #if not tmp:
+    #    return
+
+    #print "%d (%d): " % (i, tmp.values[0])
+    sys.stdout.write("%d," % i)
+
+    try:
+        tmp = data.find_by(
+            device_id=0,
+            parameter_type=ParameterType.FCS_PARAMETER_GPS_VELOCITY_NED).values
+        gps_v_1 = str(math.sqrt((tmp[0] * 1e-3) ** 2 + (tmp[1] * 1e-3) ** 2 + (tmp[2] * 1e-3) ** 2))
+    except Exception:
+        gps_v_1 = ""
+
+    try:
+        tmp = data.find_by(
+            device_id=1,
+            parameter_type=ParameterType.FCS_PARAMETER_GPS_VELOCITY_NED).values
+        gps_v_2 = str(math.sqrt((tmp[0] * 1e-3) ** 2 + (tmp[1] * 1e-3) ** 2 + (tmp[2] * 1e-3) ** 2))
+    except Exception:
+        gps_v_2 = ""
+
+    try:
+        pitot = data.find_by(
+            device_id=0,
+            parameter_type=ParameterType.FCS_PARAMETER_PITOT).values
+        pitot_1 = str(pitot[0])
+    except Exception:
+        pitot_1 = ""
+
+    try:
+        pitot = data.find_by(
+            device_id=1,
+            parameter_type=ParameterType.FCS_PARAMETER_PITOT).values
+        pitot_2 = str(pitot[0])
+    except Exception:
+        pitot_2 = ""
+
+    v = [0, 0, 0]
+    att_ypr = [0, 0, 0]
+    w = [0, 0, 0]
+
+    for param in data:
+        pt = param.parameter_type
+        if isinstance(param, DataParameter):
+            pv = param.values
+        else:
+            pv = param.value
+
+        if pt == ParameterType.FCS_PARAMETER_ESTIMATED_VELOCITY_NED:
+            v = map(lambda x: float(x) * 1e-2, pv[0:3])
+        elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_ATTITUDE_Q:
+            att_q = map(lambda x: float(x) / 32767.0, pv[0:4])
+            att_ypr = list(q_to_euler(att_q))
+        elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED:
+            w = map(lambda x: float(x) * 1e-2, pv[0:3])
+
+    tas = math.sqrt((v[0] - w[0]) ** 2 + (v[1] - w[1]) ** 2 + (v[2] - w[2]) ** 2)
+    heading = (math.degrees(math.atan2(v[1], v[0])) + 360.0) % 360.0
+
+    v = math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+    w = math.sqrt(w[0] ** 2 + w[1] ** 2 + w[2] ** 2)
+
+    sys.stdout.write("%s,%s,%f,%f,%f,%f,%f,%f,%f,%s,%s\n" % (gps_v_1, gps_v_2, v, w, tas, heading, att_ypr[0], att_ypr[1], att_ypr[2], pitot_1, pitot_2))
+
+
 if __name__ == "__main__":
     #print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode,control_mode,path,objval,errors,resets"
 
-    print "n,gps_mode_1,gps_pdop_1,gps_numsv_1,gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
-          "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
-          "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
-          "control_rail_1,gps_mode_2,gps_pdop_2,gps_numsv_2,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
-          "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
-          "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
-          "control_lail_2,control_rail_2"
+    #print "n,gps_mode_1,gps_pdop_1,gps_numsv_1,gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
+    #      "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
+    #      "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
+    #      "control_rail_1,gps_mode_2,gps_pdop_2,gps_numsv_2,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
+    #      "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
+    #      "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
+    #      "control_lail_2,control_rail_2"
+
+    print "n,gps_v_1,gps_v_2,v,w,tas,heading,yaw,pitch,roll,pitot_1,pitot_2"
 
     n = 0
     for logf in iterlogs(sys.stdin):
@@ -749,7 +823,8 @@ if __name__ == "__main__":
 
         try:
             #print_estimate_log(logf)
-            print_measurement_log(n, logf)
+            #print_measurement_log(n, logf)
+            print_debug_log(n, logf)
 
         except Exception:
             raise

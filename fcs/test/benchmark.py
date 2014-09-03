@@ -38,7 +38,7 @@ def euler_to_q(yaw, pitch, roll):
 
 
 VIDEO_START_FRAME = 273.687
-CAMERA_Q = euler_to_q(0.0, -5.0, -0.9)
+CAMERA_Q = euler_to_q(0.0, -1.0, -0.5)
 
 CAMERA_INTRINSICS = [
     [ 299.39646639,    0.,          419.96165812],
@@ -48,6 +48,10 @@ CAMERA_INTRINSICS = [
 FIELDS = (
     "t", "lat", "lon", "alt", "vn", "ve", "vd", "q0", "q1", "q2", "q3", "yaw",
     "pitch", "roll", "vroll", "vpitch", "vyaw", "wn", "we", "wd", "mode"
+)
+NEW_FIELDS = (
+    "t", "lat", "lon", "alt", "v", "vn", "ve", "vd", "q0", "q1", "q2", "q3",
+    "yaw", "pitch", "roll", "vroll", "vpitch", "vyaw", "wn", "we", "wd", "mode"
 )
 
 def attitude_from_horizon(x0, y0, x1, y1, expected_roll):
@@ -88,8 +92,8 @@ PITCH_ERRORS_SIGNED = []
 ROLL_ERRORS_SIGNED = []
 
 
-def headless_update(datafile, horizon_info, t):
-    global FIELDS, PITCH_ERRORS, ROLL_ERRORS, ROLL_ERRORS_SIGNED, \
+def headless_update(datafile, horizon_info, t, use_new_fields):
+    global FIELDS, NEW_FIELDS, PITCH_ERRORS, ROLL_ERRORS, ROLL_ERRORS_SIGNED, \
            PITCH_ERRORS_SIGNED
 
     horizon_line = map(float, horizon_info.next().strip("\n").split(","))
@@ -98,7 +102,7 @@ def headless_update(datafile, horizon_info, t):
     estimate = None
     line = datafile.next()
     while line:
-        estimate = dict(zip(FIELDS, line.strip("\n").split(",")))
+        estimate = dict(zip(NEW_FIELDS if use_new_fields else FIELDS, line.strip("\n").split(",")))
         if float(estimate['t']) >= t:
             break
         else:
@@ -143,10 +147,10 @@ try:
     infile = open(sys.argv[1], "rU")
     horizon_info = open(sys.argv[2].rpartition(".")[0] + "-horizon.txt", "rU")
 
-    infile.next() # get rid of headers
+    headers = infile.next() # get rid of headers
 
     while True:
-        headless_update(infile, horizon_info, t)
+        headless_update(infile, horizon_info, t, True if ",v," in headers else False)
         t += (1.0 / 240.0)
 except StopIteration:
     sys.stderr.write("""

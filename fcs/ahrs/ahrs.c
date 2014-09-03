@@ -378,6 +378,7 @@ static void _populate_estimate_log(
 const struct ukf_state_t *restrict state,
 const double *restrict error, const double *restrict field,
 enum fcs_mode_t mode, double static_pressure, double static_temp) {
+#pragma unused(static_temp)
     struct fcs_parameter_t param;
     struct fcs_log_t *estimate_log;
     int32_t tmp[4];
@@ -494,7 +495,7 @@ enum fcs_mode_t mode, double static_pressure, double static_temp) {
 }
 
 static void _populate_ahrs_status(struct fcs_log_t *estimate_log,
-enum fcs_mode_t ahrs_mode) {
+enum fcs_mode_t mode) {
     int32_t tmp[4];
 
     /*
@@ -509,7 +510,7 @@ enum fcs_mode_t ahrs_mode) {
     }
 
     /* Ignore sensor timeouts in any mode but active */
-    if (ahrs_mode != FCS_MODE_ACTIVE) {
+    if (mode != FCS_MODE_ACTIVE) {
         t_since_last_sensor = 0;
     }
 
@@ -525,7 +526,7 @@ enum fcs_mode_t ahrs_mode) {
     t_since_last_comms = ahrs_solution_time - ahrs_last_comms_time;
 
     /* Ignore sensor timeouts in any mode but active */
-    if (ahrs_mode != FCS_MODE_ACTIVE && ahrs_mode != FCS_MODE_SIMULATING) {
+    if (mode != FCS_MODE_ACTIVE && mode != FCS_MODE_SIMULATING) {
         t_since_last_comms = 0;
     }
 

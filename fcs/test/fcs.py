@@ -240,6 +240,37 @@ class AHRSStateEstimate(Structure):
     ]
 
 
+class SensorHealth(Structure):
+    _fields_ = [
+        ("accel_value", c_double * 3),
+        ("accel_covariance", c_double * 3),
+        ("accel_innovation", c_double * 3),
+        ("gyro_value", c_double * 3),
+        ("gyro_covariance", c_double * 3),
+        ("gyro_innovation", c_double * 3),
+        ("mag_value", c_double * 3),
+        ("mag_covariance", c_double * 3),
+        ("mag_innovation", c_double * 3),
+        ("gps_position_value", c_double * 2),
+        ("gps_position_covariance", c_double * 2),
+        ("gps_position_innovation", c_double * 2),
+        ("gps_velocity_value", c_double * 3),
+        ("gps_velocity_covariance", c_double * 3),
+        ("gps_velocity_innovation", c_double * 3),
+        ("pitot_value", c_double),
+        ("pitot_covariance", c_double),
+        ("pitot_innovation", c_double),
+        ("barometer_value", c_double),
+        ("barometer_covariance", c_double),
+        ("barometer_innovation", c_double),
+        ("accel_gyro_present", c_ubyte),
+        ("mag_present", c_ubyte),
+        ("gps_present", c_ubyte),
+        ("pitot_present", c_ubyte),
+        ("barometer_present", c_ubyte),
+    ]
+
+
 def reset():
     """
     (Re-)initializes all FCS modules.
@@ -295,6 +326,12 @@ def read(stream_id, max_len):
     return buf[0:bytes_read]
 
 
+def get_sensor_health():
+    result = SensorHealth()
+    _fcs.ukf_get_sensor_health(result)
+    return result
+
+
 def init(dll_path):
     """
     Loads the FCS dynamic library at `dll_path` and sets up the ctypes
@@ -314,6 +351,9 @@ def init(dll_path):
 
     _fcs.fcs_ahrs_tick.argtypes = []
     _fcs.fcs_ahrs_tick.restype = None
+
+    _fcs.ukf_get_sensor_health.argtypes = [POINTER(SensorHealth)]
+    _fcs.ukf_get_sensor_health.restype = None
 
     # From drivers/stream.c
     _fcs._fcs_stream_write_to_rx_buffer.argtypes = [c_ubyte, c_char_p,

@@ -93,6 +93,41 @@ struct ukf_state_t {
     real_t gyro_bias[3]; /* X (rad/s), Y (rad/s), Z (rad/s) */
 };
 
+struct ukf_sensor_health_t {
+    real_t accel_value[3];
+    real_t accel_covariance[3];
+    real_t accel_innovation[3];
+
+    real_t gyro_value[3];
+    real_t gyro_covariance[3];
+    real_t gyro_innovation[3];
+
+    real_t mag_value[3];
+    real_t mag_covariance[3];
+    real_t mag_innovation[3];
+
+    real_t gps_position_value[2];
+    real_t gps_position_covariance[2];
+    real_t gps_position_innovation[2];
+    real_t gps_velocity_value[3];
+    real_t gps_velocity_covariance[3];
+    real_t gps_velocity_innovation[3];
+
+    real_t pitot_value;
+    real_t pitot_covariance;
+    real_t pitot_innovation;
+
+    real_t barometer_value;
+    real_t barometer_covariance;
+    real_t barometer_innovation;
+
+    bool accel_gyro_present;
+    bool mag_present;
+    bool gps_present;
+    bool pitot_present;
+    bool barometer_present;
+};
+
 /*
 Dynamics model function, for custom model support. These functions have to
 be compatible between the C++ and C versions of the UKF, so they take pointers
@@ -123,6 +158,7 @@ void ukf_get_state_covariance(
 void ukf_get_state_covariance_diagonal(
     real_t state_covariance_diagonal[UKF_STATE_DIM]);
 void ukf_get_state_error(real_t state_error[UKF_STATE_DIM]);
+void ukf_get_sensor_health(struct ukf_sensor_health_t *in);
 
 /*
 Functions for setting sensor data. Before each frame, call the sensor_clear()

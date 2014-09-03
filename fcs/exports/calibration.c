@@ -144,6 +144,10 @@ double *restrict out_offset, double prescale) {
         case FCS_CALIBRATION_BIAS_SCALE_1D:
             temp_value[0] -= p[0];
             temp_value[0] *= p[1];
+
+            if (parameter->type == FCS_PARAMETER_PITOT) {
+                temp_value[0] = absval(temp_value[0]);
+            }
             break;
         case FCS_CALIBRATION_BIAS_SCALE_2D:
             temp_value[0] -= p[0];

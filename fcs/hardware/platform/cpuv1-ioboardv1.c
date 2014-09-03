@@ -232,7 +232,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_ACCELEROMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 2.5f, /* m/s^2 */
+            .error = 1.5f, /* m/s^2 */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -266,7 +266,7 @@ void fcs_board_init_platform(void) {
             .type = FCS_PARAMETER_MAGNETOMETER_XYZ,
             .calibration_type = FCS_CALIBRATION_FLAGS_APPLY_ORIENTATION |
                                 FCS_CALIBRATION_BIAS_SCALE_3X3,
-            .error = 0.12f, /* Gauss */
+            .error = 0.02f, /* Gauss */
             .params = {
                 0.0f, 0.0f, 0.0f,
                 0.0f, 0.0f, 0.0f,
@@ -304,7 +304,7 @@ void fcs_board_init_platform(void) {
             .device = 0,
             .type = FCS_PARAMETER_PITOT,
             .calibration_type = FCS_CALIBRATION_BIAS_SCALE_1D,
-            .error = 1.0f,
+            .error = 2.0f,
             /*
             Pitot sensor is in the range +/- 1 psi from 1638 to 14746, with
             zero being 8192.
@@ -542,13 +542,15 @@ void fcs_board_tick(void) {
             }
 
             /* Continuously update the magnetometer calibration */
-            if (ahrs_mode == FCS_MODE_ACTIVE) {
+            if (ahrs_mode == FCS_MODE_ACTIVE || ahrs_mode == FCS_MODE_SAFE ||
+                    ahrs_mode == FCS_MODE_ARMED) {
                 _update_magnetometer_calibration(
                     measurement_log, &board_calibration,
                     &board_mag_trical_instances[i], attitude,
                     board_mag_trical_update_attitude[i], wmm_field,
                     wmm_field_norm, i);
-            } else if (ahrs_mode == FCS_MODE_CALIBRATING) {
+            }
+            if (ahrs_mode == FCS_MODE_CALIBRATING) {
                 _update_pitot_calibration(
                     measurement_log, &board_calibration, i);
                 _update_barometer_calibration(
@@ -919,7 +921,7 @@ double wmm_field_norm, size_t i) {
     */
     delta_angle = quaternion_quaternion_angle_d(attitude,
                                                 last_update_attitude);
-    if (delta_angle < 15.0 * M_PI / 180.0) {
+    if (delta_angle < 3.0 * M_PI / 180.0) {
         return;
     }
 
@@ -1104,7 +1106,7 @@ double wmm_field_norm, enum fcs_mode_t ahrs_mode) {
     Scale error by the same amount, so the units of error are Gauss.
     */
     err *= field_norm_inv;
-    if (ahrs_mode != FCS_MODE_ACTIVE || true) {
+    if (ahrs_mode == FCS_MODE_CALIBRATING) {
         err *= 9.0;
     }
 

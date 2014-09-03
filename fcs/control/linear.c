@@ -39,7 +39,7 @@ const struct fcs_waypoint_t *last_point, const float *restrict wind,
 const struct fcs_waypoint_t *start, const struct fcs_waypoint_t *end,
 float t) {
     float delta_n, delta_e, x, end_ned[3], distance, target_roll,
-          target_airspeed, wind_dot, distance_inv, start_t = t;
+          target_airspeed, wind_dot, distance_inv;
 
     /* Handle zero-length paths */
     if (start == end) {
