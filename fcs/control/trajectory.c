@@ -521,8 +521,6 @@ struct fcs_nav_state_t *nav) {
         fcs_assert(nav->paths[*new_point_path_id].start_waypoint_id ==
                    path->end_waypoint_id ||
                    *new_point_path_id == FCS_CONTROL_HOLD_PATH_ID);
-        fcs_assert(nav->paths[*new_point_path_id].type != FCS_PATH_LINE ||
-                   path->type != FCS_PATH_LINE);
 
         path = &nav->paths[*new_point_path_id];
         t -= _next_point_from_path(
