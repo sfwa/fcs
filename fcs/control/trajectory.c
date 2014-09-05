@@ -511,9 +511,7 @@ struct fcs_nav_state_t *nav) {
 
         /*
         Sanity checks on consistency of path navigation -- the start waypoint
-        of path N+1 must be the same as the end waypoint of path N, and the
-        types can't both be FCS_PATH_LINE (since the headings would always
-        mismatch).
+        of path N+1 must be the same as the end waypoint of path N.
 
         HOLD paths are exempt from that because they always result in a
         waypoint switch (to FCS_CONTROL_HOLD_WAYPOINT_ID).
