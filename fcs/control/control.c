@@ -108,6 +108,10 @@ static bool is_position_error_ok(float err) {
            (is_stabilising() || absval(err) < FCS_CONTROL_POSITION_TOLERANCE);
 }
 
+static void fcs_abort(const char *reason) {
+    fcs_assert(0);
+}
+
 void fcs_control_init(void) {
     float state_weights[NMPC_DELTA_DIM] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
@@ -290,7 +294,7 @@ void fcs_control_tick(void) {
                     measurement_log, FCS_PARAMETER_KEY_ABORT, 1u,
                     &param)) {
             /* Abort */
-            fcs_assert(0 && "Manual abort");
+            fcs_abort("Manual abort");
         }
     }
 
@@ -314,19 +318,19 @@ void fcs_control_tick(void) {
                            nav_state.boundary.waypoint_ids,
                            nav_state.waypoints)) {
         /* Lock up so the AHRS core signals I/O boards to abort flight */
-        fcs_assert(0 && "Mission boundary crossed");
+        fcs_abort("Mission boundary crossed");
     }
 
     if (control_state.mode == FCS_CONTROL_MODE_AUTO) {
         /* Handle loss of data link and loss of GPS when in autonomous mode */
         if (ms_since_last_gps > 1000 && ms_since_last_data > 10000) {
             /* Lock up */
-            fcs_assert(0 && "Lost GPS and lost data link");
+            fcs_abort("Lost GPS and lost data link");
         }
 
         if (ms_since_last_gps > 30000) {
             /* Lock up */
-            fcs_assert(0 && "Lost GPS > 30 sec");
+            fcs_abort("Lost GPS > 30 sec");
         } else if (ms_since_last_gps > 1000) {
             /* Enter a holding pattern if we're not already in one */
             if (nav_state.reference_path_id[0] != FCS_CONTROL_HOLD_PATH_ID &&
@@ -340,7 +344,7 @@ void fcs_control_tick(void) {
         if (control_state.intent == FCS_CONTROL_INTENT_RETURNING_HOME &&
                 control_hold_timer > 120000) {
             /* We've been holding at the HOME waypoint for 2 min -- abort */
-            fcs_assert(0 && "Lost data link");
+            fcs_abort("Lost data link");
         } else if (control_state.intent == FCS_CONTROL_INTENT_RALLYING &&
                    control_hold_timer > 120000) {
             /*

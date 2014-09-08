@@ -80,6 +80,8 @@ static uint8_t
     stream_msg_buf[FCS_STREAM_NUM_DEVICES][FCS_LOG_SERIALIZED_LENGTH];
 static size_t stream_msg_idx[FCS_STREAM_NUM_DEVICES];
 static uint16_t last_control_packet_frame_id;
+static uint32_t control_lockup_ticks = 0;
+static bool control_lockup = false;
 
 
 /* Prototypes of internal functions */
@@ -420,22 +422,28 @@ void fcs_board_tick(void) {
     */
     fcs_log_init(&out_log, FCS_LOG_TYPE_COMBINED, 0);
 
-    /* Don't send the reference trajectory, in order to save space */
-    for (i = 5u; i < control_log->length - 3u; ) {
-        param_len = _extract_length(control_log->data[i]);
-        param_type = (enum fcs_parameter_type_t)control_log->data[i + 2u];
-        if (param_type == FCS_PARAMETER_INVALID || !param_len ||
-                param_len > sizeof(struct fcs_parameter_t) ||
-                i + param_len > control_log->length) {
-            break;
-        }
+    /*
+    Don't send the control log when that core has locked up, to ensure the
+    I/O board enters failsafe.
+    */
+    if (!control_lockup) {
+        /* Don't send the reference trajectory, in order to save space */
+        for (i = 5u; i < control_log->length - 3u; ) {
+            param_len = _extract_length(control_log->data[i]);
+            param_type = (enum fcs_parameter_type_t)control_log->data[i + 2u];
+            if (param_type == FCS_PARAMETER_INVALID || !param_len ||
+                    param_len > sizeof(struct fcs_parameter_t) ||
+                    i + param_len > control_log->length) {
+                break;
+            }
 
-        if (param_type != FCS_PARAMETER_KEY_VALUE) {
-            memcpy(&param, &control_log->data[i], param_len);
-            (void)fcs_log_add_parameter(&out_log, &param);
-        }
+            if (param_type != FCS_PARAMETER_KEY_VALUE) {
+                memcpy(&param, &control_log->data[i], param_len);
+                (void)fcs_log_add_parameter(&out_log, &param);
+            }
 
-        i += param_len;
+            i += param_len;
+        }
     }
 
     if (out_log.length + estimate_log->length < 208) {
@@ -617,11 +625,18 @@ void fcs_board_tick(void) {
         (void)fcs_stream_write(FCS_STREAM_UART_EXT1, out_buf, out_buf_len);
 
         last_control_packet_frame_id = frame_id;
+        control_lockup_ticks = 0;
+        control_lockup = false;
     } else {
         /*
-        TODO: check last control log frame ID and if it hasn't changed in N
-        ticks, tell the I/O board to enter failsafe.
+        Check last control log frame ID and if it hasn't changed in N ticks,
+        tell the I/O board to enter failsafe.
         */
+        if (control_lockup_ticks > 250) {
+            control_lockup = true;
+        } else {
+            control_lockup_ticks++;
+        }
     }
 
     /*

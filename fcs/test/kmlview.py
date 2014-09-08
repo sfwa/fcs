@@ -45,6 +45,7 @@ if __name__ == '__main__':
             control_obj_val = None
             control_errors = None
             control_resets = None
+            mode = None
             time_when = '<when>' + datetime.datetime.fromtimestamp(float(t) / 1000.0).isoformat() + '</when>'
 
             for param in rec:
@@ -93,10 +94,12 @@ if __name__ == '__main__':
                     control_obj_val = pv[1]
                     control_errors = pv[2]
                     control_resets = pv[3]
+                elif pt == plog.ParameterType.FCS_PARAMETER_AHRS_MODE:
+                    mode = chr(pv[0])
 
             if ref_point == last_ref_point or not point or not ref_point \
                     or not path or control_obj_val is None \
-                    or control_pos is None:
+                    or control_pos is None or mode not in ('A', 'R'):
                 continue
 
             airspeed = math.sqrt((velocity[0] - wind[0])**2 +
