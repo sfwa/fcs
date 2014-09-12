@@ -52,7 +52,7 @@ trajectory to get back on track.
 #define FCS_CONTROL_DEFAULT_AIRSPEED 20.0
 
 /* Turn radius in metres */
-#define FCS_CONTROL_TURN_RADIUS 75.0
+#define FCS_CONTROL_TURN_RADIUS 90.0
 
 /* Maximum path length in metres */
 #define FCS_CONTROL_MAX_PATH_LENGTH 10000.0

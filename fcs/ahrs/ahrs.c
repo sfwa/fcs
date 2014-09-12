@@ -60,7 +60,7 @@ static enum fcs_mode_t ahrs_mode;
 static uint64_t ahrs_last_gps_time;
 static uint64_t ahrs_last_baro_time;
 static uint64_t ahrs_last_comms_time;
-static uint16_t ahrs_last_gcs_packet_tick;
+static uint16_t ahrs_last_gcs_packet_tick, ahrs_last_cpu_packet_tick;
 
 /*
 Check a vector for NaN values; return true if any are found, and false
@@ -247,6 +247,16 @@ void fcs_ahrs_tick(void) {
         ahrs_last_gcs_packet_tick = parameter.data.u16[1];
     }
 
+    got_result = fcs_parameter_find_by_type_and_device(
+        measurement_log, FCS_PARAMETER_IO_STATUS, 0u, &parameter);
+    if (got_result) {
+        if (ahrs_last_cpu_packet_tick != parameter.data.u16[1]) {
+            ahrs_last_comms_time = ahrs_solution_time;
+        }
+
+        ahrs_last_cpu_packet_tick = parameter.data.u16[1];
+    }
+
     measurement_log = fcs_exports_log_close(measurement_log);
     fcs_assert(!measurement_log);
 
@@ -290,7 +300,8 @@ void fcs_ahrs_tick(void) {
         Transition out of initializing if we've received a GPS packet as well
         as a reference pressure from the GCS
         */
-        if (got_gps && ahrs_last_gcs_packet_tick != 0) {
+        if (got_gps && (ahrs_last_gcs_packet_tick != 0 ||
+                        ahrs_last_cpu_packet_tick != 0)) {
             fcs_ahrs_set_mode(FCS_MODE_CALIBRATING);
         }
     } else if (ahrs_mode == FCS_MODE_SIMULATING) {

@@ -776,6 +776,7 @@ def print_debug_log(i, data):
     v = [0, 0, 0]
     att_ypr = [0, 0, 0]
     w = [0, 0, 0]
+    gyro_bias = [0, 0, 0]
 
     for param in data:
         pt = param.parameter_type
@@ -791,6 +792,10 @@ def print_debug_log(i, data):
             att_ypr = list(q_to_euler(att_q))
         elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_WIND_VELOCITY_NED:
             w = map(lambda x: float(x) * 1e-2, pv[0:3])
+        elif pt == ParameterType.FCS_PARAMETER_ESTIMATED_GYRO_BIAS_XYZ:
+            gyro_bias = map(
+                lambda x: math.degrees(float(x) / (32767.0 / math.pi * 2.0)),
+                pv)
 
     tas = math.sqrt((v[0] - w[0]) ** 2 + (v[1] - w[1]) ** 2 + (v[2] - w[2]) ** 2)
     heading = (math.degrees(math.atan2(v[1], v[0])) + 360.0) % 360.0
@@ -798,7 +803,7 @@ def print_debug_log(i, data):
     v = math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
     w = math.sqrt(w[0] ** 2 + w[1] ** 2 + w[2] ** 2)
 
-    sys.stdout.write("%s,%s,%f,%f,%f,%f,%f,%f,%f,%s,%s\n" % (gps_v_1, gps_v_2, v, w, tas, heading, att_ypr[0], att_ypr[1], att_ypr[2], pitot_1, pitot_2))
+    sys.stdout.write("%s,%s,%f,%f,%f,%f,%f,%f,%f,%s,%s,%f,%f,%f\n" % (gps_v_1, gps_v_2, v, w, tas, heading, att_ypr[0], att_ypr[1], att_ypr[2], pitot_1, pitot_2, gyro_bias[0], gyro_bias[1], gyro_bias[2]))
 
 
 if __name__ == "__main__":
@@ -812,7 +817,7 @@ if __name__ == "__main__":
     #      "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
     #      "control_lail_2,control_rail_2"
 
-    print "n,gps_v_1,gps_v_2,v,w,tas,heading,yaw,pitch,roll,pitot_1,pitot_2"
+    print "n,gps_v_1,gps_v_2,v,w,tas,heading,yaw,pitch,roll,pitot_1,pitot_2,bias_x,bias_y,bias_z"
 
     n = 0
     for logf in iterlogs(sys.stdin):

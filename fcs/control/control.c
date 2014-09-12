@@ -108,8 +108,16 @@ static bool is_position_error_ok(float err) {
            (is_stabilising() || absval(err) < FCS_CONTROL_POSITION_TOLERANCE);
 }
 
+#ifndef __TI_COMPILER_VERSION__
+#include <stdio.h>
+#endif
+
 static void fcs_abort(const char *reason) {
+#ifdef __TI_COMPILER_VERSION__
     fcs_assert(0);
+#else
+    printf("ABORT: %s", reason);
+#endif
 }
 
 void fcs_control_init(void) {
@@ -197,12 +205,15 @@ void fcs_control_tick(void) {
     struct fcs_state_estimate_t state_estimate;
     struct fcs_log_t *control_log, *measurement_log;
     struct fcs_path_t *path;
+    struct fcs_waypoint_t *release_point;
+    struct fcs_waypoint_t waypoint;
     struct fcs_parameter_t param, param2;
-    float controls[NMPC_CONTROL_DIM], alt_diff, yaw, pitch, roll;
+    float controls[NMPC_CONTROL_DIM], alt_diff, yaw, pitch, roll,
+          release_pt_dist, next_release_pt_dist, ned[3];
     uint32_t start_t = cycle_count();
     int32_t ms_since_last_gps, ms_since_last_data;
     uint16_t manual_setpoint[NMPC_CONTROL_DIM];
-    uint8_t param_key[4];
+    uint8_t param_key[4], i;
     bool control_timeout = false, needs_path_reset = false, do_release;
 
     fcs_assert(control_state.mode != FCS_CONTROL_MODE_STARTUP_VALUE);
@@ -244,57 +255,59 @@ void fcs_control_tick(void) {
 
     /* Handle navigation state updates */
     needs_path_reset = false;
-    if (fcs_parameter_find_by_type_and_device(
-            measurement_log, FCS_PARAMETER_NAV_VERSION, 1u, &param) &&
-            param.data.u32[0] == nav_state.version + 1u) {
-        /* Look for path and waypoint updates */
+    for (i = 0; i < 2u; i++) {
         if (fcs_parameter_find_by_type_and_device(
-                    measurement_log, FCS_PARAMETER_NAV_PATH_ID, 1u, &param) &&
-                fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_PATH, 1u, &param2) &&
-                param.data.u16[0] < FCS_CONTROL_MAX_PATHS) {
-            /* Update path */
-            (void)fcs_parameter_get_key_value(
-                param_key, (uint8_t*)&nav_state.paths[param.data.u16[0]],
-                sizeof(struct fcs_path_t), &param2);
-            nav_state.version++;
-        } else if (fcs_parameter_find_by_type_and_device(
-                    measurement_log, FCS_PARAMETER_NAV_WAYPOINT_ID, 1u,
-                    &param) &&
-                fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_WAYPOINT, 1u,
-                    &param2) &&
-                param.data.u16[0] < FCS_CONTROL_MAX_WAYPOINTS) {
-            /* Update waypoint */
-            (void)fcs_parameter_get_key_value(
-                param_key, (uint8_t*)&nav_state.waypoints[param.data.u16[0]],
-                sizeof(struct fcs_waypoint_t), &param2);
-            nav_state.version++;
-        } else if (fcs_parameter_find_by_type_and_device(
-                    measurement_log, FCS_PARAMETER_NAV_PATH_ID, 1u, &param) &&
-                fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_REROUTE, 1u,
-                    &param2) &&
-                param.data.u16[0] < FCS_CONTROL_MAX_PATHS &&
-                nav_state.reference_path_id[0] != param.data.u16[0]) {
-            /* Re-route to the new path */
-            nav_state.reference_path_id[0] = param.data.u16[0];
-            nav_state.version++;
-            needs_path_reset = true;
-            control_state.intent = FCS_CONTROL_INTENT_NAVIGATING;
-        } else if (fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_NAV_BOUNDARY, 1u,
-                    &param)) {
-            /* Update mission boundary */
-            (void)fcs_parameter_get_key_value(
-                param_key, (uint8_t*)&nav_state.boundary,
-                sizeof(struct fcs_boundary_t), &param);
-            nav_state.version++;
-        } else if (fcs_parameter_find_by_key_and_device(
-                    measurement_log, FCS_PARAMETER_KEY_ABORT, 1u,
-                    &param)) {
-            /* Abort */
-            fcs_abort("Manual abort");
+                measurement_log, FCS_PARAMETER_NAV_VERSION, i, &param) &&
+                param.data.u32[0] == nav_state.version + 1u) {
+            /* Look for path and waypoint updates */
+            if (fcs_parameter_find_by_type_and_device(
+                        measurement_log, FCS_PARAMETER_NAV_PATH_ID, i, &param) &&
+                    fcs_parameter_find_by_key_and_device(
+                        measurement_log, FCS_PARAMETER_KEY_PATH, i, &param2) &&
+                    param.data.u16[0] < FCS_CONTROL_MAX_PATHS) {
+                /* Update path */
+                (void)fcs_parameter_get_key_value(
+                    param_key, (uint8_t*)&nav_state.paths[param.data.u16[0]],
+                    sizeof(struct fcs_path_t), &param2);
+                nav_state.version++;
+            } else if (fcs_parameter_find_by_type_and_device(
+                        measurement_log, FCS_PARAMETER_NAV_WAYPOINT_ID, i,
+                        &param) &&
+                    fcs_parameter_find_by_key_and_device(
+                        measurement_log, FCS_PARAMETER_KEY_WAYPOINT, i,
+                        &param2) &&
+                    param.data.u16[0] < FCS_CONTROL_MAX_WAYPOINTS) {
+                /* Update waypoint */
+                (void)fcs_parameter_get_key_value(
+                    param_key, (uint8_t*)&nav_state.waypoints[param.data.u16[0]],
+                    sizeof(struct fcs_waypoint_t), &param2);
+                nav_state.version++;
+            } else if (fcs_parameter_find_by_type_and_device(
+                        measurement_log, FCS_PARAMETER_NAV_PATH_ID, i, &param) &&
+                    fcs_parameter_find_by_key_and_device(
+                        measurement_log, FCS_PARAMETER_KEY_REROUTE, i,
+                        &param2) &&
+                    param.data.u16[0] < FCS_CONTROL_MAX_PATHS &&
+                    nav_state.reference_path_id[0] != param.data.u16[0]) {
+                /* Re-route to the new path */
+                nav_state.reference_path_id[0] = param.data.u16[0];
+                nav_state.version++;
+                needs_path_reset = true;
+                control_state.intent = FCS_CONTROL_INTENT_NAVIGATING;
+            } else if (fcs_parameter_find_by_key_and_device(
+                        measurement_log, FCS_PARAMETER_KEY_NAV_BOUNDARY, i,
+                        &param)) {
+                /* Update mission boundary */
+                (void)fcs_parameter_get_key_value(
+                    param_key, (uint8_t*)&nav_state.boundary,
+                    sizeof(struct fcs_boundary_t), &param);
+                nav_state.version++;
+            } else if (fcs_parameter_find_by_key_and_device(
+                        measurement_log, FCS_PARAMETER_KEY_ABORT, i,
+                        &param)) {
+                /* Abort */
+                fcs_abort("Manual abort");
+            }
         }
     }
 
@@ -523,15 +536,46 @@ void fcs_control_tick(void) {
 
     /*
     Add GPIO to the control log if everything's stable and a payload release
-    is requested
+    is requested -- if the first or last point is a release path, then the
+    release point must be somewhere along the trajectory.
+
+    If:
+    1. there is a release point in the current horizon, and
+    2. the current position plus current velocity would be further from the
+       release point than the current position is,
+    release the payload.
     */
     if (result == NMPC_OK &&
-        ((nav_state.reference_trajectory[0].flags &
-            FCS_WAYPOINT_FLAG_RELEASE_MASK) ||
-         (nav_state.reference_path_id[0] < FCS_CONTROL_MAX_PATHS &&
+        ((nav_state.reference_path_id[0] < FCS_CONTROL_MAX_PATHS &&
             nav_state.paths[nav_state.reference_path_id[0]].type ==
+            FCS_PATH_RELEASE) ||
+         (nav_state.reference_path_id[OCP_HORIZON_LENGTH] < FCS_CONTROL_MAX_PATHS &&
+            nav_state.paths[nav_state.reference_path_id[OCP_HORIZON_LENGTH]].type ==
             FCS_PATH_RELEASE))) {
-        do_release = true;
+        path = &nav_state.paths[nav_state.reference_path_id[0]];
+        if (path->type != FCS_PATH_RELEASE) {
+            /* Release path must have been at the end of the trajectory */
+            path = &nav_state.paths[nav_state.reference_path_id[OCP_HORIZON_LENGTH]];
+        }
+
+        release_point = &nav_state.waypoints[path->start_waypoint_id];
+        waypoint.lat = state_estimate.lat;
+        waypoint.lon = state_estimate.lon;
+        waypoint.alt = state_estimate.alt;
+
+        _ned_from_point_diff(ned, release_point, &waypoint);
+        ned[Z] = 0.0f;
+        release_pt_dist = vector3_norm_f(ned);
+
+        ned[X] += state_estimate.velocity[X] * (1.0f / (float)OCP_HORIZON_LENGTH);
+        ned[Y] += state_estimate.velocity[Y] * (1.0f / (float)OCP_HORIZON_LENGTH);
+        next_release_pt_dist = vector3_norm_f(ned);
+
+        if (next_release_pt_dist >= release_pt_dist) {
+            do_release = true;
+        } else {
+            do_release = false;
+        }
     } else {
         do_release = false;
     }
@@ -590,7 +634,9 @@ void fcs_control_reset(void) {
     struct fcs_state_estimate_t state_estimate;
     int32_t tmp1, tmp2;
     _read_estimate_log(&state_estimate, &tmp1, &tmp2);
+    fcs_trajectory_start_recover(&nav_state, &state_estimate, true);
     fcs_trajectory_recalculate(&nav_state, &state_estimate);
+    control_state.intent = FCS_CONTROL_INTENT_NAVIGATING;
 }
 
 /*

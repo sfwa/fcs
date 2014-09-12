@@ -35,6 +35,7 @@ def tick(t, data):
     control_error_type = 0
     last_gps = 0
     last_data = 0
+    payload_release = False
 
     for param in data:
         pt = param.parameter_type
@@ -83,6 +84,8 @@ def tick(t, data):
             last_data = pv[1]
         elif pt == plog.ParameterType.FCS_PARAMETER_NAV_VERSION:
             control_nav_version = pv[0]
+        elif pt == plog.ParameterType.FCS_PARAMETER_GP_OUT:
+            payload_release = True if pv[0] else False
 
 
     control_data = (control_cycles, control_obj_val, control_errors,
@@ -129,7 +132,7 @@ def tick(t, data):
         (control_pos[0], control_pos[1], control_pos[2]) +
         (control_obj_val, control_cycles, control_errors, control_resets) +
         (control_path, last_gps, control_mode[1], control_refp["flags"],
-            control_error_type)
+            control_error_type, 1 if payload_release else 0)
     )
 
     format = (
@@ -146,7 +149,7 @@ def tick(t, data):
         "t=%.3f, l=%.3f, r=%.3f, " +
         "tp=%.3f, lp=%.3f, rp=%.3f, " +
         "objval=%10.1f, cycles=%9d, errors=%9d, resets=%9d, " +
-        "path=%4d, last_gps=%4d, mode1=%d, flags=%08x, err=%04x\n"
+        "path=%4d, last_gps=%4d, mode1=%d, flags=%08x, err=%04x, release=%d\n"
     )
 
     dump = (
@@ -163,7 +166,7 @@ def tick(t, data):
         "%.3f,%.3f,%.3f," +
         "%.3f,%.3f,%.3f," +
         "%.1f,%d,%d,%d," +
-        "%d,%d,%d,%d,%d\n"
+        "%d,%d,%d,%d,%d,%d\n"
     )
 
     #return format % data
@@ -176,7 +179,7 @@ if __name__ == "__main__":
     infile = open(sys.argv[2], 'rb') if len(sys.argv) > 2 else sys.stdin
     outfile = open(sys.argv[3], 'wb') if len(sys.argv) > 3 else sys.stdout
 
-    print "t,alt,alt_ref,n,e,d,xte,ate,tas,tas_ref,gs,heading,heading_ref,yaw,yaw_ref,pitch,pitch_ref,roll,roll_ref,vyaw,vpitch,vroll,wind,wind_n,wind_e,t,l,r,tp,lp,rp,objval,cycles,errors,resets,path,last_gps,mode1,flags,err"
+    print "t,alt,alt_ref,n,e,d,xte,ate,tas,tas_ref,gs,heading,heading_ref,yaw,yaw_ref,pitch,pitch_ref,roll,roll_ref,vyaw,vpitch,vroll,wind,wind_n,wind_e,t,l,r,tp,lp,rp,objval,cycles,errors,resets,path,last_gps,mode1,flags,err,release"
 
     i = 0
     for logf in plog.iterlogs(infile):

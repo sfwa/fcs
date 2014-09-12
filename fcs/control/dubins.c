@@ -174,7 +174,8 @@ float t) {
     float end_ned[3], target_airspeed, theta, a, b, sa, sb, ca, cb, ca_b, d,
           min_d, target_roll, target_yaw, tangent_n, tangent_e, wind_dot,
           straight_d, start_turn_d, end_turn_d, path_t, tangent_ground_speed,
-          interpolation_rate, ref[3], out[3], p1[3], p2[3];
+          interpolation_rate, ref[3], out[3], p1[3], p2[3], wind_perp2,
+          wind_comp;
     uint8_t segment, last_segment; /* 0, 1 or 2 (curve, straight, curve) */
     int8_t first_action, last_action; /* -1 = left, 0 = straight, 1 = right */
     uint8_t path_type = 0xFFu; /* FCS_WAYPOINT_FLAG_DUBINS_LSL &c */
@@ -357,9 +358,14 @@ float t) {
     tangent_n = (float)cos(last_point->yaw);
     tangent_e = (float)sin(last_point->yaw);
     wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
+    wind_perp2 = (wind[0] * wind[0] + wind[1] * wind[1] -
+                  wind_dot * wind_dot);
+    wind_comp = (float)sqrt(max(0.0,
+                                start->airspeed * start->airspeed -
+                                wind_perp2));
     target_airspeed = start->airspeed;
 
-    tangent_ground_speed = target_airspeed ; //+ wind_dot * 0.33f;
+    tangent_ground_speed = wind_comp + wind_dot;
 
     target_roll = (float)(M_PI * 0.5 - atan2(
         G_ACCEL * FCS_CONTROL_TURN_RADIUS,
@@ -369,15 +375,15 @@ float t) {
     Smooth roll changes by interpolating from 0 to maximum over the course of
     1/2 of a radian in yaw.
     */
-    if (absval(target_yaw) < 0.333333f &&
+    if (absval(target_yaw) < 0.25f &&
             (needs_roll_change ||
              (last_segment == 0 && path_t < start_turn_d * 0.5f) ||
              (last_segment == 2u && path_t < min_d - end_turn_d * 0.5f))) {
-        target_roll *= max(0.01f, absval(target_yaw) * 3.0f);
+        target_roll *= max(0.01f, absval(target_yaw) * 4.0f);
     }
 
     interpolation_rate =
-        (target_airspeed + wind_dot) * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
+        (wind_comp + wind_dot) * (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
 
     path_t += t * interpolation_rate;
     if (path_t >= min_d) {

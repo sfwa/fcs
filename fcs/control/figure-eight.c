@@ -119,7 +119,8 @@ const struct fcs_waypoint_t *end, float t) {
     */
     float offset_n, offset_e, offset_u, offset_v, sd, cd, sy, cy,
           target_airspeed, target_yaw, target_roll, tangent_n, tangent_e,
-          wind_dot, tangent_ground_speed, last_ned[3], delta_pos, delta_yaw;
+          wind_dot, tangent_ground_speed, last_ned[3], delta_pos, delta_yaw,
+          wind_perp2, wind_comp;
     uint8_t last_segment, new_segment;
 
     sy = (float)sin(start->yaw);
@@ -136,7 +137,12 @@ const struct fcs_waypoint_t *end, float t) {
     tangent_n = (float)cos(last_point->yaw);
     tangent_e = (float)sin(last_point->yaw);
     wind_dot = tangent_n * wind[0] + tangent_e * wind[1];
-    tangent_ground_speed = wind_dot + target_airspeed;
+    wind_perp2 = (wind[0] * wind[0] + wind[1] * wind[1] -
+                  wind_dot * wind_dot);
+    wind_comp = (float)sqrt(max(0.0,
+                                start->airspeed * start->airspeed -
+                                wind_perp2));
+    tangent_ground_speed = wind_dot + wind_comp;
 
     delta_pos = tangent_ground_speed * t *
                 (float)(1.0 / FCS_CONTROL_TURN_RADIUS);
@@ -224,7 +230,7 @@ const struct fcs_waypoint_t *end, float t) {
         Roll angle is based on airspeed and turn radius (constant):
         roll_deg = 90 - atan(9.8 * r / v^2)
         */
-        tangent_ground_speed = target_airspeed;
+        //tangent_ground_speed = target_airspeed;
         target_roll = (float)(M_PI * 0.5 - atan2(
             G_ACCEL * FCS_CONTROL_TURN_RADIUS,
             (tangent_ground_speed * tangent_ground_speed)));
@@ -235,12 +241,12 @@ const struct fcs_waypoint_t *end, float t) {
         delta_yaw = min(
             absval(_angle_diff(target_yaw, 0.0f)),
             absval(_angle_diff(target_yaw, (float)M_PI * 1.5f)));
-        if (delta_yaw < 0.333333f) {
+        if (delta_yaw < 0.25f) {
             /*
             Scale roll angle to avoid discontinuity at start and end of
             curved segments
             */
-            target_roll *= delta_yaw * 3.0f;
+            target_roll *= delta_yaw * 4.0f;
         }
     } else {
         target_roll = 0.0f;

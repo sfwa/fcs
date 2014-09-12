@@ -210,7 +210,7 @@ class NavWaypoint(Structure):
 class NavBoundary(Structure):
     _fields_ = [
         ("num_waypoint_ids", c_ushort),
-        ("waypoint_ids", c_ushort * 64),
+        ("waypoint_ids", c_ushort * 16),
         ("flags", c_ubyte)
     ]
 

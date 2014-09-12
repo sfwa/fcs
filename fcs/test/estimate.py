@@ -88,6 +88,10 @@ if __name__ == "__main__":
                 wind_v = map(lambda x: float(x) * 1e-2, pv)
             elif pt == plog.ParameterType.FCS_PARAMETER_AHRS_MODE:
                 mode = chr(pv[0])
+            elif pt == plog.ParameterType.FCS_PARAMETER_ESTIMATED_GYRO_BIAS_XYZ:
+                gyro_bias = map(
+                    lambda x: math.degrees(float(x) / (32767.0 / math.pi * 2.0)),
+                    pv)
 
         vv = math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
 

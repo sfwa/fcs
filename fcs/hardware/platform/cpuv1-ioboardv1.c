@@ -82,6 +82,9 @@ static size_t stream_msg_idx[FCS_STREAM_NUM_DEVICES];
 static uint16_t last_control_packet_frame_id;
 static uint32_t control_lockup_ticks = 0;
 static bool control_lockup = false;
+static uint32_t uart0_timeout, uart1_timeout;
+static uint8_t gpin_status;
+static struct fcs_log_t last_cpu_command;
 
 
 /* Prototypes of internal functions */
@@ -200,16 +203,6 @@ void fcs_board_init_platform(void) {
     result = fcs_stream_set_rate(FCS_STREAM_UART_INT1, 2604166u);
     fcs_assert(result == FCS_STREAM_OK);
     result = fcs_stream_open(FCS_STREAM_UART_INT1);
-    fcs_assert(result == FCS_STREAM_OK);
-
-    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
-    fcs_assert(result == FCS_STREAM_OK);
-    result = fcs_stream_open(FCS_STREAM_UART_EXT0);
-    fcs_assert(result == FCS_STREAM_OK);
-
-    result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
-    fcs_assert(result == FCS_STREAM_OK);
-    result = fcs_stream_open(FCS_STREAM_UART_EXT1);
     fcs_assert(result == FCS_STREAM_OK);
 
     result = fcs_stream_open(FCS_STREAM_USB);
@@ -382,6 +375,8 @@ void fcs_board_init_platform(void) {
     /* Update reference values */
     board_reference_pressure = STANDARD_PRESSURE;
     board_reference_alt = 0.0;
+
+    fcs_log_init(&last_cpu_command, FCS_LOG_TYPE_MEASUREMENT, 0);
 }
 
 void fcs_board_tick(void) {
@@ -392,18 +387,24 @@ void fcs_board_tick(void) {
     struct fcs_log_t out_log;
     double attitude[4], wmm_field[3], wmm_field_norm, wmm_field_norm_inv;
     double static_pressure, static_temp;
-    struct fcs_parameter_t param;
+    struct fcs_parameter_t param, param2;
     enum fcs_mode_t ahrs_mode;
     bool got_result, mode_ok;
     enum fcs_stream_result_t stream_result;
     uint16_t frame_id;
 
+    uart0_timeout++;
+    uart1_timeout++;
+
     /* Check for errors -- if found, reset the UARTs */
-    if (fcs_stream_check_error(FCS_STREAM_UART_EXT1) == FCS_STREAM_ERROR) {
+    if (fcs_stream_check_error(FCS_STREAM_UART_EXT1) == FCS_STREAM_ERROR ||
+            uart1_timeout > 1000u) {
         stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT1, 921600u);
         fcs_assert(stream_result == FCS_STREAM_OK);
         stream_result = fcs_stream_open(FCS_STREAM_UART_EXT1);
         fcs_assert(stream_result == FCS_STREAM_OK);
+
+        uart1_timeout = 0;
     }
 
     /*
@@ -448,6 +449,15 @@ void fcs_board_tick(void) {
 
     if (out_log.length + estimate_log->length < 208) {
         (void)fcs_log_merge(&out_log, estimate_log);
+    }
+
+    /* Add the GP_IN status to the output log */
+    if (out_log.length < 200) {
+        fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 8u, 1u);
+        fcs_parameter_set_type(&param, FCS_PARAMETER_GP_IN);
+        fcs_parameter_set_device_id(&param, 0u);
+        param.data.u8[0] = gpin_status;
+        (void)fcs_log_add_parameter(&out_log, &param);
     }
 
     /*
@@ -547,6 +557,17 @@ void fcs_board_tick(void) {
                 (uint8_t)i, &param);
             if (got_result) {
                 fcs_parameter_get_values_d(&param, &board_reference_alt, 1u);
+                board_reference_alt *= 1e-2;
+            }
+
+            if (i == 1u) {
+                /* Read GPIN from the I/O board with payload release sensor */
+                got_result = fcs_parameter_find_by_type_and_device(
+                    measurement_log, FCS_PARAMETER_GP_IN,
+                    (uint8_t)i, &param);
+                if (got_result) {
+                    gpin_status = param.data.u8[0];
+                }
             }
 
             /* Continuously update the magnetometer calibration */
@@ -660,10 +681,12 @@ void fcs_board_tick(void) {
 
             memcpy(estimate_log, &out_log, sizeof(struct fcs_log_t));
         }
+
+        uart1_timeout = 0;
     }
 
     fcs_log_init(&out_log, FCS_LOG_TYPE_MEASUREMENT, 0);
-    if (_fcs_read_log_packet(FCS_STREAM_UART_EXT0, 1u, &out_log)) {
+    if (_fcs_read_log_packet(FCS_STREAM_UART_EXT0, 0u, &out_log)) {
         /*
         Got a command from the CPU -- merge it in ahead of the actual
         measurement log to ensure it takes priority over commands relayed from
@@ -674,15 +697,27 @@ void fcs_board_tick(void) {
         */
         fcs_parameter_set_header(&param, FCS_VALUE_UNSIGNED, 16u, 2u);
         fcs_parameter_set_type(&param, FCS_PARAMETER_IO_STATUS);
-        fcs_parameter_set_device_id(&param, 1u);
+        fcs_parameter_set_device_id(&param, 0u);
         param.data.u16[0] = 0;
         /*
         Doesn't actually matter what this counter is, as long as it changes
         each packet
         */
         param.data.u16[1] = fcs_log_get_frame_id(estimate_log);
-        fcs_log_add_parameter(&out_log, &param);
+        (void)fcs_log_add_parameter(&out_log, &param);
 
+        memcpy(&last_cpu_command, &out_log, sizeof(struct fcs_log_t));
+
+        uart0_timeout = 0;
+    }
+
+    /*
+    Repeat the last CPU command into the measurement log until a newer
+    measurement arrives
+    */
+    if (fcs_parameter_find_by_type_and_device(
+                &last_cpu_command, FCS_PARAMETER_NAV_VERSION, 0u, &param)) {
+        memcpy(&out_log, &last_cpu_command, sizeof(struct fcs_log_t));
         fcs_log_merge(&out_log, measurement_log);
         fcs_log_init(measurement_log, FCS_LOG_TYPE_MEASUREMENT,
                      fcs_log_get_frame_id(measurement_log));
@@ -711,7 +746,8 @@ void fcs_board_tick(void) {
         }
 #endif
     } else if ((fcs_log_get_frame_id(estimate_log) & 0x003Fu) == 0x003Fu) {
-        if (fcs_stream_check_error(FCS_STREAM_UART_EXT0) == FCS_STREAM_ERROR) {
+        if (fcs_stream_check_error(FCS_STREAM_UART_EXT0) == FCS_STREAM_ERROR ||
+                uart0_timeout > 5000u) {
             stream_result = fcs_stream_set_rate(FCS_STREAM_UART_EXT0, 115200u);
             fcs_assert(stream_result == FCS_STREAM_OK);
             stream_result = fcs_stream_open(FCS_STREAM_UART_EXT0);
