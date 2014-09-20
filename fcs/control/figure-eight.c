@@ -230,7 +230,7 @@ const struct fcs_waypoint_t *end, float t) {
         Roll angle is based on airspeed and turn radius (constant):
         roll_deg = 90 - atan(9.8 * r / v^2)
         */
-        //tangent_ground_speed = target_airspeed;
+        tangent_ground_speed = target_airspeed;
         target_roll = (float)(M_PI * 0.5 - atan2(
             G_ACCEL * FCS_CONTROL_TURN_RADIUS,
             (tangent_ground_speed * tangent_ground_speed)));
@@ -241,12 +241,12 @@ const struct fcs_waypoint_t *end, float t) {
         delta_yaw = min(
             absval(_angle_diff(target_yaw, 0.0f)),
             absval(_angle_diff(target_yaw, (float)M_PI * 1.5f)));
-        if (delta_yaw < 0.25f) {
+        if (delta_yaw < 0.333333f) {
             /*
             Scale roll angle to avoid discontinuity at start and end of
             curved segments
             */
-            target_roll *= delta_yaw * 4.0f;
+            target_roll *= delta_yaw * 3.0f;
         }
     } else {
         target_roll = 0.0f;

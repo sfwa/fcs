@@ -365,7 +365,7 @@ float t) {
                                 wind_perp2));
     target_airspeed = start->airspeed;
 
-    tangent_ground_speed = wind_comp + wind_dot;
+    tangent_ground_speed = start->airspeed; //wind_comp + wind_dot;
 
     target_roll = (float)(M_PI * 0.5 - atan2(
         G_ACCEL * FCS_CONTROL_TURN_RADIUS,
@@ -375,11 +375,11 @@ float t) {
     Smooth roll changes by interpolating from 0 to maximum over the course of
     1/2 of a radian in yaw.
     */
-    if (absval(target_yaw) < 0.25f &&
+    if (absval(target_yaw) < 0.333333f &&
             (needs_roll_change ||
              (last_segment == 0 && path_t < start_turn_d * 0.5f) ||
              (last_segment == 2u && path_t < min_d - end_turn_d * 0.5f))) {
-        target_roll *= max(0.01f, absval(target_yaw) * 4.0f);
+        target_roll *= max(0.01f, absval(target_yaw) * 3.0f);
     }
 
     interpolation_rate =

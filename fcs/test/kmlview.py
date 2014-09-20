@@ -27,7 +27,7 @@ if __name__ == '__main__':
     last_auto = 0
     with open(args.infile, 'r') as infile:
         for t, rec in enumerate(plog.iterlogs(infile)):
-            if t % 1000:
+            if t % 50: #t % 1000:
                 continue
 
             path = None
@@ -98,8 +98,8 @@ if __name__ == '__main__':
                     mode = chr(pv[0])
 
             if ref_point == last_ref_point or not point or not ref_point \
-                    or not path or control_obj_val is None \
-                    or control_pos is None or mode not in ('A', 'R'):
+                    or not path: #or control_obj_val is None \
+                    #or control_pos is None : #or mode not in ('A', 'R'):
                 continue
 
             airspeed = math.sqrt((velocity[0] - wind[0])**2 +
@@ -117,9 +117,9 @@ if __name__ == '__main__':
                 path = 0
 
             path_id.append('<gx:value>{0}</gx:value>'.format(path))
-            path_throttle.append('<gx:value>{0:.3f}</gx:value>'.format(control_pos[0]))
-            path_left_elevon.append('<gx:value>{0:.3f}</gx:value>'.format(control_pos[1]))
-            path_right_elevon.append('<gx:value>{0:.3f}</gx:value>'.format(control_pos[2]))
+            #path_throttle.append('<gx:value>{0:.3f}</gx:value>'.format(control_pos[0]))
+            #path_left_elevon.append('<gx:value>{0:.3f}</gx:value>'.format(control_pos[1]))
+            #path_right_elevon.append('<gx:value>{0:.3f}</gx:value>'.format(control_pos[2]))
             path_airspeed.append(airspeed)
             path_data.append(time_when + point + attitude)
             path_obj_val.append('<gx:value>{0:.1f}</gx:value>'.format(control_obj_val))

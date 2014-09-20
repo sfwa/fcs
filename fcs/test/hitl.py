@@ -45,9 +45,9 @@ X-Plane simulation, with the DSP connected via a USB-serial adapter
 ahrs_tick = 0
 
 
-START_LAT = -37.954719 #-37.81358378
-START_LON = 145.237617 #144.9
-START_ALT = 200
+START_LAT = -26.584781 # -37.954719 #-37.81358378
+START_LON = 151.842325 # 145.237617 #144.9
+START_ALT = 480 # 200
 
 
 WGS84_A = 6378137.0

@@ -177,7 +177,7 @@ def tick(lat=None, lon=None, alt=None, velocity=None, attitude=None,
     fcs.read(0, 1023)
     fcs.read(1, 1023)
     fcs.read(2, 1023)
-    fcs.read(4, 1023)
+    sys.stderr.write(fcs.read(4, 1023))
 
     try:
         control_log = plog.ParameterLog.deserialize(fcs.read(3, 1023))
@@ -466,7 +466,7 @@ def ll_pt_line_direction(a, line):
     return 1.0 if direction > 0.0 else -1.0
 
 
-PATTERN_WIDTH = 200.0 # 130.0 # 150.0
+PATTERN_WIDTH = 251.0 # 130.0 # 150.0
 
 
 def generate_search_pattern(area):
@@ -506,7 +506,7 @@ def generate_search_pattern(area):
     pass_direction = ll_pt_line_direction(
         area[furthest_point], (area[longest_side[0]], area[longest_side[1]]))
 
-    n_passes = int(math.floor(furthest_point_distance / pass_distance))
+    n_passes = int(math.ceil(furthest_point_distance / pass_distance))
 
     pass_offset = (
         math.cos(heading + math.pi * 0.5 * pass_direction) * pass_distance,
@@ -646,18 +646,22 @@ if __name__ == "__main__":
         fcs.nav_state.waypoints[3 + i].pitch = 0.0
         fcs.nav_state.waypoints[3 + i].roll = 0.0
 
-        #print "[%.9f, %.9f]," % (math.degrees(nav_state.waypoints[3 + i].lon), math.degrees(nav_state.waypoints[3 + i].lat))
+        print "[WaypointX]\nname = SP%02d\npos = (%.8f, %.8f, 115.0)\n" % (i, math.degrees(fcs.nav_state.waypoints[3 + i].lat), math.degrees(fcs.nav_state.waypoints[3 + i].lon))
 
         if i % 2 == 0:
             fcs.nav_state.paths[3 + i].start_waypoint_id = 3 + i
             fcs.nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
             fcs.nav_state.paths[3 + i].type = FCS_PATH_LINE
             fcs.nav_state.paths[3 + i].next_path_id = 3 + i + 1
+
+            print "[PathX]\nname = SP%02d->SP%02d\nstart = SP%02d\nend = SP%02d\ntype = STRAIGHT\nnext = SP%02d->SP%02d\n" % (i, i + 1, i, i + 1, i + 1, i + 2)
         else:
             fcs.nav_state.paths[3 + i].start_waypoint_id = 3 + i
             fcs.nav_state.paths[3 + i].end_waypoint_id = 3 + i + 1
             fcs.nav_state.paths[3 + i].type = FCS_PATH_DUBINS_CURVE
             fcs.nav_state.paths[3 + i].next_path_id = 3 + i + 1
+
+            print "[PathX]\nname = SP%02d->SP%02d\nstart = SP%02d\nend = SP%02d\ntype = CURVE\nnext = SP%02d->SP%02d\n" % (i, i + 1, i, i + 1, i + 1, i + 2)
 
     # Exit pattern to EL03
     fcs.nav_state.waypoints[3 + len(pattern_points)].lat = EL[2][0]

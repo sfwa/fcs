@@ -387,7 +387,7 @@ void fcs_board_tick(void) {
     struct fcs_log_t out_log;
     double attitude[4], wmm_field[3], wmm_field_norm, wmm_field_norm_inv;
     double static_pressure, static_temp;
-    struct fcs_parameter_t param, param2;
+    struct fcs_parameter_t param;
     enum fcs_mode_t ahrs_mode;
     bool got_result, mode_ok;
     enum fcs_stream_result_t stream_result;

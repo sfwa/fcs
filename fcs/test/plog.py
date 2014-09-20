@@ -809,15 +809,15 @@ def print_debug_log(i, data):
 if __name__ == "__main__":
     #print "lat,lon,alt,vn,ve,vd,q0,q1,q2,q3,yaw,pitch,roll,vroll,vpitch,vyaw,wn,we,wd,mode,control_mode,path,objval,errors,resets"
 
-    #print "n,gps_mode_1,gps_pdop_1,gps_numsv_1,gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
-    #      "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
-    #      "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
-    #      "control_rail_1,gps_mode_2,gps_pdop_2,gps_numsv_2,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
-    #      "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
-    #      "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
-    #      "control_lail_2,control_rail_2"
+    print "n,gps_mode_1,gps_pdop_1,gps_numsv_1,gps_lat_1,gps_lon_1,gps_alt_1,gps_n_1,gps_e_1,gps_d_1,accel_x_1," + \
+          "accel_y_1,accel_z_1,gyro_x_1,gyro_y_1,gyro_z_1,mag_x_1,mag_y_1," + \
+          "mag_z_1,pitot_1,baro_1,i_1,v_1,control_thr_1,control_lail_1," + \
+          "control_rail_1,gps_mode_2,gps_pdop_2,gps_numsv_2,gps_lat_2,gps_lon_2,gps_alt_2,gps_n_2,gps_e_2," + \
+          "gps_d_2,accel_x_2,accel_y_2,accel_z_2,gyro_x_2,gyro_y_2,gyro_z_2," + \
+          "mag_x_2,mag_y_2,mag_z_2,pitot_2,baro_2,i_2,v_2,control_thr_2," + \
+          "control_lail_2,control_rail_2"
 
-    print "n,gps_v_1,gps_v_2,v,w,tas,heading,yaw,pitch,roll,pitot_1,pitot_2,bias_x,bias_y,bias_z"
+    #print "n,gps_v_1,gps_v_2,v,w,tas,heading,yaw,pitch,roll,pitot_1,pitot_2,bias_x,bias_y,bias_z"
 
     n = 0
     for logf in iterlogs(sys.stdin):
@@ -828,8 +828,8 @@ if __name__ == "__main__":
 
         try:
             #print_estimate_log(logf)
-            #print_measurement_log(n, logf)
-            print_debug_log(n, logf)
+            print_measurement_log(n, logf)
+            #print_debug_log(n, logf)
 
         except Exception:
             raise
