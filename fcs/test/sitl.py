@@ -495,10 +495,11 @@ def generate_search_pattern(area):
     ned_area = [ll_pt_ned_offset(a, area[0]) for a in area]
 
     # Find the orientation of the search pattern (heading of initial path)
-    heading = math.atan2(
-        ned_area[longest_side[0]][1] - ned_area[longest_side[1]][1],
-        ned_area[longest_side[0]][0] - ned_area[longest_side[1]][0]
+    longest_side_ned = (
+        ned_area[longest_side[0]][0] - ned_area[longest_side[1]][0],
+        ned_area[longest_side[0]][1] - ned_area[longest_side[1]][1]
     )
+    heading = math.atan2(longest_side_ned[1], longest_side_ned[0])
 
     # Determine the number of passes to be made (2 passes per cycle, so the
     # number must be even).
@@ -512,41 +513,58 @@ def generate_search_pattern(area):
         math.cos(heading + math.pi * 0.5 * pass_direction) * pass_distance,
         math.sin(heading + math.pi * 0.5 * pass_direction) * pass_distance
     )
+    pass_inset = (
+        100.0 * longest_side_ned[0] / math.sqrt(longest_side_ned[0]**2 + longest_side_ned[1]**2),
+        100.0 * longest_side_ned[1] / math.sqrt(longest_side_ned[0]**2 + longest_side_ned[1]**2),
+    )
+
 
     pattern_points = []
 
     # Generate points/paths for the first sweep, at 120m intervals
     for i in range(n_passes):
+        if i == n_passes - 1:
+            # inset the last point a bit more
+            extra_inset = (pass_inset[0] * 1.5, pass_inset[1] * 1.5)
+        else:
+            extra_inset = (0.0, 0.0)
+
         if i % 2 == 1:  # odd, 0-1
             pattern_points += [
-                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.25),
-                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.25)),
-                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.25),
-                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.25))
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.25) - pass_inset[0] - extra_inset[0],
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.25) - pass_inset[1] - extra_inset[1]),
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.25) + pass_inset[0],
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.25) + pass_inset[1])
             ]
-        else:  # event, 1-0
+        else:  # even, 1-0
             pattern_points += [
-                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.25),
-                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.25)),
-                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.25),
-                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.25))
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.25) + pass_inset[0],
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.25) + pass_inset[1]),
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.25) - pass_inset[0] - extra_inset[0],
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.25) - pass_inset[1] - extra_inset[1])
             ]
 
     # Generate points/paths for the second sweep, at 120m intervals with a 60m offset
     for i in range(n_passes - 1, -1, -1):
+        if i == n_passes - 1:
+            # inset the last point a bit more
+            extra_inset = (pass_inset[0] * 4.0, pass_inset[1] * 4.0)
+        else:
+            extra_inset = (0.0, 0.0)
+
         if i % 2 == 0:  # even, 0-1
             pattern_points += [
-                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.75),
-                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.75)),
-                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.75),
-                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.75))
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.75) - pass_inset[0] - extra_inset[0],
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.75) - pass_inset[1] - extra_inset[1]),
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.75) + pass_inset[0],
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.75) + pass_inset[1])
             ]
         else:  # odd, 1-0
             pattern_points += [
-                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.75),
-                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.75)),
-                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.75),
-                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.75))
+                (ned_area[longest_side[1]][0] + pass_offset[0] * (i + 0.75) + pass_inset[0],
+                 ned_area[longest_side[1]][1] + pass_offset[1] * (i + 0.75) + pass_inset[1]),
+                (ned_area[longest_side[0]][0] + pass_offset[0] * (i + 0.75) - pass_inset[0] - extra_inset[0],
+                 ned_area[longest_side[0]][1] + pass_offset[1] * (i + 0.75) - pass_inset[1] - extra_inset[1])
             ]
 
     pattern_points = [ned_pt_ll(a, area[0]) for a in pattern_points]

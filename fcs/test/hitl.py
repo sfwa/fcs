@@ -374,7 +374,7 @@ def recv_state_from_xplane(s):
             elif fields[1] == "sim/flightmodel/position/longitude":
                 sim_state["lon"] = math.radians(float(fields[2]))
             elif fields[1] == "sim/flightmodel/position/elevation":
-                sim_state["alt"] = float(fields[2])
+                sim_state["alt"] = float(fields[2]) - START_ALT
             elif fields[1] == "sim/flightmodel/position/local_vx":
                 sim_state["velocity"][1] = float(fields[2])
             elif fields[1] == "sim/flightmodel/position/local_vy":
